@@ -5,12 +5,12 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "rm -f ./data/sqlite.db ./data/sqlite.db-journal && npm run db:prepare && next start",
+    "start": "rm -f /app/data/sqlite.db /app/data/sqlite.db-journal && npm run db:prepare && next start",
     "lint": "next lint",
     "prisma:migrate": "prisma migrate dev",
     "db:init": "sqlite3 data/sqlite.db < prisma/manual-init.sql || true",
     "prisma:generate": "prisma generate",
-    "db:prepare": "mkdir -p ./data && touch ./data/sqlite.db && prisma migrate deploy",
+    "db:prepare": "mkdir -p /app/data && touch /app/data/sqlite.db && prisma migrate deploy",
     "postinstall": "prisma generate"
   },
   "dependencies": {
