@@ -359,18 +359,17 @@ export default function KannibalisierungPage() {
       {!loading && filteredRows.length > 0 && (
         <Card>
           <CardContent className="space-y-4 py-4">
-            <div className="h-[520px]">
-              <BubbleScatter
-                data={bubbleData}
-                onSelect={(query) => {
-                  const found = filteredRows.find((r) => r.query === query) || null;
-                  setSelectedBubble(found);
-                }}
-              />
-            </div>
-
             <div className="grid gap-4 lg:grid-cols-3">
-              <Card className="h-full">
+              <div className="lg:col-span-2 h-[520px]">
+                <BubbleScatter
+                  data={bubbleData}
+                  onSelect={(query) => {
+                    const found = filteredRows.find((r) => r.query === query) || null;
+                    setSelectedBubble(found);
+                  }}
+                />
+              </div>
+              <Card className="h-[520px]">
                 <CardContent className="py-3 space-y-2 text-sm">
                   {!selectedBubble && <p className="text-muted-foreground">Klicke eine Bubble für Details.</p>}
                   {selectedBubble && (
@@ -409,10 +408,10 @@ export default function KannibalisierungPage() {
                   )}
                 </CardContent>
               </Card>
+            </div>
 
-              <div className="lg:col-span-2 h-[380px]">
-                <DumbbellChart data={dumbbellData} />
-              </div>
+            <div className="h-[380px]">
+              <DumbbellChart data={dumbbellData} />
             </div>
           </CardContent>
         </Card>
