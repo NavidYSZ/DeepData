@@ -2,7 +2,6 @@
 
 import useSWR from "swr";
 import { useEffect } from "react";
-import { cn } from "@/lib/utils";
 import { useSite } from "@/components/dashboard/site-context";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -62,9 +61,9 @@ export function PropertyMenu() {
       ) : (
         <Select
           value={site ?? ""}
-          onChange={(e) => setSite(e.target.value || null)}
+          onChange={(val) => setSite(val || null)}
           options={options}
-          className={cn("h-9 text-sm")}
+          placeholder="Property wählen"
         />
       )}
     </div>

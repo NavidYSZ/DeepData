@@ -205,7 +205,7 @@ export default function SeoBubblePage() {
             <span className="text-sm font-medium">Top N</span>
             <Select
               value={String(topN)}
-              onChange={(e) => setTopN(Number(e.target.value))}
+              onChange={(val) => setTopN(Number(val))}
               options={[
                 { value: "100", label: "100" },
                 { value: "300", label: "300" },
@@ -218,7 +218,7 @@ export default function SeoBubblePage() {
             <span className="text-sm font-medium">Zeitraum</span>
             <Select
               value={String(range)}
-              onChange={(e) => setRange(Number(e.target.value))}
+              onChange={(val) => setRange(Number(val))}
               options={[
                 { value: "7", label: "7 Tage" },
                 { value: "28", label: "28 Tage" },
