@@ -359,59 +359,59 @@ export default function KannibalisierungPage() {
       {!loading && filteredRows.length > 0 && (
         <Card>
           <CardContent className="space-y-4 py-4">
+            <div className="h-[520px]">
+              <BubbleScatter
+                data={bubbleData}
+                onSelect={(query) => {
+                  const found = filteredRows.find((r) => r.query === query) || null;
+                  setSelectedBubble(found);
+                }}
+              />
+            </div>
+
             <div className="grid gap-4 lg:grid-cols-3">
-              <div className="lg:col-span-2 h-[520px]">
-                <BubbleScatter
-                  data={bubbleData}
-                  onSelect={(query) => {
-                    const found = filteredRows.find((r) => r.query === query) || null;
-                    setSelectedBubble(found);
-                  }}
-                />
-              </div>
-              <div className="space-y-3">
-                <Card className="h-[260px]">
-                  <CardContent className="py-3 space-y-2 text-sm">
-                    {!selectedBubble && <p className="text-muted-foreground">Klicke eine Bubble für Details.</p>}
-                    {selectedBubble && (
-                      <>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold break-words">{selectedBubble.query}</span>
-                          <Badge variant={selectedBubble.priorityLevel === "high" ? "destructive" : selectedBubble.priorityLevel === "medium" ? "secondary" : "default"}>
-                            {selectedBubble.priorityLevel ?? "low"}
-                          </Badge>
+              <Card className="h-full">
+                <CardContent className="py-3 space-y-2 text-sm">
+                  {!selectedBubble && <p className="text-muted-foreground">Klicke eine Bubble für Details.</p>}
+                  {selectedBubble && (
+                    <>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold break-words">{selectedBubble.query}</span>
+                        <Badge variant={selectedBubble.priorityLevel === "high" ? "destructive" : selectedBubble.priorityLevel === "medium" ? "secondary" : "default"}>
+                          {selectedBubble.priorityLevel ?? "low"}
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <div>Top Share: {(selectedBubble.topShare * 100).toFixed(1)}%</div>
+                        <div>2nd Share: {(selectedBubble.secondShare * 100).toFixed(1)}%</div>
+                        <div>URLs: {selectedBubble.urls.length}</div>
+                        <div>Spread: {selectedBubble.spread.toFixed(1)}</div>
+                        <div>Impr.: {selectedBubble.totalImpressions.toLocaleString("de-DE")}</div>
+                      </div>
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <p className="font-semibold">Empfehlung</p>
+                        <p>{recommendation(selectedBubble)}</p>
+                      </div>
+                      <div className="space-y-1 text-xs">
+                        <p className="font-semibold text-muted-foreground">URLs</p>
+                        <div className="space-y-1">
+                          {selectedBubble.urls.map((u) => (
+                            <div key={u.page} className="flex justify-between gap-2">
+                              <span className="truncate text-foreground" title={u.page}>{u.page}</span>
+                              <span className="text-muted-foreground">
+                                {(u.share * 100).toFixed(1)}% · pos {u.position.toFixed(1)}
+                              </span>
+                            </div>
+                          ))}
                         </div>
-                        <div className="text-xs text-muted-foreground space-y-1">
-                          <div>Top Share: {(selectedBubble.topShare * 100).toFixed(1)}%</div>
-                          <div>2nd Share: {(selectedBubble.secondShare * 100).toFixed(1)}%</div>
-                          <div>URLs: {selectedBubble.urls.length}</div>
-                          <div>Spread: {selectedBubble.spread.toFixed(1)}</div>
-                          <div>Impr.: {selectedBubble.totalImpressions.toLocaleString("de-DE")}</div>
-                        </div>
-                        <div className="text-xs text-muted-foreground space-y-1">
-                          <p className="font-semibold">Empfehlung</p>
-                          <p>{recommendation(selectedBubble)}</p>
-                        </div>
-                        <div className="space-y-1 text-xs">
-                          <p className="font-semibold text-muted-foreground">URLs</p>
-                          <div className="space-y-1">
-                            {selectedBubble.urls.map((u) => (
-                              <div key={u.page} className="flex justify-between gap-2">
-                                <span className="truncate text-foreground" title={u.page}>{u.page}</span>
-                                <span className="text-muted-foreground">
-                                  {(u.share * 100).toFixed(1)}% · pos {u.position.toFixed(1)}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-                <div className="h-[260px]">
-                  <DumbbellChart data={dumbbellData} />
-                </div>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              <div className="lg:col-span-2 h-[380px]">
+                <DumbbellChart data={dumbbellData} />
               </div>
             </div>
           </CardContent>
