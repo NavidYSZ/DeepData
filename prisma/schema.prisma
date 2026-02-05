@@ -1,0 +1,16 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model GoogleAccount {
+  id            String   @id @default(cuid())
+  email         String?  @unique
+  refresh_token String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}

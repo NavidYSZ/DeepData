@@ -1,0 +1,349 @@
+```md
+# GSC Data-Science Methoden für SEO (Bericht)
+
+> Fokus: Techniken, die du **direkt mit Google Search Console Daten** (Queries/Pages/Impressions/Clicks/CTR/Position/Date) umsetzen kannst – zur **Priorisierung**, **Diagnose** und **Messung** von SEO-Maßnahmen.
+
+---
+
+## 1) Bubble-Scatter: **Position vs. CTR** (Bubble Size = Impressions)
+
+### Was es ist (Methodik)
+- **Streudiagramm**: x-Achse = CTR, y-Achse = durchschnittliche Position  
+- **Bubble-Größe** = Impressions (Gewichtung nach “Hebel”)
+- Optional: Farbe = Cluster (z. B. Brand vs Non-Brand, Produkt vs Ratgeber)
+
+### Was du damit konkret machen kannst
+- **CTR-Opportunities finden**:
+  - *Gute Position, niedrige CTR* → Snippet/Title/Intent passt nicht optimal oder SERP-Features drücken CTR.
+- **“Overperformer” identifizieren**:
+  - *Mittelmäßige Position, hohe CTR* → sehr relevanter Snippet/Brand/USP; diese Muster auf andere Seiten übertragen.
+- **Priorisieren nach Impact**:
+  - Große Bubble + CTR-Problem = sofortiger Hebel (mehr Klicks ohne Ranking-Lift).
+
+### Warum das für SEO geeignet ist
+- CTR ist ein **Conversion-Hebel im SERP**: Snippets verbessern bringt oft schnell messbare Klick-Zuwächse.
+- Impressions-Gewichtung sorgt dafür, dass du nicht an “Nice-to-have” Keywords optimierst, sondern an Traffic-Hebeln.
+
+### Typische Aktionen (aus Findings)
+- Title/Meta neu schreiben (Intent + USP + Proof + Stadt/Produktvariante)
+- Rich-Result/Schema prüfen (wenn relevant)
+- Snippet-Tests: 2–3 Varianten pro Cluster, periodisch messen
+
+---
+
+## 2) Expected-CTR Modell / **CTR-Gap** (Snippet-ROI Scoring)
+
+### Was es ist (Methodik)
+- Du modellierst eine **erwartete CTR** je Position (z. B. für Position 1–10), basierend auf deinen Daten.
+- Dann berechnest du pro Query/Page:  
+  **CTR-Gap = CTR_aktuell − CTR_erwartet(Position)**
+
+### Was du damit konkret machen kannst
+- **Kandidaten für Snippet-Optimierung objektiv priorisieren**:
+  - Wenn CTR deutlich unter Erwartung liegt, ist das ein “echtes” Snippet-Problem (nicht nur “Position ist halt schlecht”).
+- **ROI-Score bauen** (Priorisierung nach Potenzial):
+  - Beispiel: `Impressions * (CTR_expected − CTR_actual)` für negative Gaps.
+- **A/B-ähnliche Iteration ohne echtes A/B**:
+  - Du wechselst Snippet/Title, prüfst ob CTR-Gap sich normalisiert.
+
+### Warum das für SEO geeignet ist
+- Entkoppelt CTR-Bewertung von Position (“Position 7 hat halt wenig CTR”) → du siehst **wer unterperformt**.
+- Sehr gut für **große Sites**: du bekommst eine Backlog-Liste, die sich rechnen kann.
+
+### Typische Aktionen
+- Snippet-Template pro Seitentyp (Produkt / Kategorie / Ratgeber)
+- SERP-Intent Check: passt die Seite wirklich zum Query?
+- Konkurrenz-Snippet analysieren (USP / Preise / Lieferzeit / Datenblatt)
+
+---
+
+## 3) Zeitreihen-Analyse: **Trends & Volatilität** (Daily Position/Clicks/Impressions)
+
+### Was es ist (Methodik)
+- Zeitreihe pro Query, Page oder Verzeichnis (z. B. täglich).
+- Du schaust auf:
+  - **Trend** (langsam rauf/runter)
+  - **Volatilität** (Schwankungsbreite)
+  - **Muster** (Wochentage, Saisonalität)
+
+### Was du damit konkret machen kannst
+- **Stabile vs. volatile Keywords trennen**:
+  - Volatile Queries: oft SERP-Feature-lastig, News-ähnlich, oder dünne Relevanzsignale.
+- **Impact von Änderungen sichtbar machen**:
+  - Relaunch, interne Links, Content Update → “vor/nach” im Verlauf.
+- **“Quality/Intent-Fit” Diagnosen**:
+  - Starkes Zickzack bei stabilen Impressions kann auf instabile Relevanz hinweisen.
+
+### Warum das für SEO geeignet ist
+- SEO ist zeitlich träge. Zeitreihen zeigen **ob du echte Bewegung** hast oder nur Rauschen.
+- Sehr gut für “was hat wirklich geholfen?” – besonders bei vielen parallelen Änderungen.
+
+### Typische Aktionen
+- Interne Link-Pushes für “fast-Top-10” Keywords
+- Content-Refresh bei fallenden Trends
+- SERP-Check bei starken Sprüngen (Feature/Intent-Shift)
+
+---
+
+## 4) Anomaly Detection / **Control Charts** (Frühwarnsystem)
+
+### Was es ist (Methodik)
+- Du definierst “Normalbereich” aus Vergangenheit:
+  - Rolling Mean/Median + Streuung (Std oder MAD)
+- Alarm, wenn heutiger Wert außerhalb liegt:
+  - z. B. Clicks/Impressions fallen **ungewöhnlich stark**
+
+### Was du damit konkret machen kannst
+- **Drops sehr früh erkennen** (bevor der Kunde es merkt):
+  - Indexierung, Canonicals, Robots, Noindex, Tech-Fehler, Template-Bug.
+- **False positives reduzieren**:
+  - Du alarmierst nicht bei normaler Schwankung, sondern bei echten Ausreißern.
+- **Monitoring nach Verzeichnis/Template**:
+  - `/produkte/` bricht ein → templateweit; einzelne URL → page-spezifisch.
+
+### Warum das für SEO geeignet ist
+- In SEO sind die teuersten Probleme oft **technische Drops**, die Tage kosten.
+- Ein gutes Anomaly-System spart massiv Zeit.
+
+### Typische Aktionen
+- GSC Indexing / Coverage / Inspect URL checks
+- Logfile/Server-Checks (500er, Timeouts)
+- Canonical/Hreflang/Robots Review
+
+---
+
+## 5) Change-Point Detection: **Strukturbrüche** finden (Breaks)
+
+### Was es ist (Methodik)
+- Du suchst Zeitpunkte, an denen sich Mittelwert/Trend sprunghaft ändert:
+  - “ab dem 12.01. ist der Verlauf anders”
+
+### Was du damit konkret machen kannst
+- **Klarer Zeitpunkt für Ursachenanalyse**:
+  - Update, Relaunch, Link-Rollout, Content-Publish-Welle, Redirects.
+- **Maßnahmen bewerten**:
+  - Wenn nach Change-Point dauerhaft höher → Maßnahme wirkt wahrscheinlich.
+- **Segmentiert auswerten**:
+  - Verzeichnisse, Seitentypen, Query-Cluster.
+
+### Warum das für SEO geeignet ist
+- Hilft dir, aus “gefühlt” ein “datierbares Ereignis” zu machen → besseres Reporting & Debugging.
+
+### Typische Aktionen
+- Timeline mit Deploys/Content-Publishes matchen
+- SERP-Snapshots vor/nach vergleichen
+- interne Links/IA-Änderungen rückverfolgen
+
+---
+
+## 6) Cannibalization Detection: **Query ↔ mehrere URLs** (Share/Entropie)
+
+### Was es ist (Methodik)
+- Für eine Query verteilen sich Clicks/Impressions über mehrere URLs.
+- Kennzahlen:
+  - **Share** pro URL (z. B. Top-URL 40%, Zweite 35%, …)
+  - **Konzentration** (Herfindahl/Entropie-Idee): verteilt vs. fokussiert
+
+### Was du damit konkret machen kannst
+- **Echte Kannibalisierung identifizieren**:
+  - Wenn 2–3 URLs sich die gleiche Query teilen und sich gegenseitig blockieren.
+- **Owner-URL bestimmen** (Intent-Fit):
+  - Welche URL sollte “gewinnen”?
+- **Fix-Strategie auswählen**:
+  - Merge, Canonical, Redirect, interne Links, Content-Differenzierung, Title-Clarification.
+
+### Warum das für SEO geeignet ist
+- Kannibalisierung kostet Rankings, weil Google nicht sicher ist, welche Seite die beste ist.
+- Besonders wichtig bei großen Produktkatalogen und ähnlichen Landingpages.
+
+### Typische Aktionen
+- Content konsolidieren (eine starke Seite statt drei mittelmäßige)
+- Interne Links auf Owner-URL fokussieren
+- Snippet/Heading klar trennen (Intent-Differenzierung)
+
+---
+
+## 7) Clustering / Segmentierung von Queries & Pages
+
+### Was es ist (Methodik)
+- Du gruppierst Daten nach Mustern:
+  - Keyword-Muster (Wörter)
+  - Performance-Muster (Position/CTR/Impr)
+  - Seitentyp (Kategorie/Produkt/Ratgeber)
+
+### Was du damit konkret machen kannst
+- **Roadmaps bauen** statt Einzel-Fixes:
+  - “Snippet-Optimierung für alle Kategorie-Seiten”
+  - “Content-Refresh für Ratgeber-Cluster X”
+- **Intent-Mismatch erkennen**:
+  - Informational Queries landen auf Kategorie → CTR/Position leiden.
+- **Template-Optimierung priorisieren**:
+  - Ein Fix am Template verbessert 200 Seiten.
+
+### Warum das für SEO geeignet ist
+- SEO skaliert über Muster und Templates, nicht über Einzel-URL-Handarbeit.
+
+### Typische Aktionen
+- Cluster-Pages als Pillar + supporting content
+- Content briefs pro Cluster
+- interne Linkstruktur pro Cluster
+
+---
+
+## 8) Seasonality & YoY Normalisierung
+
+### Was es ist (Methodik)
+- Vergleiche gleiche Zeiträume:
+  - WoW (week over week)
+  - **YoY** (same period last year)
+- Optional: Baseline pro Monat/Woche
+
+### Was du damit konkret machen kannst
+- **Echte Gains vs. saisonales Rauschen trennen**
+- **Reporting verbessern**:
+  - “+18% YoY” ist oft aussagekräftiger als “-6% vs. letzter Monat”.
+- **Budget/Planung**:
+  - Content-Push vor Peak-Season.
+
+### Warum das für SEO geeignet ist
+- Viele Branchen sind saisonal → ohne Normalisierung wirken Maßnahmen falsch positiv/negativ.
+
+### Typische Aktionen
+- Publish-Plan entlang Saisonalität
+- interne Links + Updates vor Peak
+- Forecasts pro Season-Cluster
+
+---
+
+## 9) Forecasting & Baselines (kurzfristige Erwartungswerte)
+
+### Was es ist (Methodik)
+- Einfache Prognose/Erwartung:
+  - 7/28-Tage gleitende Durchschnitte
+  - Trend-Extrapolation (light)
+
+### Was du damit konkret machen kannst
+- **“Was passiert, wenn wir nichts tun?”** (Baseline)
+- **Zieltracking**:
+  - erwartete Clicks vs. tatsächliche Clicks
+- **Frühwarnung**:
+  - wenn Ist dauerhaft unter Erwartung fällt
+
+### Warum das für SEO geeignet ist
+- Macht SEO-Performance steuerbarer: du siehst Abweichungen früh und kannst gegensteuern.
+
+### Typische Aktionen
+- Maßnahmen priorisieren, wenn Forecast verfehlt wird
+- Tech/Index Checks, wenn Baseline bricht
+
+---
+
+## 10) Rank-Lift Opportunity Scoring (Impressions-gewichteter Impact)
+
+### Was es ist (Methodik)
+- Du bewertest, wie viel Traffic eine Positionsverbesserung bringen könnte:
+  - `Impressions * (CTR_expected(target_pos) − CTR_expected(current_pos))`
+
+### Was du damit konkret machen kannst
+- **Prioritätenliste für “Push” Keywords**:
+  - Position 6–12 mit hohen Impressions → großer Hebel.
+- **Maßnahmen zuordnen**:
+  - Content-Depth, interne Links, E-E-A-T, Entity-Abdeckung, technische UX.
+
+### Warum das für SEO geeignet ist
+- “Position verbessern” klingt gut, aber ohne Impact-Score optimierst du oft am falschen Ende.
+
+### Typische Aktionen
+- Interne Linkkampagne für Near-Top-10
+- Content-Erweiterung entlang SERP-Corpus
+- Onpage-Tuning (H1/H2/FAQ, Medien, Daten, Tabellen)
+
+---
+
+## 11) SERP-Feature Sensitivität (CTR-Shift bei stabiler Position)
+
+### Was es ist (Methodik)
+- Du suchst Fälle:
+  - Position bleibt ähnlich, aber CTR/Clicks ändern sich stark.
+- Interpretation: SERP-Layout/Features/Ads/Overviews verändern Click-Verteilung.
+
+### Was du damit konkret machen kannst
+- **Diagnose ohne Ranking-Panik**:
+  - “Wir ranken gleich, aber bekommen weniger Klicks” → SERP hat sich geändert.
+- **Content/Schema-Strategie ableiten**:
+  - FAQ/HowTo/Productschema (wo sinnvoll) oder Snippet-Reframing.
+
+### Warum das für SEO geeignet ist
+- Viele Drops sind heute SERP-Layout-Drops, nicht Ranking-Drops → du brauchst andere Maßnahmen.
+
+### Typische Aktionen
+- Snippet auf “Skim-Value” optimieren (Quick answers, Proof)
+- Rich-Results eligibility prüfen
+- Content-Format an SERP anpassen (z. B. Vergleichstabelle)
+
+---
+
+## 12) Directory/Template-Level Analyse (Pattern Aggregation)
+
+### Was es ist (Methodik)
+- Aggregation nach URL-Pattern:
+  - `/produkte/`, `/ratgeber/`, `/produkte/xyz/…`
+- Metrics als Summe/Mittel über Gruppen
+
+### Was du damit konkret machen kannst
+- **Template-Probleme erkennen**:
+  - CTR in `/produkte/` generell niedriger → Title-Pattern schlecht.
+- **Fixes skalieren**:
+  - ein Template-Fix verbessert hunderte URLs.
+- **Strategische Entscheidungen**:
+  - Welche Seitentypen liefern Wachstum vs. binden Ressourcen?
+
+### Warum das für SEO geeignet ist
+- Große Sites gewinnen über Template-Optimierung und IA-Skalierung.
+
+### Typische Aktionen
+- Title/Meta-Templates neu
+- interne Linkmodule standardisieren
+- Breadcrumb/Navigation/Schema anpassen
+
+---
+
+# Praktische Umsetzung: Welche 5 “Boards” sich am meisten lohnen
+
+1. **CTR-Gap Board**  
+   - CTR_expected, CTR_gap, Impressions-ROI  
+2. **Anomaly Board**  
+   - Alerts pro Verzeichnis + wichtigste betroffene URLs/Queries  
+3. **Cannibalization Board**  
+   - Query → URL-Shares, Owner-Empfehlung, Fix-Typ  
+4. **Rank-Lift ROI Board**  
+   - Impact-Score für Position 4–12 Push-Kandidaten  
+5. **Seasonality/YoY Board**  
+   - echte Entwicklung vs. saisonale Effekte
+
+---
+
+# Datenanforderungen (GSC Export)
+- Date
+- Query
+- Page (URL)
+- Impressions
+- Clicks
+- CTR
+- Average Position
+
+Optional (sehr hilfreich):
+- Device
+- Country
+- Search appearance
+- URL-Pattern (selbst abgeleitet)
+
+---
+```
+
+Wenn du magst, kann ich dir als nächstes **konkrete Formeln/SQL** (BigQuery/Looker Studio) für:
+
+* CTR_expected + CTR_gap
+* Cannibalization-Konzentration (Share/Index)
+* Anomaly-Regeln (Rolling Median/MAD)
+  machen – damit du es 1:1 nachbauen kannst.

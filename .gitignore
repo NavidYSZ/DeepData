@@ -1,0 +1,10 @@
+node_modules
+.next
+.env.local
+.env.production
+.env
+data/sqlite.db
+data/sqlite.db-journal
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
