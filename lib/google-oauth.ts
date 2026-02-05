@@ -11,16 +11,16 @@ interface TokenResponse {
 
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 
-export async function exchangeCodeForTokens(code: string): Promise<TokenResponse> {
+export async function exchangeCodeForTokens(code: string, redirectUri?: string): Promise<TokenResponse> {
   const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } = getEnv();
+  const redirect = (redirectUri ?? GOOGLE_REDIRECT_URI)!;
 
-  const body = new URLSearchParams({
-    code,
-    client_id: GOOGLE_CLIENT_ID,
-    client_secret: GOOGLE_CLIENT_SECRET,
-    redirect_uri: GOOGLE_REDIRECT_URI,
-    grant_type: "authorization_code"
-  });
+  const body = new URLSearchParams();
+  body.set("code", code);
+  body.set("client_id", GOOGLE_CLIENT_ID);
+  body.set("client_secret", GOOGLE_CLIENT_SECRET);
+  body.set("redirect_uri", redirect);
+  body.set("grant_type", "authorization_code");
 
   const res = await fetch(TOKEN_ENDPOINT, {
     method: "POST",

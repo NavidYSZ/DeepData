@@ -47,10 +47,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Missing code" }, { status: 400 });
   }
 
-  const { GOOGLE_REDIRECT_URI } = getEnv();
+  const { GOOGLE_REDIRECT_URI, NEXTAUTH_URL } = getEnv();
+  const redirectUri =
+    GOOGLE_REDIRECT_URI ??
+    (NEXTAUTH_URL ? `${NEXTAUTH_URL}/api/auth/google/callback` : "");
 
   try {
-    const tokens = await exchangeCodeForTokens(code);
+    const tokens = await exchangeCodeForTokens(code, redirectUri);
     const refreshToken = tokens.refresh_token;
     if (!refreshToken) {
       return NextResponse.json(
