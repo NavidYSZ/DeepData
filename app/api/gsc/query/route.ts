@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { refreshAccessToken } from "@/lib/google-oauth";
 import { searchAnalyticsQuery } from "@/lib/gsc";
+import { authOptions } from "@/lib/auth";
+import { decrypt } from "@/lib/crypto";
 
 const filterSchema = z.object({
   dimension: z.string(),
@@ -23,11 +26,15 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as any)?.id;
+  if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
   const cookieStore = cookies();
   const accountId = cookieStore.get("accountId")?.value;
   const account = accountId
-    ? await prisma.googleAccount.findUnique({ where: { id: accountId } })
-    : await prisma.googleAccount.findFirst({ orderBy: { created_at: "asc" } });
+    ? await prisma.gscAccount.findFirst({ where: { id: accountId, userId } })
+    : await prisma.gscAccount.findFirst({ where: { userId }, orderBy: { created_at: "asc" } });
 
   if (!account?.refresh_token) {
     return NextResponse.json({ error: "Not connected" }, { status: 401 });
@@ -42,7 +49,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const tokens = await refreshAccessToken(account.refresh_token);
+    const tokens = await refreshAccessToken(decrypt(account.refresh_token));
     const rows = await searchAnalyticsQuery(tokens.access_token, body.siteUrl, {
       startDate: body.startDate,
       endDate: body.endDate,

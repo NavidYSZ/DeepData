@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { AccountMenu } from "@/components/dashboard/account-menu";
 import { PropertyMenu } from "@/components/dashboard/property-menu";
 import { SiteProvider } from "@/components/dashboard/site-context";
+import { AuthButton } from "@/components/dashboard/auth-button";
 import { RefreshCcw } from "lucide-react";
 
 const navItems = [
@@ -100,6 +101,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </div>
             <div className="flex items-center gap-3">
               <Badge variant="secondary">Multi User</Badge>
+              <AuthButton />
             </div>
           </div>
         </header>

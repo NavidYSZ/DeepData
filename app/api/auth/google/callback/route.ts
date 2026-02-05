@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/db";
 import { exchangeCodeForTokens } from "@/lib/google-oauth";
 import { getEnv } from "@/lib/env";
+import { authOptions } from "@/lib/auth";
+import { encrypt } from "@/lib/crypto";
 
 async function fetchEmail(accessToken: string, idToken?: string): Promise<string | undefined> {
   // try id_token first
@@ -33,6 +36,11 @@ async function fetchEmail(accessToken: string, idToken?: string): Promise<string
 }
 
 export async function GET(request: Request) {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as any)?.id;
+  if (!userId) {
+    return NextResponse.redirect("/api/auth/signin?callbackUrl=/dashboard");
+  }
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   if (!code) {
@@ -53,18 +61,17 @@ export async function GET(request: Request) {
 
     const email = await fetchEmail(tokens.access_token, tokens.id_token);
 
-    let account;
-    if (email) {
-      account = await prisma.googleAccount.upsert({
-        where: { email },
-        update: { refresh_token: refreshToken },
-        create: { email, refresh_token: refreshToken }
-      });
-    } else {
-      account = await prisma.googleAccount.create({
-        data: { refresh_token: refreshToken }
-      });
-    }
+    const existing = email
+      ? await prisma.gscAccount.findFirst({ where: { userId, email } })
+      : null;
+    const account = existing
+      ? await prisma.gscAccount.update({
+          where: { id: existing.id },
+          data: { refresh_token: encrypt(refreshToken), email }
+        })
+      : await prisma.gscAccount.create({
+          data: { userId, email, refresh_token: encrypt(refreshToken) }
+        });
 
     cookies().set("accountId", account.id, {
       httpOnly: true,

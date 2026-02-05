@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { useSession, signIn } from "next-auth/react";
 
 interface Account {
   id: string;
@@ -30,27 +31,18 @@ interface AccountMenuProps {
 }
 
 export function AccountMenu({ renderButton, className }: AccountMenuProps) {
-  const { data, mutate } = useSWR<AccountsResponse>("/api/accounts", fetcher);
+  const { status } = useSession();
+  const { data, mutate } = useSWR<AccountsResponse>(status === "authenticated" ? "/api/accounts" : null, fetcher);
   const [open, setOpen] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
 
   const accounts = data?.accounts ?? [];
 
-  async function selectAccount(id: string) {
+  function selectAccount(id: string) {
     setSelecting(id);
-    try {
-      await fetch("/api/accounts/select", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId: id })
-      });
-      await mutate();
-      window.location.reload();
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSelecting(null);
-    }
+    document.cookie = `accountId=${id}; path=/; samesite=lax`;
+    mutate();
+    window.location.reload();
   }
 
   // choose the first account as current heuristic (cookie is server-side; we display first)
@@ -98,7 +90,7 @@ export function AccountMenu({ renderButton, className }: AccountMenuProps) {
           onClick={(e) => e.stopPropagation()}
         >
           <CardContent className="space-y-2 py-3">
-            <p className="text-xs font-semibold text-muted-foreground">Konten</p>
+            <p className="text-xs font-semibold text-muted-foreground">GSC Konten</p>
             {accounts.map((acc) => (
               <button
                 key={acc.id}
@@ -120,10 +112,14 @@ export function AccountMenu({ renderButton, className }: AccountMenuProps) {
                 size="sm"
                 className="w-full"
                 onClick={() => {
-                  window.location.href = "/api/auth/google";
+                  if (status !== "authenticated") {
+                    signIn("google");
+                  } else {
+                    window.location.href = "/api/auth/google";
+                  }
                 }}
               >
-                Weiteren Nutzer hinzufügen
+                Search Console verbinden
               </Button>
             </div>
           </CardContent>
