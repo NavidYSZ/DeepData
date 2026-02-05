@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "npm run db:prepare && next start",
+    "start": "rm -f ./data/sqlite.db ./data/sqlite.db-journal && npm run db:prepare && next start",
     "lint": "next lint",
     "prisma:migrate": "prisma migrate dev",
     "db:init": "sqlite3 data/sqlite.db < prisma/manual-init.sql || true",
