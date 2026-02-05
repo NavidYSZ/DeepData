@@ -18,6 +18,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { CannibalRow } from "@/lib/cannibalization";
+import React from "react";
 
 interface BubblePoint {
   query: string;
@@ -54,7 +55,7 @@ export function BubbleScatter({
   onSelect: (query: string) => void;
   labelTopN?: number;
 }) {
-  const maxY = Math.max(30, Math.ceil(Math.max(...data.map((d) => d.y || 0), 0)));
+  const maxY = Math.max(30, Math.ceil(Math.max(0, ...data.map((d) => d.y || 0))));
   const topN = [...data].sort((a, b) => b.priority - a.priority).slice(0, labelTopN).map((d) => d.query);
 
   return (
@@ -112,16 +113,11 @@ export function BubbleScatter({
               }}
             />
 
-            <Scatter data={data} onClick={(e: any) => onSelect(e?.query)}>
-              {data.map((d, idx) => (
-                <circle key={idx} cx={0} cy={0} r={0} />
-              ))}
-            </Scatter>
             <Scatter
               data={data}
               shape={(props: any) => {
                 const { cx, cy, payload, size } = props;
-                if (cx == null || cy == null) return null;
+                if (cx == null || cy == null) return <g />;
                 const r = Math.sqrt(size || 0) * 0.5;
                 return (
                   <g>
@@ -195,9 +191,23 @@ export function DumbbellChart({ data }: { data: DumbbellPoint[] }) {
                 );
               }}
             />
-            <Line dataKey={(d: any) => [d.second, d.top]} stroke="#94a3b8" strokeWidth={2} dot={false} />
-            <Scatter dataKey="second" fill="#ef4444" name="2nd" />
-            <Scatter dataKey="top" fill="#22c55e" name="Top" />
+            <Scatter
+              data={sorted}
+              shape={(props: any) => {
+                const { y, payload, xAxis } = props;
+                const scale = xAxis?.scale;
+                if (!scale || y == null) return <g />;
+                const cx1 = scale(payload.second);
+                const cx2 = scale(payload.top);
+                return (
+                  <g>
+                    <line x1={cx1} x2={cx2} y1={y} y2={y} stroke="#94a3b8" strokeWidth={2} />
+                    <circle cx={cx1} cy={y} r={4} fill="#ef4444" />
+                    <circle cx={cx2} cy={y} r={4} fill="#22c55e" />
+                  </g>
+                );
+              }}
+            />
           </ComposedChart>
         </ResponsiveContainer>
       </CardContent>

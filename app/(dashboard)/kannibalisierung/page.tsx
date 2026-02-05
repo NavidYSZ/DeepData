@@ -8,9 +8,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CannibalizationTable } from "@/components/dashboard/cannibalization-table";
+import { BubbleScatter, DumbbellChart } from "@/components/dashboard/cannibalization-visuals";
 import { useSite } from "@/components/dashboard/site-context";
 import type { QueryRow } from "@/components/dashboard/queries-table";
-import { aggregateQueryPage, computeCannibalRows, computeSwitches } from "@/lib/cannibalization";
+import {
+  aggregateQueryPage,
+  computeCannibalRows,
+  computeSwitches,
+  assignPriorityLevels,
+  type CannibalRow
+} from "@/lib/cannibalization";
 
 interface SitesResponse {
   sites: { siteUrl: string; permissionLevel: string }[];
@@ -72,6 +79,11 @@ export default function KannibalisierungPage() {
   const [contains, setContains] = useState("");
   const [notContains, setNotContains] = useState("");
   const [includeSwitches, setIncludeSwitches] = useState(false);
+  const [shareMetric, setShareMetric] = useState<"clicks" | "impressions">("clicks");
+  const [minImprSlider, setMinImprSlider] = useState(0);
+  const [urlBucket, setUrlBucket] = useState<"all" | "2" | "3-4" | "5+">("all");
+  const [onlyCritical, setOnlyCritical] = useState(false);
+  const [selectedBubble, setSelectedBubble] = useState<CannibalRow | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,7 +140,7 @@ export default function KannibalisierungPage() {
 
   const filteredRows = useMemo(() => {
     const byQuery = aggregateQueryPage(rows);
-    const base = computeCannibalRows(byQuery);
+    const base = assignPriorityLevels(computeCannibalRows(byQuery, shareMetric));
 
     const switchesMap = includeSwitches && dailyRows.length ? computeSwitches(dailyRows) : null;
     if (switchesMap) {
@@ -140,15 +152,25 @@ export default function KannibalisierungPage() {
 
     const list = base.filter((r) => {
       const passesUrls = r.urls.length >= 2;
-      const passesThreshold = r.totalImpressions >= minImpr || r.totalClicks >= minClicks;
+      const passesThreshold =
+        r.totalImpressions >= Math.max(minImpr, minImprSlider) || r.totalClicks >= minClicks;
+      const bucket = r.urls.length <= 2 ? "2" : r.urls.length <= 4 ? "3-4" : "5+";
+      const bucketOk = urlBucket === "all" || urlBucket === bucket;
+      const criticalOk = !onlyCritical || (r.topShare < 0.6 && r.spread > 20);
       const q = r.query.toLowerCase();
       const containsOk = contains.trim() ? q.includes(contains.trim().toLowerCase()) : true;
       const notContainsOk = notContains.trim() ? !q.includes(notContains.trim().toLowerCase()) : true;
-      return passesUrls && passesThreshold && containsOk && notContainsOk;
+      return passesUrls && passesThreshold && bucketOk && criticalOk && containsOk && notContainsOk;
     });
 
     return list.slice(0, topN);
-  }, [rows, dailyRows, minImpr, minClicks, contains, notContains, topN, includeSwitches]);
+  }, [rows, dailyRows, minImpr, minClicks, minImprSlider, urlBucket, onlyCritical, contains, notContains, topN, includeSwitches, shareMetric]);
+
+  useEffect(() => {
+    if (selectedBubble && !filteredRows.find((r) => r.query === selectedBubble.query)) {
+      setSelectedBubble(null);
+    }
+  }, [filteredRows, selectedBubble]);
 
   const stats = useMemo(() => {
     if (!filteredRows.length) return null;
@@ -173,6 +195,45 @@ export default function KannibalisierungPage() {
   }, [filteredRows]);
 
   const notConnected = error && error.toLowerCase().includes("not connected");
+  const recommendation = (r: CannibalRow) => {
+    if (r.topShare < 0.6 && r.spread > 20) return "Merge/Simplify: klare Haupt-URL setzen, interne Links vereinheitlichen";
+    if (r.urls.length >= 3 && r.secondShare > 0.2) return "Split intent / interne Verlinkung klarziehen";
+    return "Keep & monitor";
+  };
+
+  const bubbleData = useMemo(() => {
+    return filteredRows.map((r) => {
+      const bucket = r.urls.length <= 2 ? "2" : r.urls.length <= 4 ? "3-4" : "5+";
+      return {
+        query: r.query,
+        x: r.topShare * 100,
+        y: r.spread,
+        size: r.totalImpressions,
+        urls: r.urls.length,
+        topShare: r.topShare * 100,
+        secondShare: r.secondShare * 100,
+        impressions: r.totalImpressions,
+        priority: r.priority,
+        priorityLevel: r.priorityLevel,
+        label: r.priorityLevel === "high" ? r.query : undefined,
+        bucket
+      };
+    });
+  }, [filteredRows]);
+
+  const dumbbellData = useMemo(() => {
+    return [...filteredRows]
+      .sort((a, b) => b.priority - a.priority)
+      .slice(0, 20)
+      .map((r) => ({
+        query: r.query,
+        top: r.topShare * 100,
+        second: r.secondShare * 100,
+        urls: r.urls.length,
+        impressions: r.totalImpressions,
+        priority: r.priority
+      }));
+  }, [filteredRows]);
 
   return (
     <div className="space-y-6">
@@ -197,6 +258,19 @@ export default function KannibalisierungPage() {
           <div className="space-y-2">
             <label className="text-sm font-medium">Ende</label>
             <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Shares</label>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <label className="flex items-center gap-1">
+                <input type="radio" name="shareMetric" value="clicks" checked={shareMetric === "clicks"} onChange={() => setShareMetric("clicks")} />
+                Clicks
+              </label>
+              <label className="flex items-center gap-1">
+                <input type="radio" name="shareMetric" value="impressions" checked={shareMetric === "impressions"} onChange={() => setShareMetric("impressions")} />
+                Impressions
+              </label>
+            </div>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Min Impressions</label>
@@ -225,6 +299,43 @@ export default function KannibalisierungPage() {
             <label className="text-sm font-medium">Query enthält nicht</label>
             <Input placeholder="z.B. gratis" value={notContains} onChange={(e) => setNotContains(e.target.value)} />
           </div>
+          <div className="md:col-span-6 grid gap-3 md:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Min Impressions (Slider)</label>
+              <input
+                type="range"
+                min={0}
+                max={5000}
+                step={50}
+                value={minImprSlider}
+                onChange={(e) => setMinImprSlider(Number(e.target.value))}
+                className="w-full"
+              />
+              <div className="text-xs text-muted-foreground">Aktuell: {minImprSlider}</div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">URL-Bucket</label>
+              <div className="flex flex-wrap gap-2">
+                {(["all", "2", "3-4", "5+"] as const).map((b) => (
+                  <Button
+                    key={b}
+                    size="sm"
+                    variant={urlBucket === b ? "secondary" : "outline"}
+                    onClick={() => setUrlBucket(b)}
+                  >
+                    {b === "all" ? "Alle" : b === "2" ? "2 URLs" : b === "3-4" ? "3–4 URLs" : "5+ URLs"}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nur kritisch</label>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={onlyCritical} onChange={(e) => setOnlyCritical(e.target.checked)} />
+                <span className="text-sm text-muted-foreground">Top Share &lt; 60% und Spread &gt; 20</span>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -243,6 +354,68 @@ export default function KannibalisierungPage() {
         <Skeleton className="h-[520px] w-full" />
       ) : (
         <CannibalizationTable rows={filteredRows} showSwitches={includeSwitches} />
+      )}
+
+      {!loading && filteredRows.length > 0 && (
+        <Card>
+          <CardContent className="space-y-4 py-4">
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="lg:col-span-2 h-[520px]">
+                <BubbleScatter
+                  data={bubbleData}
+                  onSelect={(query) => {
+                    const found = filteredRows.find((r) => r.query === query) || null;
+                    setSelectedBubble(found);
+                  }}
+                />
+              </div>
+              <div className="space-y-3">
+                <Card className="h-[260px]">
+                  <CardContent className="py-3 space-y-2 text-sm">
+                    {!selectedBubble && <p className="text-muted-foreground">Klicke eine Bubble für Details.</p>}
+                    {selectedBubble && (
+                      <>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold break-words">{selectedBubble.query}</span>
+                          <Badge variant={selectedBubble.priorityLevel === "high" ? "destructive" : selectedBubble.priorityLevel === "medium" ? "secondary" : "default"}>
+                            {selectedBubble.priorityLevel ?? "low"}
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <div>Top Share: {(selectedBubble.topShare * 100).toFixed(1)}%</div>
+                          <div>2nd Share: {(selectedBubble.secondShare * 100).toFixed(1)}%</div>
+                          <div>URLs: {selectedBubble.urls.length}</div>
+                          <div>Spread: {selectedBubble.spread.toFixed(1)}</div>
+                          <div>Impr.: {selectedBubble.totalImpressions.toLocaleString("de-DE")}</div>
+                        </div>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <p className="font-semibold">Empfehlung</p>
+                          <p>{recommendation(selectedBubble)}</p>
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          <p className="font-semibold text-muted-foreground">URLs</p>
+                          <div className="space-y-1">
+                            {selectedBubble.urls.map((u) => (
+                              <div key={u.page} className="flex justify-between gap-2">
+                                <span className="truncate text-foreground" title={u.page}>{u.page}</span>
+                                <span className="text-muted-foreground">
+                                  {(u.share * 100).toFixed(1)}% · pos {u.position.toFixed(1)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+                <div className="h-[260px]">
+                  <DumbbellChart data={dumbbellData} />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
