@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/db";
 import { exchangeCodeForTokens } from "@/lib/google-oauth";
-import { getEnv } from "@/lib/env";
+import { getGoogleRedirectUri } from "@/lib/env";
 import { authOptions } from "@/lib/auth";
 import { encrypt } from "@/lib/crypto";
 
@@ -43,23 +43,25 @@ export async function GET(request: Request) {
   }
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
+  const errorParam = searchParams.get("error");
   if (!code) {
-    return NextResponse.json({ error: "Missing code" }, { status: 400 });
+    return NextResponse.redirect("/dashboard?gscError=missing_code");
   }
 
-  const { GOOGLE_REDIRECT_URI, NEXTAUTH_URL } = getEnv();
-  const redirectUri =
-    GOOGLE_REDIRECT_URI ??
-    (NEXTAUTH_URL ? `${NEXTAUTH_URL}/api/auth/google/callback` : "");
+  const redirectUri = getGoogleRedirectUri();
 
   try {
+    console.info("GSC OAuth callback", {
+      userId,
+      codePresent: !!code,
+      errorParam,
+      redirectUri
+    });
+
     const tokens = await exchangeCodeForTokens(code, redirectUri);
     const refreshToken = tokens.refresh_token;
     if (!refreshToken) {
-      return NextResponse.json(
-        { error: "No refresh_token received. Please re-consent with prompt=consent." },
-        { status: 500 }
-      );
+      return NextResponse.redirect("/dashboard?gscError=no_refresh_token");
     }
 
     const email = await fetchEmail(tokens.access_token, tokens.id_token);
@@ -84,7 +86,19 @@ export async function GET(request: Request) {
 
     return NextResponse.redirect(new URL("/dashboard", request.url));
   } catch (err: any) {
-    console.error("OAuth callback error", err);
-    return NextResponse.json({ error: err.message ?? "OAuth error" }, { status: 500 });
+    console.error("OAuth callback error", {
+      message: err?.message,
+      stack: err?.stack,
+      cause: err?.cause
+    });
+    const msg = err?.message || "oauth_error";
+    const short = msg
+      .toLowerCase()
+      .includes("invalid_grant")
+      ? "invalid_grant"
+      : msg.toLowerCase().includes("access_denied")
+        ? "access_denied"
+        : "oauth_error";
+    return NextResponse.redirect(`/dashboard?gscError=${encodeURIComponent(short)}`);
   }
 }

@@ -25,3 +25,39 @@ export function getEnv() {
   }
   return parsed.data;
 }
+
+function trimTrailingSlash(input: string) {
+  return input.endsWith("/") ? input.replace(/\/+$/, "") : input;
+}
+
+function normalizeRedirectUri(uri: string) {
+  let url: URL;
+  try {
+    url = new URL(uri);
+  } catch {
+    throw new Error("Invalid GOOGLE_REDIRECT_URI/NEXTAUTH_URL provided");
+  }
+
+  // Normalize trailing slashes on the path to avoid accidental mismatches
+  url.pathname = url.pathname.replace(/\/+$/, "");
+
+  if (process.env.NODE_ENV === "production" && url.protocol !== "https:") {
+    throw new Error("Google redirect URI must use https in production");
+  }
+
+  return url.toString();
+}
+
+// Resolves the Google OAuth redirect URI used by the custom GSC flow.
+// Priority: explicit GOOGLE_REDIRECT_URI, otherwise NEXTAUTH_URL + /api/auth/google/callback.
+export function getGoogleRedirectUri() {
+  const { GOOGLE_REDIRECT_URI, NEXTAUTH_URL } = getEnv();
+  const fallback = NEXTAUTH_URL ? `${trimTrailingSlash(NEXTAUTH_URL)}/api/auth/google/callback` : undefined;
+  const candidate = GOOGLE_REDIRECT_URI ?? fallback;
+
+  if (!candidate) {
+    throw new Error("Missing GOOGLE_REDIRECT_URI or NEXTAUTH_URL for Google OAuth redirect");
+  }
+
+  return normalizeRedirectUri(candidate);
+}
