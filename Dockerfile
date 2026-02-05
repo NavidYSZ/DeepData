@@ -22,4 +22,4 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/data ./data
 
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]
+CMD ["sh", "-c", "mkdir -p /app/data && touch /app/data/sqlite.db && npx prisma migrate deploy && npm run start"]
