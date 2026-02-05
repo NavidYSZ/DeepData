@@ -58,6 +58,14 @@ export async function GET(request: Request) {
       redirectUri
     });
 
+    // Ensure the user still exists (DB may have been reset)
+    const userExists = await prisma.user.findUnique({ where: { id: userId } });
+    if (!userExists) {
+      return NextResponse.redirect(
+        new URL("/api/auth/signin?error=SessionExpired&callbackUrl=/dashboard", request.url)
+      );
+    }
+
     const tokens = await exchangeCodeForTokens(code, redirectUri);
     const refreshToken = tokens.refresh_token;
     if (!refreshToken) {
@@ -99,6 +107,7 @@ export async function GET(request: Request) {
       : msg.toLowerCase().includes("access_denied")
         ? "access_denied"
         : "oauth_error";
-    return NextResponse.redirect(`/dashboard?gscError=${encodeURIComponent(short)}`);
+    const target = new URL(`/dashboard?gscError=${encodeURIComponent(short)}`, request.url);
+    return NextResponse.redirect(target);
   }
 }
