@@ -17,10 +17,23 @@ interface SelectProps {
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
 }
 
-export function Select({ options, value, onChange, placeholder = "Auswählen", disabled, ariaLabel, className }: SelectProps) {
+export function Select({
+  options,
+  value,
+  onChange,
+  placeholder = "Auswählen",
+  disabled,
+  ariaLabel,
+  className,
+  searchable = false,
+  searchPlaceholder = "Suchen..."
+}: SelectProps) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const listId = useId();
@@ -44,6 +57,9 @@ export function Select({ options, value, onChange, placeholder = "Auswählen", d
   }, [open]);
 
   const selected = options.find((o) => o.value === value);
+  const filtered = searchable
+    ? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()))
+    : options;
 
   return (
     <div className={cn("relative", className)}>
@@ -73,7 +89,18 @@ export function Select({ options, value, onChange, placeholder = "Auswählen", d
           className="absolute z-30 mt-2 w-full rounded-md border border-border bg-card shadow-lg"
         >
           <div className="max-h-56 overflow-y-auto py-1">
-            {options.map((opt) => {
+            {searchable && (
+              <div className="px-3 pb-2">
+                <input
+                  autoFocus
+                  className="w-full rounded-md border border-border bg-card px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                  placeholder={searchPlaceholder}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+            )}
+            {filtered.map((opt) => {
               const active = opt.value === value;
               return (
                 <button

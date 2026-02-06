@@ -29,8 +29,14 @@ export function PropertyMenu() {
   const { data, error, isLoading } = useSWR<SitesResponse>("/api/gsc/sites", fetcher);
 
   useEffect(() => {
-    if (!site && data?.sites?.length) {
-      setSite(data.sites[0].siteUrl);
+    if (!data?.sites?.length) return;
+    const currentSites = data.sites.map((s) => s.siteUrl);
+    if (!site) {
+      setSite(currentSites[0]);
+      return;
+    }
+    if (!currentSites.includes(site)) {
+      setSite(currentSites[0]);
     }
   }, [data, setSite, site]);
 
@@ -64,6 +70,8 @@ export function PropertyMenu() {
           onChange={(val) => setSite(val || null)}
           options={options}
           placeholder="Property wählen"
+          searchable
+          searchPlaceholder="Property suchen…"
         />
       )}
     </div>
