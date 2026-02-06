@@ -4,7 +4,7 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/db";
 import { getEnv } from "@/lib/env";
 
-const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, NEXTAUTH_SECRET } = getEnv();
+const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, NEXTAUTH_SECRET, SESSION_VERSION } = getEnv();
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -20,6 +20,15 @@ export const authOptions: NextAuthOptions = {
   },
   secret: NEXTAUTH_SECRET,
   callbacks: {
+    async jwt({ token }) {
+      // invalidate older JWTs when SESSION_VERSION is bumped
+      const currentVersion = SESSION_VERSION ?? "1";
+      if (token.sessionVersion && token.sessionVersion !== currentVersion) {
+        return {}; // clears token, forces re-login
+      }
+      token.sessionVersion = currentVersion;
+      return token;
+    },
     async session({ session, token }) {
       if (session.user) {
         (session.user as any).id = token.sub;

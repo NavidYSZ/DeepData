@@ -7,7 +7,8 @@ const envSchema = z.object({
   NEXTAUTH_URL: z.string().url().optional(),
   NEXTAUTH_SECRET: z.string().min(1),
   ENCRYPTION_KEY: z.string().length(64),
-  DATABASE_URL: z.string().optional()
+  DATABASE_URL: z.string().optional(),
+  SESSION_VERSION: z.string().optional()
 });
 
 export function getEnv() {
