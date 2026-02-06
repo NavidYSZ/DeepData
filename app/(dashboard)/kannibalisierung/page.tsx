@@ -174,6 +174,26 @@ export default function KannibalisierungPage() {
     }
   }, [filteredRows, selectedBubble]);
 
+  const bubbleData = useMemo(() => {
+    return filteredRows.map((r) => {
+      const bucket = r.urls.length <= 2 ? "2" : r.urls.length <= 4 ? "3-4" : "5+";
+      return {
+        query: r.query,
+        x: r.topShare * 100,
+        y: r.spread,
+        size: r.totalImpressions,
+        urls: r.urls.length,
+        topShare: r.topShare * 100,
+        secondShare: r.secondShare * 100,
+        impressions: r.totalImpressions,
+        priority: r.priority,
+        priorityLevel: r.priorityLevel,
+        label: r.priorityLevel === "high" ? r.query : undefined,
+        bucket
+      };
+    });
+  }, [filteredRows]);
+
   const stats = useMemo(() => {
     if (!filteredRows.length) return null;
     const agg = filteredRows.reduce(
@@ -222,26 +242,6 @@ export default function KannibalisierungPage() {
     if (r.urls.length >= 3 && r.secondShare > 0.2) return "Split intent / interne Verlinkung klarziehen";
     return "Keep & monitor";
   };
-
-  const bubbleData = useMemo(() => {
-    return filteredRows.map((r) => {
-      const bucket = r.urls.length <= 2 ? "2" : r.urls.length <= 4 ? "3-4" : "5+";
-      return {
-        query: r.query,
-        x: r.topShare * 100,
-        y: r.spread,
-        size: r.totalImpressions,
-        urls: r.urls.length,
-        topShare: r.topShare * 100,
-        secondShare: r.secondShare * 100,
-        impressions: r.totalImpressions,
-        priority: r.priority,
-        priorityLevel: r.priorityLevel,
-        label: r.priorityLevel === "high" ? r.query : undefined,
-        bucket
-      };
-    });
-  }, [filteredRows]);
 
   const dumbbellData = useMemo(() => {
     return [...filteredRows]
