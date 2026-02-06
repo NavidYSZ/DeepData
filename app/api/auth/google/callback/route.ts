@@ -7,6 +7,11 @@ import { getGoogleRedirectUri } from "@/lib/env";
 import { authOptions } from "@/lib/auth";
 import { encrypt } from "@/lib/crypto";
 
+function buildRedirect(path: string, request: Request) {
+  const base = process.env.NEXTAUTH_URL ?? request.url;
+  return NextResponse.redirect(new URL(path, base));
+}
+
 async function fetchEmail(accessToken: string, idToken?: string): Promise<string | undefined> {
   // try id_token first
   if (idToken) {
@@ -39,15 +44,13 @@ export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id;
   if (!userId) {
-    const target = new URL("/api/auth/signin?callbackUrl=/dashboard", request.url);
-    return NextResponse.redirect(target);
+    return buildRedirect("/api/auth/signin?callbackUrl=/dashboard", request);
   }
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const errorParam = searchParams.get("error");
   if (!code) {
-    const target = new URL("/dashboard?gscError=missing_code", request.url);
-    return NextResponse.redirect(target);
+    return buildRedirect("/dashboard?gscError=missing_code", request);
   }
 
   const redirectUri = getGoogleRedirectUri();
@@ -63,15 +66,13 @@ export async function GET(request: Request) {
     // Ensure the user still exists (DB may have been reset)
     const userExists = await prisma.user.findUnique({ where: { id: userId } });
     if (!userExists) {
-      return NextResponse.redirect(
-        new URL("/api/auth/signin?error=SessionExpired&callbackUrl=/dashboard", request.url)
-      );
+      return buildRedirect("/api/auth/signin?error=SessionExpired&callbackUrl=/dashboard", request);
     }
 
     const tokens = await exchangeCodeForTokens(code, redirectUri);
     const refreshToken = tokens.refresh_token;
     if (!refreshToken) {
-      return NextResponse.redirect("/dashboard?gscError=no_refresh_token");
+      return buildRedirect("/dashboard?gscError=no_refresh_token", request);
     }
 
     const email = await fetchEmail(tokens.access_token, tokens.id_token);
@@ -94,7 +95,7 @@ export async function GET(request: Request) {
       path: "/"
     });
 
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return buildRedirect("/dashboard", request);
   } catch (err: any) {
     console.error("OAuth callback error", {
       message: err?.message,
@@ -109,7 +110,6 @@ export async function GET(request: Request) {
       : msg.toLowerCase().includes("access_denied")
         ? "access_denied"
         : "oauth_error";
-    const target = new URL(`/dashboard?gscError=${encodeURIComponent(short)}`, request.url);
-    return NextResponse.redirect(target);
+    return buildRedirect(`/dashboard?gscError=${encodeURIComponent(short)}`, request);
   }
 }
