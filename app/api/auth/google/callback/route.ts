@@ -64,9 +64,17 @@ export async function GET(request: Request) {
     });
 
     // Ensure the user still exists (DB may have been reset)
-    const userExists = await prisma.user.findUnique({ where: { id: userId } });
-    if (!userExists) {
-      return buildRedirect("/api/auth/signin?error=SessionExpired&callbackUrl=/dashboard", request);
+    let user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      const sessionUser = session?.user ?? {};
+      user = await prisma.user.create({
+        data: {
+          id: userId,
+          name: (sessionUser as any)?.name ?? null,
+          email: (sessionUser as any)?.email ?? null,
+          image: (sessionUser as any)?.image ?? null
+        }
+      });
     }
 
     const tokens = await exchangeCodeForTokens(code, redirectUri);
