@@ -14,8 +14,8 @@ import { RefreshCcw } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/data-explorer", label: "Data Explorer" },
   { href: "/rank-tracker", label: "Rank Tracker" },
+  { href: "/data-explorer", label: "Data Explorer" },
   { href: "/seo-bubble", label: "SEO Bubble" },
   { href: "/kannibalisierung", label: "Kannibalisierung" }
 ];

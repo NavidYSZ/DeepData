@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CannibalizationTable } from "@/components/dashboard/cannibalization-table";
@@ -18,6 +18,8 @@ import {
   assignPriorityLevels,
   type CannibalRow
 } from "@/lib/cannibalization";
+import { Maximize2 } from "lucide-react";
+import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
 
 interface SitesResponse {
   sites: { siteUrl: string; permissionLevel: string }[];
@@ -194,6 +196,26 @@ export default function KannibalisierungPage() {
     };
   }, [filteredRows]);
 
+  const [activeQuadrant, setActiveQuadrant] = useState<"all" | "q1" | "q2" | "q3" | "q4">("all");
+  const [fullscreen, setFullscreen] = useState(false);
+
+  const filteredBubbleData = useMemo(() => {
+    const data = bubbleData;
+    if (activeQuadrant === "all") return data;
+    const isQ1 = (p: any) => p.x > 60 && p.y < 20;
+    const isQ2 = (p: any) => p.x <= 60 && p.y < 20;
+    const isQ3 = (p: any) => p.x > 60 && p.y >= 20;
+    const isQ4 = (p: any) => p.x <= 60 && p.y >= 20;
+    const match = { q1: isQ1, q2: isQ2, q3: isQ3, q4: isQ4 }[activeQuadrant];
+    return data.filter(match);
+  }, [bubbleData, activeQuadrant]);
+
+  useEffect(() => {
+    if (selectedBubble && !filteredBubbleData.find((r) => r.query === selectedBubble.query)) {
+      setSelectedBubble(null);
+    }
+  }, [filteredBubbleData, selectedBubble]);
+
   const notConnected = error && error.toLowerCase().includes("not connected");
   const recommendation = (r: CannibalRow) => {
     if (r.topShare < 0.6 && r.spread > 20) return "Merge/Simplify: klare Haupt-URL setzen, interne Links vereinheitlichen";
@@ -358,11 +380,35 @@ export default function KannibalisierungPage() {
 
       {!loading && filteredRows.length > 0 && (
         <Card>
+          <CardHeader className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <CardTitle className="text-base">Bubble: Top Share vs Spread</CardTitle>
+            <div className="flex items-center gap-2 flex-wrap">
+              {[
+                { key: "all", label: "Alle" },
+                { key: "q1", label: "Q1 (x>60,y<20)" },
+                { key: "q2", label: "Q2 (x≤60,y<20)" },
+                { key: "q3", label: "Q3 (x>60,y≥20)" },
+                { key: "q4", label: "Q4 (x≤60,y≥20)" }
+              ].map((q) => (
+                <Button
+                  key={q.key}
+                  size="xs"
+                  variant={activeQuadrant === q.key ? "secondary" : "outline"}
+                  onClick={() => setActiveQuadrant(q.key as any)}
+                >
+                  {q.label}
+                </Button>
+              ))}
+              <Button variant="ghost" size="icon" onClick={() => setFullscreen(true)} aria-label="Vollbild">
+                <Maximize2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
           <CardContent className="space-y-4 py-4">
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="lg:col-span-2 h-[520px]">
                 <BubbleScatter
-                  data={bubbleData}
+                  data={filteredBubbleData}
                   onSelect={(query) => {
                     const found = filteredRows.find((r) => r.query === query) || null;
                     setSelectedBubble(found);
@@ -415,6 +461,20 @@ export default function KannibalisierungPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {fullscreen && (
+        <FullscreenOverlay title="Bubble: Top Share vs Spread" onClose={() => setFullscreen(false)}>
+          <div className="h-[75vh] min-h-[480px]">
+            <BubbleScatter
+              data={filteredBubbleData}
+              onSelect={(query) => {
+                const found = filteredRows.find((r) => r.query === query) || null;
+                setSelectedBubble(found);
+              }}
+            />
+          </div>
+        </FullscreenOverlay>
       )}
     </div>
   );

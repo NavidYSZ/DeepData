@@ -19,6 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
+import { Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSite } from "@/components/dashboard/site-context";
 
@@ -84,6 +86,8 @@ export default function SeoBubblePage() {
   const [selected, setSelected] = useState<DataPoint | null>(null);
   const [detailRows, setDetailRows] = useState<RawRow[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [activeQuadrant, setActiveQuadrant] = useState<"all" | "q1" | "q2" | "q3" | "q4">("all");
+  const [fullscreen, setFullscreen] = useState(false);
 
   const body = site
     ? {
@@ -150,6 +154,37 @@ export default function SeoBubblePage() {
 
   const notConnected = (error as any)?.status === 401;
 
+  const displayPoints = useMemo(() => {
+    if (activeQuadrant === "all") return points;
+    const isQ1 = (p: DataPoint) => p.ctr > ctrLowThreshold && p.position < 10;
+    const isQ2 = (p: DataPoint) => p.ctr <= ctrLowThreshold && p.position < 10;
+    const isQ3 = (p: DataPoint) => p.ctr > ctrLowThreshold && p.position >= 10;
+    const isQ4 = (p: DataPoint) => p.ctr <= ctrLowThreshold && p.position >= 10;
+    const match = { q1: isQ1, q2: isQ2, q3: isQ3, q4: isQ4 }[activeQuadrant];
+    return points.filter(match);
+  }, [points, activeQuadrant, ctrLowThreshold]);
+
+  useEffect(() => {
+    if (selected && !displayPoints.find((p) => p.id === selected.id)) {
+      setSelected(null);
+    }
+  }, [displayPoints, selected]);
+
+  const displayCtrValues = displayPoints.map((p) => p.ctr);
+  const displayPosValues = displayPoints.map((p) => p.position);
+
+  const displayMaxCtr = useMemo(() => {
+    if (!displayCtrValues.length) return maxCtr;
+    return Math.min(0.3, Math.max(...displayCtrValues, maxCtr));
+  }, [displayCtrValues, maxCtr]);
+
+  const displayYMax = useMemo(() => {
+    if (!displayPosValues.length) return yMax;
+    const maxVal = Math.max(...displayPosValues, yMax);
+    const p95v = p95(displayPosValues) * 1.2;
+    return Math.min(100, Math.max(maxVal, p95v));
+  }, [displayPosValues, yMax]);
+
   // Fetch detail rankings for a page when selected in page mode
   useEffect(() => {
     async function loadDetails(pageUrl: string) {
@@ -181,6 +216,115 @@ export default function SeoBubblePage() {
       setDetailRows([]);
     }
   }, [mode, selected, site, body?.startDate, body?.endDate]);
+
+  const renderChart = (heightClass: string) => (
+    <div className={heightClass}>
+      {isLoading ? (
+        <Skeleton className="h-full w-full" />
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis
+              type="number"
+              dataKey="ctr"
+              name="CTR"
+              domain={[0, displayMaxCtr || 0.1]}
+              tickFormatter={formatPct}
+              tick={{ fontSize: 11 }}
+            />
+            <YAxis
+              type="number"
+              dataKey="position"
+              name="Position"
+              domain={[1, displayYMax || 100]}
+              reversed
+              tick={{ fontSize: 11 }}
+              ticks={[1, 3, 10, 20, 50, 100].filter((t) => t <= (displayYMax || 100))}
+            />
+            {showRefs && (
+              <>
+                {[3, 10, 20].map((y) => (
+                  <ReferenceLine
+                    key={y}
+                    y={y}
+                    stroke="#e5e7eb"
+                    strokeDasharray="4 4"
+                    ifOverflow="extendDomain"
+                  />
+                ))}
+                {displayMaxCtr >= 0.01 && (
+                  <ReferenceLine
+                    x={0.01}
+                    stroke="#e5e7eb"
+                    strokeDasharray="4 4"
+                    ifOverflow="extendDomain"
+                  />
+                )}
+              </>
+            )}
+            {showZones && (
+              <>
+                <ReferenceArea
+                  x1={0}
+                  x2={ctrLowThreshold}
+                  y1={1}
+                  y2={10}
+                  fill="#e0f2fe"
+                  fillOpacity={0.25}
+                  stroke="none"
+                />
+                <ReferenceArea
+                  x1={ctrLowThreshold}
+                  x2={displayMaxCtr || 0.3}
+                  y1={4}
+                  y2={12}
+                  fill="#e2e8f0"
+                  fillOpacity={0.2}
+                  stroke="none"
+                />
+              </>
+            )}
+            <Tooltip
+              formatter={(value: any, name) => {
+                if (name === "ctr") return [formatPct(value as number), "CTR"];
+                if (name === "position") return [(value as number).toFixed(1), "Position"];
+                if (name === "impressions") return [(value as number).toLocaleString("de-DE"), "Impressions"];
+                if (name === "clicks") return [(value as number).toLocaleString("de-DE"), "Clicks"];
+                return value;
+              }}
+              labelFormatter={() => ""}
+              content={({ payload }) => {
+                const p = payload?.[0]?.payload as DataPoint | undefined;
+                if (!p) return null;
+                return (
+                  <div className="rounded-md border border-border bg-card px-3 py-2 text-sm shadow-md">
+                    <div className="font-semibold">{p.primary}</div>
+                    {p.secondary && <div className="text-xs text-muted-foreground">{p.secondary}</div>}
+                    <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                      <div>Position: {p.position.toFixed(1)}</div>
+                      <div>CTR: {formatPct(p.ctr)}</div>
+                      <div>Impressions: {p.impressions.toLocaleString("de-DE")}</div>
+                      <div>Clicks: {p.clicks.toLocaleString("de-DE")}</div>
+                    </div>
+                  </div>
+                );
+              }}
+            />
+            <Scatter
+              name="Keywords"
+              data={displayPoints}
+              fill="#6366f1"
+              shape="circle"
+              onClick={(p: any) => setSelected(p.payload as DataPoint)}
+            >
+              {/* radius via data.r */}
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -248,6 +392,11 @@ export default function SeoBubblePage() {
         </CardContent>
       </Card>
 
+      {fullscreen && (
+        <FullscreenOverlay title="SEO Bubble: Position vs CTR" onClose={() => setFullscreen(false)}>
+          {renderChart("h-[75vh] min-h-[500px]")}
+        </FullscreenOverlay>
+      )}
       {notConnected && (
         <Card className="border-dashed">
           <CardContent className="flex flex-col gap-4 py-6 md:flex-row md:items-center md:justify-between">
@@ -265,115 +414,33 @@ export default function SeoBubblePage() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <CardTitle>SEO Bubble: Position vs CTR</CardTitle>
+          <div className="flex items-center gap-2 flex-wrap">
+            {[
+              { key: "all", label: "Alle" },
+              { key: "q1", label: "Q1 (CTR hoch, Pos < 10)" },
+              { key: "q2", label: "Q2 (CTR niedrig, Pos < 10)" },
+              { key: "q3", label: "Q3 (CTR hoch, Pos ≥ 10)" },
+              { key: "q4", label: "Q4 (CTR niedrig, Pos ≥ 10)" }
+            ].map((q) => (
+              <Button
+                key={q.key}
+                size="xs"
+                variant={activeQuadrant === q.key ? "secondary" : "outline"}
+                onClick={() => setActiveQuadrant(q.key as any)}
+              >
+                {q.label}
+              </Button>
+            ))}
+            <Button variant="ghost" size="icon" onClick={() => setFullscreen(true)} aria-label="Vollbild">
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-4">
           <div className="lg:col-span-3 h-[520px]">
-            {isLoading ? (
-              <Skeleton className="h-full w-full" />
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis
-                    type="number"
-                    dataKey="ctr"
-                    name="CTR"
-                    domain={[0, maxCtr || 0.1]}
-                    tickFormatter={formatPct}
-                    tick={{ fontSize: 11 }}
-                  />
-                  <YAxis
-                    type="number"
-                    dataKey="position"
-                    name="Position"
-                    domain={[1, yMax || 100]}
-                    reversed
-                    tick={{ fontSize: 11 }}
-                    ticks={[1, 3, 10, 20, 50, 100].filter((t) => t <= (yMax || 100))}
-                  />
-                  {showRefs && (
-                    <>
-                      {[3, 10, 20].map((y) => (
-                        <ReferenceLine
-                          key={y}
-                          y={y}
-                          stroke="#e5e7eb"
-                          strokeDasharray="4 4"
-                          ifOverflow="extendDomain"
-                        />
-                      ))}
-                      {maxCtr >= 0.01 && (
-                        <ReferenceLine
-                          x={0.01}
-                          stroke="#e5e7eb"
-                          strokeDasharray="4 4"
-                          ifOverflow="extendDomain"
-                        />
-                      )}
-                    </>
-                  )}
-                  {showZones && (
-                    <>
-                      <ReferenceArea
-                        x1={0}
-                        x2={ctrLowThreshold}
-                        y1={1}
-                        y2={10}
-                        fill="#e0f2fe"
-                        fillOpacity={0.25}
-                        stroke="none"
-                      />
-                      <ReferenceArea
-                        x1={ctrLowThreshold}
-                        x2={maxCtr || 0.3}
-                        y1={4}
-                        y2={12}
-                        fill="#e2e8f0"
-                        fillOpacity={0.2}
-                        stroke="none"
-                      />
-                    </>
-                  )}
-                  <Tooltip
-                    formatter={(value: any, name) => {
-                      if (name === "ctr") return [formatPct(value as number), "CTR"];
-                      if (name === "position") return [(value as number).toFixed(1), "Position"];
-                      if (name === "impressions") return [(value as number).toLocaleString("de-DE"), "Impressions"];
-                      if (name === "clicks") return [(value as number).toLocaleString("de-DE"), "Clicks"];
-                      return value;
-                    }}
-                    labelFormatter={() => ""}
-                    content={({ payload }) => {
-                      const p = payload?.[0]?.payload as DataPoint | undefined;
-                      if (!p) return null;
-                      return (
-                        <div className="rounded-md border border-border bg-card px-3 py-2 text-sm shadow-md">
-                          <div className="font-semibold">{p.primary}</div>
-                          {p.secondary && <div className="text-xs text-muted-foreground">{p.secondary}</div>}
-                          <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                            <div>Position: {p.position.toFixed(1)}</div>
-                            <div>CTR: {formatPct(p.ctr)}</div>
-                            <div>Impressions: {p.impressions.toLocaleString("de-DE")}</div>
-                            <div>Clicks: {p.clicks.toLocaleString("de-DE")}</div>
-                          </div>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Scatter
-                    name="Keywords"
-                    data={points}
-                    fill="#6366f1"
-                    shape="circle"
-                    onClick={(p: any) => setSelected(p.payload as DataPoint)}
-                  >
-                    {/* radius via data.r */}
-                  </Scatter>
-                </ScatterChart>
-              </ResponsiveContainer>
-            )}
+            {renderChart("h-full")}
           </div>
           <div className="lg:col-span-1 space-y-3">
             <Card className="h-full">
