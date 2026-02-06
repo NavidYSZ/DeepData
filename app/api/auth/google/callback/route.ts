@@ -39,13 +39,15 @@ export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id;
   if (!userId) {
-    return NextResponse.redirect("/api/auth/signin?callbackUrl=/dashboard");
+    const target = new URL("/api/auth/signin?callbackUrl=/dashboard", request.url);
+    return NextResponse.redirect(target);
   }
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const errorParam = searchParams.get("error");
   if (!code) {
-    return NextResponse.redirect("/dashboard?gscError=missing_code");
+    const target = new URL("/dashboard?gscError=missing_code", request.url);
+    return NextResponse.redirect(target);
   }
 
   const redirectUri = getGoogleRedirectUri();
