@@ -426,14 +426,14 @@ export default function SeoBubblePage() {
             ].map((q) => (
               <Button
                 key={q.key}
-                size="xs"
+                size="sm"
                 variant={activeQuadrant === q.key ? "secondary" : "outline"}
                 onClick={() => setActiveQuadrant(q.key as any)}
               >
                 {q.label}
               </Button>
             ))}
-            <Button variant="ghost" size="icon" onClick={() => setFullscreen(true)} aria-label="Vollbild">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setFullscreen(true)} aria-label="Vollbild">
               <Maximize2 className="h-4 w-4" />
             </Button>
           </div>

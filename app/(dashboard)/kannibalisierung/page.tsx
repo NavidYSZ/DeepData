@@ -390,16 +390,16 @@ export default function KannibalisierungPage() {
                 { key: "q3", label: "Q3 (x>60,y≥20)" },
                 { key: "q4", label: "Q4 (x≤60,y≥20)" }
               ].map((q) => (
-                <Button
-                  key={q.key}
-                  size="xs"
-                  variant={activeQuadrant === q.key ? "secondary" : "outline"}
-                  onClick={() => setActiveQuadrant(q.key as any)}
-                >
+                      <Button
+                        key={q.key}
+                        size="sm"
+                        variant={activeQuadrant === q.key ? "secondary" : "outline"}
+                        onClick={() => setActiveQuadrant(q.key as any)}
+                      >
                   {q.label}
                 </Button>
               ))}
-              <Button variant="ghost" size="icon" onClick={() => setFullscreen(true)} aria-label="Vollbild">
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setFullscreen(true)} aria-label="Vollbild">
                 <Maximize2 className="h-4 w-4" />
               </Button>
             </div>
