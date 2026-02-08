@@ -15,6 +15,7 @@ import { RefreshCcw } from "lucide-react";
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/rank-tracker", label: "Rank Tracker" },
+  { href: "/url-tracker", label: "URL-Tracker" },
   { href: "/data-explorer", label: "Data Explorer" },
   { href: "/seo-bubble", label: "SEO Bubble" },
   { href: "/kannibalisierung", label: "Kannibalisierung" }
@@ -93,6 +94,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <h1 className="text-xl font-semibold">
                 {{
                   "/rank-tracker": "Rank Tracker",
+                  "/url-tracker": "URL-Tracker",
                   "/data-explorer": "Data Explorer",
                   "/kannibalisierung": "Kannibalisierung",
                   "/seo-bubble": "SEO Bubble"
