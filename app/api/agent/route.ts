@@ -27,6 +27,7 @@ const querySchema = z.object({
   endDate: z.string().min(10),
   dimensions: z.array(z.string()).min(1),
   rowLimit: z.number().optional(),
+  startRow: z.number().optional(),
   filters: z
     .array(
       z.object({
@@ -47,6 +48,9 @@ const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY || ""
 });
 
+const MAX_GSC_ROW_LIMIT = 5000;
+const MAX_ROWS_RETURNED = 200;
+
 async function ensureDir(dir: string) {
   await mkdir(dir, { recursive: true });
 }
@@ -58,6 +62,59 @@ async function getUserAccount(userId: string) {
     ? await prisma.gscAccount.findFirst({ where: { id: accountId, userId } })
     : await prisma.gscAccount.findFirst({ where: { userId }, orderBy: { created_at: "asc" } });
   return account;
+}
+
+function summarizeRows(
+  rows: { clicks: number; impressions: number; ctr: number; position: number }[],
+  totalRows: number
+) {
+  if (!rows?.length) return { totalRows, aggregatedRows: 0 };
+  const agg = rows.reduce(
+    (acc, r) => {
+      acc.clicks.sum += r.clicks;
+      acc.impr.sum += r.impressions;
+      acc.ctr.sum += r.ctr;
+      acc.pos.sum += r.position;
+      acc.clicks.min = Math.min(acc.clicks.min, r.clicks);
+      acc.impr.min = Math.min(acc.impr.min, r.impressions);
+      acc.ctr.min = Math.min(acc.ctr.min, r.ctr);
+      acc.pos.min = Math.min(acc.pos.min, r.position);
+      acc.clicks.max = Math.max(acc.clicks.max, r.clicks);
+      acc.impr.max = Math.max(acc.impr.max, r.impressions);
+      acc.ctr.max = Math.max(acc.ctr.max, r.ctr);
+      acc.pos.max = Math.max(acc.pos.max, r.position);
+      return acc;
+    },
+    {
+      clicks: { sum: 0, min: Infinity, max: -Infinity },
+      impr: { sum: 0, min: Infinity, max: -Infinity },
+      ctr: { sum: 0, min: Infinity, max: -Infinity },
+      pos: { sum: 0, min: Infinity, max: -Infinity }
+    }
+  );
+  const n = rows.length;
+  return {
+    totalRows,
+    aggregatedRows: n,
+    avg: {
+      clicks: agg.clicks.sum / n,
+      impressions: agg.impr.sum / n,
+      ctr: agg.ctr.sum / n,
+      position: agg.pos.sum / n
+    },
+    min: {
+      clicks: agg.clicks.min,
+      impressions: agg.impr.min,
+      ctr: agg.ctr.min,
+      position: agg.pos.min
+    },
+    max: {
+      clicks: agg.clicks.max,
+      impressions: agg.impr.max,
+      ctr: agg.ctr.max,
+      position: agg.pos.max
+    }
+  };
 }
 
 async function getAccessToken(userId: string) {
@@ -83,6 +140,15 @@ export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as any)?.id as string | undefined;
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
+  const abortHandler = () => {
+    console.warn("[agent] request aborted", { userId });
+  };
+  try {
+    req.signal?.addEventListener("abort", abortHandler);
+  } catch {
+    // no-op if signal unavailable
+  }
 
   const body = inputSchema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
@@ -135,29 +201,60 @@ export async function POST(req: Request) {
       description: "Query Google Search Console searchAnalytics",
       inputSchema: querySchema,
       execute: async (input: z.infer<typeof querySchema>) => {
-        console.log("[agent] tool:querySearchAnalytics start", { siteUrl: input.siteUrl, dims: input.dimensions });
-        const token = await getAccessToken(userId);
-        const rows = await searchAnalyticsQuery(token, input.siteUrl, {
-          startDate: input.startDate,
-          endDate: input.endDate,
-          dimensions: input.dimensions,
-          rowLimit: input.rowLimit,
-          dimensionFilterGroups:
-            input.filters && input.filters.length > 0
-              ? [
-                  {
-                    groupType: input.filters.length > 1 ? "or" : "and",
-                    filters: input.filters.map((f) => ({
-                      dimension: f.dimension,
-                      operator: f.operator,
-                      expression: f.expression
-                    }))
-                  }
-                ]
-              : undefined
+        const started = Date.now();
+        const rowLimit = Math.min(input.rowLimit ?? MAX_GSC_ROW_LIMIT, MAX_GSC_ROW_LIMIT);
+        const startRow = Math.max(input.startRow ?? 0, 0);
+        console.log("[agent] tool:querySearchAnalytics start", {
+          siteUrl: input.siteUrl,
+          dims: input.dimensions,
+          rowLimit,
+          startRow
         });
-        console.log("[agent] tool:querySearchAnalytics done", { rows: rows?.length ?? 0 });
-        return { type: "data", rows };
+        if (!input.siteUrl || !input.startDate || !input.endDate || input.dimensions.length === 0) {
+          return { type: "error", code: "validation_error", message: "siteUrl, dates und dimensions sind erforderlich." };
+        }
+        try {
+          const token = await getAccessToken(userId);
+          const rows = await searchAnalyticsQuery(token, input.siteUrl, {
+            startDate: input.startDate,
+            endDate: input.endDate,
+            dimensions: input.dimensions,
+            rowLimit,
+            startRow,
+            dimensionFilterGroups:
+              input.filters && input.filters.length > 0
+                ? [
+                    {
+                      groupType: input.filters.length > 1 ? "or" : "and",
+                      filters: input.filters.map((f) => ({
+                        dimension: f.dimension,
+                        operator: f.operator,
+                        expression: f.expression
+                      }))
+                    }
+                  ]
+                : undefined
+          });
+          const totalRows = rows?.length ?? 0;
+          const limitedRows = rows ? rows.slice(0, MAX_ROWS_RETURNED) : [];
+          const stats = summarizeRows(limitedRows, totalRows);
+          console.log("[agent] tool:querySearchAnalytics done", {
+            rows: totalRows,
+            limited: limitedRows.length,
+            ms: Date.now() - started
+          });
+          return {
+            type: "data",
+            rows: limitedRows,
+            totalRows,
+            truncated: totalRows > limitedRows.length,
+            stats,
+            pagination: { rowLimit, startRow }
+          };
+        } catch (err: any) {
+          console.error("[agent] tool:querySearchAnalytics error", err);
+          return { type: "error", code: "gsc_query_failed", message: err?.message ?? "GSC query failed" };
+        }
       }
     }) as any,
     exportCsv: tool({
@@ -200,6 +297,8 @@ export async function POST(req: Request) {
   };
 
   try {
+    const started = Date.now();
+    console.log("[agent] stream start", { sessionId: chatSession.id, model: "gpt-5-mini-2025-08-07" });
     const result = await streamText({
       model: openai("gpt-5-mini-2025-08-07"),
       messages: coreMessages as any,
@@ -232,6 +331,9 @@ EXPORT-REGELN
 - Bei umfangreichen Ergebnissen (z. B. >100 relevante Zeilen) oder Report-Intent:
   exportCsv proaktiv ausführen und Download bereitstellen.
 - Dateiname sprechend benennen: {property}_{intent}_{start}_{end}.csv
+- Bei großen Abfragen paginiere: rowLimit <= 5000, nutze startRow für Folgeseiten.
+- Für sehr große Ergebnismengen: fordere CSV-Export statt Daten inline zu liefern.
+- Wenn Tool ein Fehlerobjekt {type:"error", code, message} zurückgibt, erkläre den Fehler und biete nächsten Schritt an.
 
 ANALYSE-QUALITÄT
 - Für Kannibalisierung: immer query+page auswerten, inkl. Click-Share je URL, CTR/Position, Veränderung ggü. Vergleichszeitraum.
@@ -240,13 +342,16 @@ ANALYSE-QUALITÄT
 `,
       tools: agentTools as any,
       // allow up to 6 LLM/tool iterations; prevents infinite loops while enabling multi-step tool use
-      stopWhen: stepCountIs(6),
+      stopWhen: stepCountIs(15),
       onFinish: async ({ text, toolCalls, response }) => {
         try {
           console.log("[agent] finish", {
             sessionId: chatSession.id,
             text: text?.slice(0, 120),
-            toolCalls
+            toolCalls,
+            responseId: (response as any)?.id,
+            model: (response as any)?.modelId ?? (response as any)?.model,
+            ms: Date.now() - started
           });
           await persistUserMessage(chatSession.id, userId, { text: message });
           await persistAssistantMessage(chatSession.id, { text, toolCalls, response }, response?.modelId);

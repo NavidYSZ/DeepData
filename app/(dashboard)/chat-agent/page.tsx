@@ -91,8 +91,15 @@ export default function ChatAgentPage() {
       });
       if (!res.ok || !res.body) {
         const txt = await res.text();
-        console.error("[chat] api error", res.status, txt);
-        throw new Error(txt || `Fehler ${res.status}`);
+        let friendly = txt;
+        try {
+          const parsed = JSON.parse(txt);
+          friendly = parsed?.error || parsed?.message || txt;
+        } catch {
+          // keep txt
+        }
+        console.error("[chat] api error", res.status, friendly);
+        throw new Error(friendly || `Fehler ${res.status}`);
       }
 
       let text = "";
