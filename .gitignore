@@ -5,6 +5,11 @@ node_modules
 .env
 data/sqlite.db
 data/sqlite.db-journal
+prisma/data/sqlite.db
+prisma/data/sqlite.db-journal
+.DS_Store
+**/.DS_Store
+data/agent-files
 pnpm-lock.yaml
 package-lock.json
 yarn.lock

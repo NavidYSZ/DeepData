@@ -18,7 +18,8 @@ const navItems = [
   { href: "/url-tracker", label: "URL-Tracker" },
   { href: "/data-explorer", label: "Data Explorer" },
   { href: "/seo-bubble", label: "SEO Bubble" },
-  { href: "/kannibalisierung", label: "Kannibalisierung" }
+  { href: "/kannibalisierung", label: "Kannibalisierung" },
+  { href: "/chat-agent", label: "Chat Agent" }
 ];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
@@ -97,7 +98,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   "/url-tracker": "URL-Tracker",
                   "/data-explorer": "Data Explorer",
                   "/kannibalisierung": "Kannibalisierung",
-                  "/seo-bubble": "SEO Bubble"
+                  "/seo-bubble": "SEO Bubble",
+                  "/chat-agent": "Chat Agent"
                 }[pathname] ?? "Dashboard"}
               </h1>
             </div>
