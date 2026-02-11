@@ -1,0 +1,115 @@
+([Past chat][1])([Past chat][2])([Past chat][3])([Past chat][4])
+
+Ja — **das ist richtig stark** und für dein GSC-Tool absolut sinnvoll.
+
+Für **deinen konkreten Stack (Next.js 14 App Router + TS + Tailwind)** würde ich es so aufsetzen:
+
+## Meine klare Empfehlung
+
+**Frontend:** `assistant-ui` + `@ai-sdk/react` (Vercel AI SDK)
+**Backend:** Next.js Route Handler (`app/api/agent/route.ts`) + OpenAI **Responses API** + deine GSC-Functions als Tools
+
+Warum genau das:
+
+* `assistant-ui` ist auf Chat-UX spezialisiert und lässt sich direkt mit AI SDK verbinden (inkl. Runtime/Transport-Integration). ([assistant-ui][5])
+* AI SDK passt perfekt zu Next.js und hat sauberes Tool-Calling + Multi-Step-Loops (`stopWhen`) + Streaming. ([ai-sdk.dev][6])
+* Für neue OpenAI-Integrationen solltest du auf Responses API setzen; Assistants API ist deprecated und auf 26.08.2026 terminiert. ([OpenAI Entwickler][7])
+
+---
+
+## Technische Zielarchitektur (pragmatisch & robust)
+
+1. **Chat-Seite**
+
+   * Neue Route: `app/(dashboard)/gsc-agent/page.tsx`
+   * UI: assistant-ui Thread + composer + 3–4 Quick-Prompt-Buttons
+   * AI Elements für fertige AI-native UI-Bausteine auf shadcn-Basis. ([elements.ai-sdk.dev][8])
+
+2. **Agent API**
+
+   * `app/api/gsc-agent/route.ts` als Route Handler (POST)
+   * `streamText(...)` mit Tool-Definitions (zod-Schemas)
+   * Multi-step tool loop via `stopWhen(stepCountIs(...))` ([ai-sdk.dev][9])
+   * Custom data streaming (status/events/cards metadata) an UI-Message-Parts. ([ai-sdk.dev][10])
+
+3. **Tool-Layer (Server only)**
+
+   * `listSites`
+   * `querySearchAnalytics`
+   * `inspectUrl`
+   * `listSitemaps`
+   * `submitSitemap` (nur falls Write-Scope gewollt)
+   * `exportCsv` / `exportXlsx`
+
+   Die Search Console API deckt genau diese Bereiche ab (Sites, Search Analytics, Sitemaps, URL Inspection). ([Google for Developers][11])
+
+4. **Download-Flow**
+
+   * Tool erzeugt Datei (CSV/XLSX), speichert sie serverseitig
+   * Rückgabe im Tool-Result: `downloadUrl`, `filename`, `expiresAt`
+   * Extra GET-Route für sicheren Download (Content-Disposition)
+   * Next.js Route Handler unterstützen das sauber über Web Request/Response APIs. ([nextjs.org][12])
+
+---
+
+## Wichtig für GSC-Tools (damit es in Produktion nicht bricht)
+
+* `searchAnalytics.query` paginieren mit `startRow`; `rowLimit` max 25.000 (default 1.000). ([Google for Developers][13])
+* Datums-/Zeitlogik beachten: GSC arbeitet in PT für date/hour Felder. ([Google for Developers][13])
+* Für stundenweise Analysen: Dimension `HOUR` + `dataState=hourly_all`; API liefert stündlich bis zu 10 Tage, teils partiell. ([Google for Developers][14])
+* Quotas/Limits existieren pro Site/User/Project (QPS/QPM/QPD + load limits). Tool-Caching + Backoff einbauen. ([Google for Developers][15])
+
+---
+
+## OAuth/Permissions sauber aufsetzen
+
+* Mindestens `webmasters.readonly` für Read-Use-Cases; Write-Scope nur wenn du wirklich Sitemap submitten willst. ([Google for Developers][16])
+* Für langlebige Sessions: OAuth mit `access_type=offline`, Refresh Tokens sicher serverseitig speichern. ([Google for Developers][17])
+* Niemals Tokens im Client.
+
+---
+
+## Die 4 Quick-Prompt-Buttons, die ich zuerst bauen würde
+
+1. **“Quick Wins (letzte 28 Tage)”**
+   → Find Pages mit hohen Impressions + niedriger CTR + Position 4–15
+
+2. **“Content Decay erkennen”**
+   → Vergleich letzte 28 vs vorherige 28 Tage (Clicks/Impr/CTR/Pos)
+
+3. **“Cannibalization Check”**
+   → mehrere URLs pro Query + sinkende CTR trotz Impressions
+
+4. **“Export Executive Report”**
+   → erzeugt CSV/XLSX + Download-Link
+
+---
+
+## Chat-UI Auswahl (kurz & ehrlich)
+
+* **Best Fit jetzt:** assistant-ui + AI SDK
+  (schnell produktiv, schöne UI, Tool-Integration, streaming-ready). ([assistant-ui][5])
+* **Leichter/DIY:** nur AI SDK + eigene shadcn-Komponenten
+* **Schwergewicht/Später:** eigener Orchestrator mit Subagents
+
+---
+
+Wenn du willst, kann ich dir als nächsten Schritt direkt ein **konkretes Modul-Layout** (Dateibaum + Interfaces + Tool-Contracts + UI-Komponentenstruktur) geben, 1:1 passend zu Next.js App Router.
+
+[1]: https://chatgpt.com/c/698b29cf-23b8-838f-bdc2-66a2fa89390d "OpenAI Agents SDK Setup"
+[2]: https://chatgpt.com/c/691318d5-2eac-832c-9e72-bcc77852d839 "GPT mit MCP-Server"
+[3]: https://chatgpt.com/c/694c4d7b-3f80-8331-acee-941aa7b645b0 "Codex für mittlere Projekte"
+[4]: https://chatgpt.com/c/6979e2df-2400-8329-a04d-3ee673ce340a "SEO Chat Agent Framework"
+[5]: https://www.assistant-ui.com/docs "Introduction | assistant-ui"
+[6]: https://ai-sdk.dev/docs/reference/ai-sdk-ui/use-chat "AI SDK UI: useChat"
+[7]: https://developers.openai.com/api/docs/deprecations/?utm_source=chatgpt.com "Deprecations | OpenAI API"
+[8]: https://elements.ai-sdk.dev/ "AI Elements"
+[9]: https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling "AI SDK Core: Tool Calling"
+[10]: https://ai-sdk.dev/docs/ai-sdk-ui/streaming-data "AI SDK UI: Streaming Custom Data"
+[11]: https://developers.google.com/webmaster-tools/v1/api_reference_index "API Reference  |  Search Console API  |  Google for Developers"
+[12]: https://nextjs.org/docs/app/api-reference/file-conventions/route "File-system conventions: route.js | Next.js"
+[13]: https://developers.google.com/webmaster-tools/v1/searchanalytics/query "Search Analytics: query  |  Search Console API  |  Google for Developers"
+[14]: https://developers.google.com/search/blog/2025/04/san-hourly-data "The Search Analytics API now supports hourly data  |  Google Search Central Blog  |  Google for Developers"
+[15]: https://developers.google.com/webmaster-tools/limits "Usage Limits  |  Search Console API  |  Google for Developers"
+[16]: https://developers.google.com/webmaster-tools/v1/sites/list "Sites: list  |  Search Console API  |  Google for Developers"
+[17]: https://developers.google.com/identity/protocols/oauth2/web-server?utm_source=chatgpt.com "Using OAuth 2.0 for Web Server Applications | Authorization"
