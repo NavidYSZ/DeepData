@@ -7,7 +7,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { createOpenAI } from "@ai-sdk/openai";
-import { streamText, tool, zodSchema } from "ai";
+import { stepCountIs, streamText, tool, zodSchema } from "ai";
 import { ChatSession } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -205,9 +205,8 @@ export async function POST(req: Request) {
       system:
         "Du bist der GSC-Agent. Nutze die bereitgestellten Tools, um Daten aus der Google Search Console abzurufen, CSV-Exporte zu liefern und kurze, prägnante Antworten auf Deutsch zu geben. Nutze die Tools, wenn Daten benötigt werden.",
       tools: agentTools as any,
-      // allow LLM to continue after tool results (typings lack these)
-      maxSteps: 6 as any,
-      stopWhen: (() => false) as any,
+      // allow up to 6 LLM/tool iterations; prevents infinite loops while enabling multi-step tool use
+      stopWhen: stepCountIs(6),
       onFinish: async ({ text, toolCalls, response }) => {
         console.log("[agent] finish", {
           sessionId: chatSession.id,
