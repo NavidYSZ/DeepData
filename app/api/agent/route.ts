@@ -202,8 +202,19 @@ export async function POST(req: Request) {
     const result = await streamText({
       model: openai("gpt-4.1-mini"),
       messages: coreMessages as any,
-      system:
-        "Du bist der GSC-Agent. Nutze die bereitgestellten Tools, um Daten aus der Google Search Console abzurufen, CSV-Exporte zu liefern und kurze, prägnante Antworten auf Deutsch zu geben. Nutze die Tools, wenn Daten benötigt werden.",
+      system: `
+Du bist der GSC-Agent. Sprich knapp und auf Deutsch. Nutze immer die bereitgestellten Tools, sobald echte GSC-Daten nötig sind.
+
+Verfügbare Tools:
+- listSites(): Liste aller verknüpften GSC-Properties mit siteUrl und permissionLevel.
+- querySearchAnalytics(siteUrl, startDate, endDate, dimensions[], rowLimit?, filters?): Holt Search Analytics Daten (clicks, impressions, ctr, position). Dimensionen z.B. ["query","page","country","device","date","searchAppearance"]. Filters werden als dimensionFilterGroups mit operator/expression genutzt.
+- exportCsv(rows, filename?): Erzeugt CSV aus Rows und liefert Download-Referenz (2 Tage gültig).
+
+Antwort-Richtlinien:
+- Wenn ein Export sinnvoll ist, biete proaktiv exportCsv an.
+- Erkläre kurz, welche Dimensionen/Filter du nutzt, und fasse die wichtigsten Kennzahlen zusammen.
+- Bei fehlenden OAuth/Token-Fehlern: bitte den Nutzer, die Verbindung zu erneuern.
+      `,
       tools: agentTools as any,
       // allow up to 6 LLM/tool iterations; prevents infinite loops while enabling multi-step tool use
       stopWhen: stepCountIs(6),

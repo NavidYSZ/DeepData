@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { Trash2 } from "lucide-react";
 
 type SessionListItem = {
   id: string;
@@ -59,6 +60,20 @@ export default function ChatAgentPage() {
     setSessionId(null);
     setMessages([]);
     setInput("");
+  }
+
+  async function deleteSession(id: string, ev?: React.MouseEvent) {
+    ev?.stopPropagation();
+    try {
+      const res = await fetch(`/api/agent/sessions/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`Löschen fehlgeschlagen (${res.status})`);
+      if (sessionId === id) {
+        startNewSession();
+      }
+      refreshSessions();
+    } catch (e) {
+      console.error("[chat] delete session error", e);
+    }
   }
 
   async function sendMessage(prompt: string) {
@@ -129,9 +144,23 @@ export default function ChatAgentPage() {
                   )}
                   onClick={() => loadSession(s.id)}
                 >
-                  <div className="font-semibold truncate">{s.title || "Unterhaltung"}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(s.updatedAt).toLocaleString("de-DE")}
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold truncate">{s.title || "Unterhaltung"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(s.updatedAt).toLocaleString("de-DE")}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={(ev) => deleteSession(s.id, ev)}
+                      aria-label="Verlauf löschen"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </button>
               ))}
@@ -157,7 +186,7 @@ export default function ChatAgentPage() {
               ))}
             </div>
             <div className="h-px w-full bg-border" />
-            <div className="h-[60vh] rounded-md border border-border bg-card" ref={scrollRef}>
+            <div className="h-[60vh] rounded-md border border-border bg-card overflow-y-auto" ref={scrollRef}>
               <div className="space-y-3 p-4">
                 {messages.map((m, idx) => (
                   <div key={m.id ?? idx} className="space-y-1">
