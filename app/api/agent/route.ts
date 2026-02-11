@@ -7,7 +7,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { createOpenAI } from "@ai-sdk/openai";
-import { streamText } from "ai";
+import { streamText, tool, zodSchema } from "ai";
 import { ChatSession } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -115,13 +115,9 @@ export async function POST(req: Request) {
   coreMessages.push({ role: "user", content: message });
 
   const agentTools: any = {
-    listSites: {
-      type: "function",
+    listSites: tool({
       description: "List GSC sites for the current user",
-      parameters: {
-        type: "object",
-        properties: {}
-      },
+      inputSchema: z.object({}),
       execute: async () => {
         const token = await getAccessToken(userId);
         const sites = await listSites(token);
@@ -130,33 +126,10 @@ export async function POST(req: Request) {
           sites: sites.map((s) => ({ siteUrl: s.siteUrl, permissionLevel: s.permissionLevel }))
         };
       }
-    },
-    querySearchAnalytics: {
-      type: "function",
+    }) as any,
+    querySearchAnalytics: tool({
       description: "Query Google Search Console searchAnalytics",
-      parameters: {
-        type: "object",
-        required: ["siteUrl", "startDate", "endDate", "dimensions"],
-        properties: {
-          siteUrl: { type: "string" },
-          startDate: { type: "string" },
-          endDate: { type: "string" },
-          dimensions: { type: "array", items: { type: "string" } },
-          rowLimit: { type: "number" },
-          filters: {
-            type: "array",
-            items: {
-              type: "object",
-              required: ["dimension", "operator", "expression"],
-              properties: {
-                dimension: { type: "string" },
-                operator: { type: "string" },
-                expression: { type: "string" }
-              }
-            }
-          }
-        }
-      },
+      inputSchema: querySchema,
       execute: async (input: z.infer<typeof querySchema>) => {
         const token = await getAccessToken(userId);
         const rows = await searchAnalyticsQuery(token, input.siteUrl, {
@@ -179,18 +152,10 @@ export async function POST(req: Request) {
         });
         return { type: "data", rows };
       }
-    },
-    exportCsv: {
-      type: "function",
+    }) as any,
+    exportCsv: tool({
       description: "Create a CSV file from provided rows and return a download reference",
-      parameters: {
-        type: "object",
-        required: ["rows"],
-        properties: {
-          rows: { type: "array", items: { type: "object" } },
-          filename: { type: "string" }
-        }
-      },
+      inputSchema: exportSchema,
       execute: async (input: z.infer<typeof exportSchema>) => {
         const dir = path.join(process.cwd(), "data", "agent-files");
         await ensureDir(dir);
@@ -221,7 +186,7 @@ export async function POST(req: Request) {
           expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 2).toISOString()
         };
       }
-    }
+    }) as any
   };
 
   const result = await streamText({
