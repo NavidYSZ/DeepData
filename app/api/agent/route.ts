@@ -7,7 +7,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { createOpenAI } from "@ai-sdk/openai";
-import { stepCountIs, streamText, tool, zodSchema } from "ai";
+import { createTextStreamResponse, stepCountIs, streamText, tool, zodSchema } from "ai";
 import { ChatSession } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -50,6 +50,12 @@ const openai = createOpenAI({
 });
 
 const MAX_GSC_ROW_LIMIT = 5000;
+
+type ToolStatusState = "running" | "done" | "error";
+
+function formatStatusBlock(label: string, state: ToolStatusState) {
+  return `\n[[JSON]]${JSON.stringify({ type: "status", label, state })}[[/JSON]]\n`;
+}
 
 async function ensureDir(dir: string) {
   await mkdir(dir, { recursive: true });
@@ -326,6 +332,24 @@ DEFAULT_PROPERTY: ${resolvedSite ?? "unbekannt"}
 SPRACHE & STIL
 - Antworte auf Deutsch, präzise und prägnant.
 - Vermeide lange Einleitungen. Fokus auf Erkenntnisse und Maßnahmen.
+- Keine technischen Setup-Details im Chat (keine siteUrl, Filter, Dimensionen erwähnen).
+
+GSC-ONLY (STRICT)
+- Aussagen NUR auf Basis von GSC-Daten.
+- Kein Crawling: wenn nach H1/Title/On-Page gefragt wird, klar sagen: keine Crawl-Daten vorhanden; optional Hinweis "Crawler-Integration erforderlich".
+
+FORMAT (JSON-BLOCKS)
+- Strukturierte Inhalte IMMER als JSON-Blocks:
+  [[JSON]]
+  { ... }
+  [[/JSON]]
+- Erlaubte Blocktypen:
+  type:"table" (columns, rows, title?)
+  type:"metrics" (items[{label,value}], title?)
+  type:"actions" (items[], title?)
+  type:"note" (text, tone?)
+- Tabellen/KPIs immer als JSON-Blocks rendern, niemals als Fließtext.
+- Alles außerhalb der JSON-Blocks ist normaler Fließtext.
 
 TOOL-CONTRACT (VERBINDLICH)
 - Verfügbare Tools:
@@ -333,13 +357,9 @@ TOOL-CONTRACT (VERBINDLICH)
   2) querySearchAnalytics(siteUrl, startDate, endDate, dimensions[], rowLimit?, filters?)
   3) exportCsv(rows, filename?)
 - Wenn echte GSC-Daten benötigt werden, nutze immer Tools (nie schätzen, nie erfinden).
-- Nenne in jeder Analyse: siteUrl, Zeitraum, Dimensionen, Filter.
 
 PROPERTY-AUFLÖSUNG
-- Wenn Nutzer eine Domain nennt (z. B. "planindustrie.de"), mappe selbstständig auf die passende Property.
-- Wenn nur eine passende Property existiert: sofort verwenden, keine Rückfrage.
-- Wenn mehrere passen: wähle nach exaktem Host-Match, sonst zuletzt genutzte Property.
-- Rückfrage nur bei hartem Blocker (keine passende Property / fehlende Rechte / Toolausfall).
+- Nutze DEFAULT_PROPERTY. Keine Setup-Fragen. Rückfrage nur bei harten Blockern (kein Property / OAuth / Toolfehler).
 
 FEHLERBEHANDLUNG
 - Bei OAuth/Token/401/403: klar sagen, dass die Verbindung erneuert werden muss.
@@ -347,13 +367,10 @@ FEHLERBEHANDLUNG
 - Bei leeren Daten: transparent "keine ausreichenden Daten im gewählten Zeitraum".
 
 EXPORT-REGELN
-- Bei umfangreichen Ergebnissen (z. B. >100 relevante Zeilen) oder Report-Intent:
-  exportCsv proaktiv ausführen und Download bereitstellen.
+- Bei umfangreichen Ergebnissen oder Report-Intent: exportCsv proaktiv ausführen und Download bereitstellen.
 - Dateiname sprechend benennen: {property}_{intent}_{start}_{end}.csv
-- Bei großen Abfragen paginiere: rowLimit <= 5000, nutze startRow für Folgeseiten.
-- Für sehr große Ergebnismengen: fordere CSV-Export statt Daten inline zu liefern.
+- Bei großen Abfragen paginiere: rowLimit <= 5000, nutze startRow.
 - Wenn Tool ein Fehlerobjekt {type:"error", code, message} zurückgibt, erkläre den Fehler und biete nächsten Schritt an.
-- Nutze die DEFAULT_PROPERTY, stelle keine Setup-Fragen. Nur bei harten Blockern (kein Property / OAuth / Toolfehler) nachfragen.
 
 ANALYSE-QUALITÄT
 - Für Kannibalisierung: immer query+page auswerten, inkl. Click-Share je URL, CTR/Position, Veränderung ggü. Vergleichszeitraum.
@@ -387,7 +404,35 @@ ANALYSE-QUALITÄT
       }
     });
 
-    return result.toTextStreamResponse();
+    const textStream = new ReadableStream<string>({
+      async start(controller) {
+        try {
+          for await (const part of result.fullStream) {
+            if (part.type === "text-delta") {
+              controller.enqueue(part.text);
+              continue;
+            }
+            if (part.type === "tool-call") {
+              controller.enqueue(formatStatusBlock(part.toolName, "running"));
+              continue;
+            }
+            if (part.type === "tool-result") {
+              controller.enqueue(formatStatusBlock(part.toolName, "done"));
+              continue;
+            }
+            if (part.type === "tool-error") {
+              controller.enqueue(formatStatusBlock(part.toolName, "error"));
+            }
+          }
+        } catch (err) {
+          controller.error(err);
+          return;
+        }
+        controller.close();
+      }
+    });
+
+    return createTextStreamResponse({ textStream });
   } catch (err: any) {
     console.error("[agent] error", err);
     return NextResponse.json({ error: err?.message ?? "agent error" }, { status: 500 });
