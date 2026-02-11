@@ -69,13 +69,13 @@ async function getAccessToken(userId: string) {
 
 async function persistUserMessage(sessionId: string, userId: string, content: any) {
   await prisma.chatMessage.create({
-    data: { sessionId, userId, role: "user", content }
+    data: { sessionId, userId, role: "user", content: JSON.stringify(content) }
   });
 }
 
 async function persistAssistantMessage(sessionId: string, content: any, model?: string) {
   await prisma.chatMessage.create({
-    data: { sessionId, role: "assistant", content, model }
+    data: { sessionId, role: "assistant", content: JSON.stringify(content), model }
   });
 }
 
