@@ -7,7 +7,8 @@ import fs from "fs";
 import crypto from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { createOpenAI } from "@ai-sdk/openai";
-import { streamText, convertToCoreMessages } from "ai";
+import { streamText } from "ai";
+import { ChatSession } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
@@ -89,11 +90,11 @@ export async function POST(req: Request) {
   const { message, sessionId: incomingSessionId } = body.data;
 
   // upsert session
-  const sessionRecord =
-    incomingSessionId &&
-    (await prisma.chatSession.findFirst({ where: { id: incomingSessionId, userId, archived: false } }));
+  const sessionRecord = incomingSessionId
+    ? await prisma.chatSession.findFirst({ where: { id: incomingSessionId, userId, archived: false } })
+    : null;
 
-  const chatSession =
+  const chatSession: ChatSession =
     sessionRecord ??
     (await prisma.chatSession.create({
       data: { userId, title: message.slice(0, 60) }
@@ -105,17 +106,15 @@ export async function POST(req: Request) {
     take: 50
   });
 
-  const coreMessages = convertToCoreMessages(
-    history.map((m) => ({
-      role: m.role as "user" | "assistant" | "system" | "tool",
-      content: typeof m.content === "string" ? m.content : (m.content as any)
-    }))
-  );
+  const coreMessages = history.map((m) => ({
+    role: m.role as "user" | "assistant" | "system" | "tool",
+    content: typeof m.content === "string" ? m.content : JSON.stringify(m.content)
+  }));
 
   // append new user message for the call
   coreMessages.push({ role: "user", content: message });
 
-  const agentTools = {
+  const agentTools: any = {
     listSites: {
       description: "List GSC sites for the current user",
       parameters: z.object({}),
@@ -192,11 +191,10 @@ export async function POST(req: Request) {
 
   const result = await streamText({
     model: openai("gpt-4.1-mini"),
-    messages: coreMessages,
+    messages: coreMessages as any,
     system:
       "Du bist der GSC-Agent. Nutze die bereitgestellten Tools, um Daten aus der Google Search Console abzurufen, CSV-Exporte zu liefern und kurze, prägnante Antworten auf Deutsch zu geben. Nutze die Tools, wenn Daten benötigt werden.",
-    tools: agentTools,
-    maxSteps: 6,
+    tools: agentTools as any,
     onFinish: async ({ text, toolCalls, response }) => {
       await persistUserMessage(chatSession.id, userId, { text: message });
       await persistAssistantMessage(chatSession.id, { text, toolCalls, response }, response?.modelId);
@@ -207,5 +205,5 @@ export async function POST(req: Request) {
     }
   });
 
-  return result.toAIStreamResponse();
+  return result.toTextStreamResponse();
 }
