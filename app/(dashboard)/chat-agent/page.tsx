@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useSite } from "@/components/dashboard/site-context";
+import { Loader2 } from "lucide-react";
 import { Trash2 } from "lucide-react";
 
 type SessionListItem = {
@@ -32,6 +34,7 @@ const quickPrompts = [
 ];
 
 export default function ChatAgentPage() {
+  const { site } = useSite();
   const { data: sessionsData, mutate: refreshSessions } = useSWR<{ sessions: SessionListItem[] }>(
     "/api/agent/sessions",
     fetcher
@@ -87,7 +90,7 @@ export default function ChatAgentPage() {
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: prompt, sessionId: sessionId ?? undefined })
+        body: JSON.stringify({ message: prompt, sessionId: sessionId ?? undefined, siteHint: site ?? undefined })
       });
       if (!res.ok || !res.body) {
         const txt = await res.text();
@@ -202,7 +205,7 @@ export default function ChatAgentPage() {
                         {m.role === "user" ? "Du" : m.role === "assistant" ? "Agent" : m.role}
                       </Badge>
                       {m.role === "assistant" && loading && m.id === "assistant-temp" && (
-                        <span>Lädt…</span>
+                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                       )}
                     </div>
                     <div className="whitespace-pre-wrap text-sm leading-relaxed">

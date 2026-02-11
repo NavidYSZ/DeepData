@@ -18,7 +18,8 @@ import { stringify } from "csv-stringify/sync";
 
 const inputSchema = z.object({
   message: z.string().min(1),
-  sessionId: z.string().optional()
+  sessionId: z.string().optional(),
+  siteHint: z.string().optional()
 });
 
 const querySchema = z.object({
@@ -49,7 +50,6 @@ const openai = createOpenAI({
 });
 
 const MAX_GSC_ROW_LIMIT = 5000;
-const MAX_ROWS_RETURNED = 200;
 
 async function ensureDir(dir: string) {
   await mkdir(dir, { recursive: true });
@@ -153,7 +153,7 @@ export async function POST(req: Request) {
   const body = inputSchema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
-  const { message, sessionId: incomingSessionId } = body.data;
+  const { message, sessionId: incomingSessionId, siteHint } = body.data;
 
   // upsert session
   const sessionRecord = incomingSessionId
@@ -182,6 +182,21 @@ export async function POST(req: Request) {
   // append new user message for the call
   coreMessages.push({ role: "user", content: message });
 
+  // resolve default property: prefer exact siteHint, else last session property if stored, else first available
+  let resolvedSite: string | null = null;
+  try {
+    const token = await getAccessToken(userId);
+    const sites = await listSites(token);
+    if (siteHint) {
+      resolvedSite = sites.find((s) => s.siteUrl === siteHint)?.siteUrl ?? null;
+    }
+    if (!resolvedSite && sites.length > 0) {
+      resolvedSite = sites[0].siteUrl;
+    }
+  } catch (err) {
+    console.error("[agent] resolve site error", err);
+  }
+
   const agentTools: any = {
     listSites: tool({
       description: "List GSC sites for the current user",
@@ -202,20 +217,21 @@ export async function POST(req: Request) {
       inputSchema: querySchema,
       execute: async (input: z.infer<typeof querySchema>) => {
         const started = Date.now();
+        const siteUrl = input.siteUrl ?? resolvedSite;
         const rowLimit = Math.min(input.rowLimit ?? MAX_GSC_ROW_LIMIT, MAX_GSC_ROW_LIMIT);
         const startRow = Math.max(input.startRow ?? 0, 0);
         console.log("[agent] tool:querySearchAnalytics start", {
-          siteUrl: input.siteUrl,
+          siteUrl,
           dims: input.dimensions,
           rowLimit,
           startRow
         });
-        if (!input.siteUrl || !input.startDate || !input.endDate || input.dimensions.length === 0) {
+        if (!siteUrl || !input.startDate || !input.endDate || input.dimensions.length === 0) {
           return { type: "error", code: "validation_error", message: "siteUrl, dates und dimensions sind erforderlich." };
         }
         try {
           const token = await getAccessToken(userId);
-          const rows = await searchAnalyticsQuery(token, input.siteUrl, {
+          const rows = await searchAnalyticsQuery(token, siteUrl, {
             startDate: input.startDate,
             endDate: input.endDate,
             dimensions: input.dimensions,
@@ -236,18 +252,16 @@ export async function POST(req: Request) {
                 : undefined
           });
           const totalRows = rows?.length ?? 0;
-          const limitedRows = rows ? rows.slice(0, MAX_ROWS_RETURNED) : [];
-          const stats = summarizeRows(limitedRows, totalRows);
+          const stats = summarizeRows(rows, totalRows);
           console.log("[agent] tool:querySearchAnalytics done", {
             rows: totalRows,
-            limited: limitedRows.length,
             ms: Date.now() - started
           });
           return {
             type: "data",
-            rows: limitedRows,
+            rows,
             totalRows,
-            truncated: totalRows > limitedRows.length,
+            truncated: false,
             stats,
             pagination: { rowLimit, startRow }
           };
@@ -298,11 +312,16 @@ export async function POST(req: Request) {
 
   try {
     const started = Date.now();
-    console.log("[agent] stream start", { sessionId: chatSession.id, model: "gpt-5-mini-2025-08-07" });
+    console.log("[agent] stream start", {
+      sessionId: chatSession.id,
+      model: "gpt-5-mini-2025-08-07",
+      resolvedSite
+    });
     const result = await streamText({
       model: openai("gpt-5-mini-2025-08-07"),
       messages: coreMessages as any,
       system: `ZUSÄTZLICHE BETRIEBSREGELN
+DEFAULT_PROPERTY: ${resolvedSite ?? "unbekannt"}
 
 SPRACHE & STIL
 - Antworte auf Deutsch, präzise und prägnant.
@@ -334,6 +353,7 @@ EXPORT-REGELN
 - Bei großen Abfragen paginiere: rowLimit <= 5000, nutze startRow für Folgeseiten.
 - Für sehr große Ergebnismengen: fordere CSV-Export statt Daten inline zu liefern.
 - Wenn Tool ein Fehlerobjekt {type:"error", code, message} zurückgibt, erkläre den Fehler und biete nächsten Schritt an.
+- Nutze die DEFAULT_PROPERTY, stelle keine Setup-Fragen. Nur bei harten Blockern (kein Property / OAuth / Toolfehler) nachfragen.
 
 ANALYSE-QUALITÄT
 - Für Kannibalisierung: immer query+page auswerten, inkl. Click-Share je URL, CTR/Position, Veränderung ggü. Vergleichszeitraum.
