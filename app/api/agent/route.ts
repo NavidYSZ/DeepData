@@ -7,7 +7,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { createOpenAI } from "@ai-sdk/openai";
-import { streamText } from "ai";
+import { streamText, zodSchema } from "ai";
 import { ChatSession } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -117,7 +117,7 @@ export async function POST(req: Request) {
   const agentTools: any = {
     listSites: {
       description: "List GSC sites for the current user",
-      parameters: z.object({}),
+      parameters: zodSchema(z.object({})),
       execute: async () => {
         const token = await getAccessToken(userId);
         const sites = await listSites(token);
@@ -126,10 +126,10 @@ export async function POST(req: Request) {
           sites: sites.map((s) => ({ siteUrl: s.siteUrl, permissionLevel: s.permissionLevel }))
         };
       }
-    },
+    } as any,
     querySearchAnalytics: {
       description: "Query Google Search Console searchAnalytics",
-      parameters: querySchema,
+      parameters: zodSchema(querySchema),
       execute: async (input: z.infer<typeof querySchema>) => {
         const token = await getAccessToken(userId);
         const rows = await searchAnalyticsQuery(token, input.siteUrl, {
@@ -152,10 +152,10 @@ export async function POST(req: Request) {
         });
         return { type: "data", rows };
       }
-    },
+    } as any,
     exportCsv: {
       description: "Create a CSV file from provided rows and return a download reference",
-      parameters: exportSchema,
+      parameters: zodSchema(exportSchema),
       execute: async (input: z.infer<typeof exportSchema>) => {
         const dir = path.join(process.cwd(), "data", "agent-files");
         await ensureDir(dir);
@@ -186,7 +186,7 @@ export async function POST(req: Request) {
           expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 2).toISOString()
         };
       }
-    }
+    } as any
   };
 
   const result = await streamText({
