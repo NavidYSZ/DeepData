@@ -142,18 +142,19 @@ export async function POST(req: Request) {
           endDate: input.endDate,
           dimensions: input.dimensions,
           rowLimit: input.rowLimit,
-          dimensionFilterGroups: input.filters
-            ? [
-                {
-                  groupType: input.filters.length > 1 ? "or" : "and",
-                  filters: input.filters.map((f) => ({
-                    dimension: f.dimension,
-                    operator: f.operator,
-                    expression: f.expression
-                  }))
-                }
-              ]
-            : undefined
+          dimensionFilterGroups:
+            input.filters && input.filters.length > 0
+              ? [
+                  {
+                    groupType: input.filters.length > 1 ? "or" : "and",
+                    filters: input.filters.map((f) => ({
+                      dimension: f.dimension,
+                      operator: f.operator,
+                      expression: f.expression
+                    }))
+                  }
+                ]
+              : undefined
         });
         console.log("[agent] tool:querySearchAnalytics done", { rows: rows?.length ?? 0 });
         return { type: "data", rows };
@@ -241,17 +242,23 @@ ANALYSE-QUALITÄT
       // allow up to 6 LLM/tool iterations; prevents infinite loops while enabling multi-step tool use
       stopWhen: stepCountIs(6),
       onFinish: async ({ text, toolCalls, response }) => {
-        console.log("[agent] finish", {
-          sessionId: chatSession.id,
-          text: text?.slice(0, 120),
-          toolCalls
-        });
-        await persistUserMessage(chatSession.id, userId, { text: message });
-        await persistAssistantMessage(chatSession.id, { text, toolCalls, response }, response?.modelId);
-        await prisma.chatSession.update({
-          where: { id: chatSession.id },
-          data: { title: chatSession.title?.startsWith("Neue Unterhaltung") ? message.slice(0, 60) : chatSession.title }
-        });
+        try {
+          console.log("[agent] finish", {
+            sessionId: chatSession.id,
+            text: text?.slice(0, 120),
+            toolCalls
+          });
+          await persistUserMessage(chatSession.id, userId, { text: message });
+          await persistAssistantMessage(chatSession.id, { text, toolCalls, response }, response?.modelId);
+          await prisma.chatSession.update({
+            where: { id: chatSession.id },
+            data: {
+              title: chatSession.title?.startsWith("Neue Unterhaltung") ? message.slice(0, 60) : chatSession.title
+            }
+          });
+        } catch (err) {
+          console.error("[agent] onFinish error", err);
+        }
       }
     });
 
