@@ -100,6 +100,8 @@ export async function POST(req: Request) {
       data: { userId, title: message.slice(0, 60) }
     }));
 
+  console.log("[agent] request", { userId, sessionId: chatSession.id, message });
+
   const history = await prisma.chatMessage.findMany({
     where: { sessionId: chatSession.id },
     orderBy: { createdAt: "asc" },
@@ -119,8 +121,10 @@ export async function POST(req: Request) {
       description: "List GSC sites for the current user",
       inputSchema: z.object({}),
       execute: async () => {
+        console.log("[agent] tool:listSites start", { userId });
         const token = await getAccessToken(userId);
         const sites = await listSites(token);
+        console.log("[agent] tool:listSites done", { count: sites.length });
         return {
           type: "data",
           sites: sites.map((s) => ({ siteUrl: s.siteUrl, permissionLevel: s.permissionLevel }))
@@ -131,6 +135,7 @@ export async function POST(req: Request) {
       description: "Query Google Search Console searchAnalytics",
       inputSchema: querySchema,
       execute: async (input: z.infer<typeof querySchema>) => {
+        console.log("[agent] tool:querySearchAnalytics start", { siteUrl: input.siteUrl, dims: input.dimensions });
         const token = await getAccessToken(userId);
         const rows = await searchAnalyticsQuery(token, input.siteUrl, {
           startDate: input.startDate,
@@ -150,6 +155,7 @@ export async function POST(req: Request) {
               ]
             : undefined
         });
+        console.log("[agent] tool:querySearchAnalytics done", { rows: rows?.length ?? 0 });
         return { type: "data", rows };
       }
     }) as any,
@@ -157,6 +163,7 @@ export async function POST(req: Request) {
       description: "Create a CSV file from provided rows and return a download reference",
       inputSchema: exportSchema,
       execute: async (input: z.infer<typeof exportSchema>) => {
+        console.log("[agent] tool:exportCsv start", { rows: input.rows.length, filename: input.filename });
         const dir = path.join(process.cwd(), "data", "agent-files");
         await ensureDir(dir);
         const id = crypto.randomUUID();
@@ -177,7 +184,7 @@ export async function POST(req: Request) {
             expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 2) // 2 days
           }
         });
-        return {
+        const result = {
           type: "file",
           fileId: id,
           filename,
@@ -185,25 +192,37 @@ export async function POST(req: Request) {
           size: stats.size,
           expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 2).toISOString()
         };
+        console.log("[agent] tool:exportCsv done", result);
+        return result;
       }
     }) as any
   };
 
-  const result = await streamText({
-    model: openai("gpt-4.1-mini"),
-    messages: coreMessages as any,
-    system:
-      "Du bist der GSC-Agent. Nutze die bereitgestellten Tools, um Daten aus der Google Search Console abzurufen, CSV-Exporte zu liefern und kurze, prägnante Antworten auf Deutsch zu geben. Nutze die Tools, wenn Daten benötigt werden.",
-    tools: agentTools as any,
-    onFinish: async ({ text, toolCalls, response }) => {
-      await persistUserMessage(chatSession.id, userId, { text: message });
-      await persistAssistantMessage(chatSession.id, { text, toolCalls, response }, response?.modelId);
-      await prisma.chatSession.update({
-        where: { id: chatSession.id },
-        data: { title: chatSession.title?.startsWith("Neue Unterhaltung") ? message.slice(0, 60) : chatSession.title }
-      });
-    }
-  });
+  try {
+    const result = await streamText({
+      model: openai("gpt-4.1-mini"),
+      messages: coreMessages as any,
+      system:
+        "Du bist der GSC-Agent. Nutze die bereitgestellten Tools, um Daten aus der Google Search Console abzurufen, CSV-Exporte zu liefern und kurze, prägnante Antworten auf Deutsch zu geben. Nutze die Tools, wenn Daten benötigt werden.",
+      tools: agentTools as any,
+      onFinish: async ({ text, toolCalls, response }) => {
+        console.log("[agent] finish", {
+          sessionId: chatSession.id,
+          text: text?.slice(0, 120),
+          toolCalls
+        });
+        await persistUserMessage(chatSession.id, userId, { text: message });
+        await persistAssistantMessage(chatSession.id, { text, toolCalls, response }, response?.modelId);
+        await prisma.chatSession.update({
+          where: { id: chatSession.id },
+          data: { title: chatSession.title?.startsWith("Neue Unterhaltung") ? message.slice(0, 60) : chatSession.title }
+        });
+      }
+    });
 
-  return result.toTextStreamResponse();
+    return result.toTextStreamResponse();
+  } catch (err: any) {
+    console.error("[agent] error", err);
+    return NextResponse.json({ error: err?.message ?? "agent error" }, { status: 500 });
+  }
 }

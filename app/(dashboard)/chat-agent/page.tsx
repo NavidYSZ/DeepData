@@ -66,6 +66,7 @@ export default function ChatAgentPage() {
     setLoading(true);
     const optimisticId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`;
     setMessages((prev) => [...prev, { id: optimisticId, role: "user", content: prompt }]);
+    console.log("[chat] send", { prompt, sessionId });
     setInput("");
     try {
       const res = await fetch("/api/agent", {
@@ -75,7 +76,8 @@ export default function ChatAgentPage() {
       });
       if (!res.ok || !res.body) {
         const txt = await res.text();
-        throw new Error(txt || "Fehler");
+        console.error("[chat] api error", res.status, txt);
+        throw new Error(txt || `Fehler ${res.status}`);
       }
 
       let text = "";
@@ -85,6 +87,7 @@ export default function ChatAgentPage() {
         const { done, value } = await reader.read();
         if (done) break;
         text += decoder.decode(value, { stream: true });
+        console.log("[chat] stream chunk", { length: text.length });
         setMessages((prev) => {
           const others = prev.filter((m) => m.id !== "assistant-temp");
           return [...others, { id: "assistant-temp", role: "assistant", content: text }];
@@ -96,6 +99,7 @@ export default function ChatAgentPage() {
       });
       refreshSessions();
     } catch (e: any) {
+      console.error("[chat] send error", e);
       setMessages((prev) => [...prev, { role: "assistant", content: `Fehler: ${e.message}` }]);
     } finally {
       setLoading(false);
