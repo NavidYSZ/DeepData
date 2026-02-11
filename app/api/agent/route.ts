@@ -205,6 +205,8 @@ export async function POST(req: Request) {
       system:
         "Du bist der GSC-Agent. Nutze die bereitgestellten Tools, um Daten aus der Google Search Console abzurufen, CSV-Exporte zu liefern und kurze, prägnante Antworten auf Deutsch zu geben. Nutze die Tools, wenn Daten benötigt werden.",
       tools: agentTools as any,
+      // allow LLM to continue after tool results (typings lack maxSteps, so cast)
+      maxSteps: 6 as any,
       onFinish: async ({ text, toolCalls, response }) => {
         console.log("[agent] finish", {
           sessionId: chatSession.id,
