@@ -200,7 +200,7 @@ export async function POST(req: Request) {
 
   try {
     const result = await streamText({
-      model: openai("gpt-4.1-mini"),
+      model: openai("gpt-5-mini-2025-08-07"),
       messages: coreMessages as any,
       system: `
 Du bist der GSC-Agent. Sprich knapp und auf Deutsch. Nutze immer die bereitgestellten Tools, sobald echte GSC-Daten nötig sind.
