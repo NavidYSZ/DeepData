@@ -18,6 +18,9 @@ model User {
   gscAccounts GscAccount[]
   accounts   Account[]
   sessions   Session[]
+  chatSessions ChatSession[]
+  chatMessages ChatMessage[]
+  chatFiles   ChatFile[]
 }
 
 model GscAccount {
@@ -84,7 +87,7 @@ model ChatMessage {
   userId     String?
   user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   role       String   // user | assistant | tool | system
-  content    Json     // structured message parts (text, tool calls, data)
+  content    String   // JSON stringified content
   model      String?
   toolName   String?
   toolCallId String?
