@@ -51,6 +51,7 @@ export default function DataExplorerPage() {
   const [contains, setContains] = useState("");
   const [notContains, setNotContains] = useState("");
   const [minWords, setMinWords] = useState<number | "">("");
+  const [selectedPage, setSelectedPage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!site && sites?.sites?.length) {
@@ -72,7 +73,7 @@ export default function DataExplorerPage() {
             siteUrl: site,
             startDate,
             endDate,
-            dimensions: ["query"],
+            dimensions: ["query", "page"],
             rowLimit: 25000
           }),
           signal: controller.signal
@@ -111,9 +112,11 @@ export default function DataExplorerPage() {
         : true;
       const wordCount = q.trim() ? q.trim().split(/\s+/).length : 0;
       const passesMinWords = minWords === "" ? true : wordCount >= Number(minWords);
-      return passesSearch && passesContains && passesNotContains && passesMinWords;
+      const page = r.keys[1] ?? "";
+      const passesPage = selectedPage ? page === selectedPage : true;
+      return passesSearch && passesContains && passesNotContains && passesMinWords && passesPage;
     });
-  }, [rows, search, contains, notContains, minWords]);
+  }, [rows, search, contains, notContains, minWords, selectedPage]);
 
   const stats = useMemo(() => {
     if (!filtered.length) return null;
@@ -251,6 +254,14 @@ export default function DataExplorerPage() {
           <Badge variant="secondary">Clicks: {(stats?.clicks ?? 0).toLocaleString("de-DE")}</Badge>
           <Badge variant="secondary">Ø Position: {stats ? stats.position.toFixed(1) : "-"}</Badge>
           <Badge variant="secondary">Ø CTR: {stats ? stats.ctr.toFixed(1) : "-"}%</Badge>
+          {selectedPage && (
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">Filter: {selectedPage}</Badge>
+              <Button size="sm" variant="ghost" onClick={() => setSelectedPage(null)}>
+                Zurück
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -258,7 +269,7 @@ export default function DataExplorerPage() {
         loading ? (
           <Skeleton className="h-[500px] w-full" />
         ) : (
-          <DataExplorerTable rows={filtered} />
+          <DataExplorerTable rows={filtered} onSelectPage={setSelectedPage} selectedPage={selectedPage} />
         )
       )}
     </div>

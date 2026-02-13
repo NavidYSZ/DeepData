@@ -8,10 +8,18 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import type { QueryRow } from "./queries-table";
 import { Button } from "@/components/ui/button";
 
-type SortCol = "impressions" | "position" | "ctr" | "clicks" | null;
+type SortCol = "impressions" | "clicks" | null;
 type SortDir = "asc" | "desc" | null;
 
-export function DataExplorerTable({ rows }: { rows: QueryRow[] }) {
+export function DataExplorerTable({
+  rows,
+  onSelectPage,
+  selectedPage
+}: {
+  rows: QueryRow[];
+  onSelectPage: (page: string) => void;
+  selectedPage: string | null;
+}) {
   const [sortCol, setSortCol] = useState<SortCol>("impressions");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -63,13 +71,12 @@ export function DataExplorerTable({ rows }: { rows: QueryRow[] }) {
   };
 
   function exportCsv() {
-    const header = ["Query", "Impressions", "Clicks", "CTR", "Position"];
+    const header = ["Query", "Impressions", "Clicks", "Page"];
     const lines = sorted.map((r) => [
       `"${(r.keys[0] ?? "").replace(/"/g, '""')}"`,
       r.impressions,
       r.clicks,
-      (r.ctr * 100).toFixed(2),
-      r.position.toFixed(2)
+      `"${(r.keys[1] ?? "").replace(/"/g, '""')}"`
     ].join(","));
     const csv = [header.join(","), ...lines].join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
@@ -95,28 +102,50 @@ export function DataExplorerTable({ rows }: { rows: QueryRow[] }) {
             <Table className="text-sm min-w-full">
               <TableHeader className="sticky top-0 bg-card z-10">
                 <TableRow>
-                  <TableHead>Query</TableHead>
-                  <TableHead className="text-right">{header("impressions", "Imp.")}</TableHead>
-                  <TableHead className="text-right">{header("position", "Avg. Pos")}</TableHead>
-                  <TableHead className="text-right">{header("ctr", "CTR")}</TableHead>
+                  <TableHead>Keyword</TableHead>
+                  <TableHead className="text-right">{header("impressions", "Impr.")}</TableHead>
                   <TableHead className="text-right">{header("clicks", "Clicks")}</TableHead>
+                  <TableHead>URL (Slug)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sorted.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
                     Keine Daten
                   </TableCell>
                 </TableRow>
               )}
               {sorted.map((r, idx) => (
                 <TableRow key={idx} className={cn(idx % 2 === 0 && "bg-muted/30") }>
-                  <TableCell className="max-w-[240px] truncate" title={r.keys[0]}>{r.keys[0]}</TableCell>
+                  <TableCell className="max-w-[220px] truncate" title={r.keys[0]}>
+                    {r.keys[0]}
+                  </TableCell>
                   <TableCell className="text-right">{r.impressions.toLocaleString("de-DE")}</TableCell>
-                  <TableCell className="text-right">{r.position.toFixed(1)}</TableCell>
-                  <TableCell className="text-right">{(r.ctr * 100).toFixed(1)}%</TableCell>
                   <TableCell className="text-right">{r.clicks.toLocaleString("de-DE")}</TableCell>
+                  <TableCell className="max-w-[280px] truncate" title={r.keys[1]}>
+                    {r.keys[1] ? (
+                      <button
+                        type="button"
+                        className={cn(
+                          "text-left text-primary hover:underline",
+                          selectedPage === r.keys[1] && "font-semibold"
+                        )}
+                        onClick={() => onSelectPage(r.keys[1] as string)}
+                      >
+                        {(() => {
+                          try {
+                            const url = new URL(r.keys[1] as string);
+                            return url.pathname || "/";
+                          } catch {
+                            return r.keys[1];
+                          }
+                        })()}
+                      </button>
+                    ) : (
+                      "-"
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
               </TableBody>
