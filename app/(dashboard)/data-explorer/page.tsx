@@ -52,6 +52,7 @@ export default function DataExplorerPage() {
   const [notContains, setNotContains] = useState("");
   const [minWords, setMinWords] = useState<number | "">("");
   const [selectedPage, setSelectedPage] = useState<string | null>(null);
+  const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
 
   useEffect(() => {
     if (!site && sites?.sites?.length) {
@@ -114,9 +115,10 @@ export default function DataExplorerPage() {
       const passesMinWords = minWords === "" ? true : wordCount >= Number(minWords);
       const page = r.keys[1] ?? "";
       const passesPage = selectedPage ? page === selectedPage : true;
-      return passesSearch && passesContains && passesNotContains && passesMinWords && passesPage;
+      const passesKeyword = selectedKeyword ? q === selectedKeyword : true;
+      return passesSearch && passesContains && passesNotContains && passesMinWords && passesPage && passesKeyword;
     });
-  }, [rows, search, contains, notContains, minWords, selectedPage]);
+  }, [rows, search, contains, notContains, minWords, selectedPage, selectedKeyword]);
 
   const stats = useMemo(() => {
     if (!filtered.length) return null;
@@ -254,10 +256,18 @@ export default function DataExplorerPage() {
           <Badge variant="secondary">Clicks: {(stats?.clicks ?? 0).toLocaleString("de-DE")}</Badge>
           <Badge variant="secondary">Ø Position: {stats ? stats.position.toFixed(1) : "-"}</Badge>
           <Badge variant="secondary">Ø CTR: {stats ? stats.ctr.toFixed(1) : "-"}%</Badge>
-          {selectedPage && (
+          {(selectedPage || selectedKeyword) && (
             <div className="flex items-center gap-2">
-              <Badge variant="secondary">Filter: {selectedPage}</Badge>
-              <Button size="sm" variant="ghost" onClick={() => setSelectedPage(null)}>
+              <Badge variant="secondary">Filter: {selectedKeyword ?? selectedPage}</Badge>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="rounded-full border border-black/60 px-3"
+                onClick={() => {
+                  setSelectedPage(null);
+                  setSelectedKeyword(null);
+                }}
+              >
                 Zurück
               </Button>
             </div>
@@ -269,7 +279,19 @@ export default function DataExplorerPage() {
         loading ? (
           <Skeleton className="h-[500px] w-full" />
         ) : (
-          <DataExplorerTable rows={filtered} onSelectPage={setSelectedPage} selectedPage={selectedPage} />
+          <DataExplorerTable
+            rows={filtered}
+            onSelectPage={(page) => {
+              setSelectedPage(page);
+              setSelectedKeyword(null);
+            }}
+            onSelectKeyword={(keyword) => {
+              setSelectedKeyword(keyword);
+              setSelectedPage(null);
+            }}
+            selectedPage={selectedPage}
+            selectedKeyword={selectedKeyword}
+          />
         )
       )}
     </div>
