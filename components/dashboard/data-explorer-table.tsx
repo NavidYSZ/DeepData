@@ -71,9 +71,10 @@ export function DataExplorerTable({
   };
 
   function exportCsv() {
-    const header = ["Query", "Impressions", "Clicks", "Page"];
+    const header = ["Query", "Position", "Impressions", "Clicks", "Page"];
     const lines = sorted.map((r) => [
       `"${(r.keys[0] ?? "").replace(/"/g, '""')}"`,
+      r.position.toFixed(2),
       r.impressions,
       r.clicks,
       `"${(r.keys[1] ?? "").replace(/"/g, '""')}"`
@@ -103,6 +104,7 @@ export function DataExplorerTable({
               <TableHeader className="sticky top-0 bg-card z-10">
                 <TableRow>
                   <TableHead>Keyword</TableHead>
+                  <TableHead className="text-right">Pos.</TableHead>
                   <TableHead className="text-right">{header("impressions", "Impr.")}</TableHead>
                   <TableHead className="text-right">{header("clicks", "Clicks")}</TableHead>
                   <TableHead>URL (Slug)</TableHead>
@@ -121,6 +123,7 @@ export function DataExplorerTable({
                   <TableCell className="max-w-[220px] truncate" title={r.keys[0]}>
                     {r.keys[0]}
                   </TableCell>
+                  <TableCell className="text-right">{r.position.toFixed(1)}</TableCell>
                   <TableCell className="text-right">{r.impressions.toLocaleString("de-DE")}</TableCell>
                   <TableCell className="text-right">{r.clicks.toLocaleString("de-DE")}</TableCell>
                   <TableCell className="max-w-[280px] truncate" title={r.keys[1]}>
