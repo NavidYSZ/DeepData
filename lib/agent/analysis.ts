@@ -169,8 +169,10 @@ export function buildContentDecay(current: GscRow[], previous: GscRow[], topN: n
   };
 
   if (!losers.length) {
+    const note: UiBlock = { type: "note", tone: "info", text: "Keine klaren Verlierer im Zeitraum gefunden." };
+    const blocks: UiBlock[] = [metrics, note];
     return {
-      blocks: [metrics, { type: "note", tone: "info", text: "Keine klaren Verlierer im Zeitraum gefunden." }],
+      blocks,
       facts: { totals: { current: curTotals, previous: prevTotals } }
     };
   }
@@ -190,8 +192,9 @@ export function buildContentDecay(current: GscRow[], previous: GscRow[], topN: n
     ])
   };
 
+  const blocks: UiBlock[] = [metrics, table];
   return {
-    blocks: [metrics, table],
+    blocks,
     facts: {
       totals: { current: curTotals, previous: prevTotals },
       losers: losers.slice(0, 5).map((r) => ({
