@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useSite } from "@/components/dashboard/site-context";
 import type { QueryRow } from "@/components/dashboard/queries-table";
 import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
@@ -16,6 +16,9 @@ import {
   type TrendPoint,
   type ChartPoint
 } from "@/components/dashboard/rank-charts";
+import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashboard/page-shell";
+import { SortableHeader, type SortDirection } from "@/components/dashboard/sortable-header";
+import { EmptyState } from "@/components/dashboard/states";
 
 interface QueryResponse {
   rows: QueryRow[];
@@ -104,10 +107,27 @@ export default function UrlTrackerPage() {
   const [search, setSearch] = useState("");
   const [minImpr, setMinImpr] = useState(0);
   const [minClicks, setMinClicks] = useState(0);
-  const [sortBy, setSortBy] = useState<"clicks" | "impressions" | "ctr" | "pos" | "keywords" | "traffic">("clicks");
+  type SortCol = "url" | "impressions" | "clicks" | "ctr" | "pos" | "keywords" | "traffic" | "topKeyword";
+  const [sortCol, setSortCol] = useState<SortCol>("clicks");
+  const [sortDir, setSortDir] = useState<SortDirection>("desc");
   const [topN, setTopN] = useState<"200" | "500" | "all">("all");
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [detailShowTrend, setDetailShowTrend] = useState(false);
+
+  function toggleSort(col: SortCol) {
+    if (col !== sortCol) {
+      setSortCol(col);
+      setSortDir("desc");
+    } else {
+      if (sortDir === "desc") setSortDir("asc");
+      else if (sortDir === "asc") {
+        setSortCol(col);
+        setSortDir(null);
+      } else {
+        setSortDir("desc");
+      }
+    }
+  }
 
   const { data, error, isLoading } = useSWR<QueryResponse>(
     site ? ["/api/gsc/query", site, startDate, endDate, "page-query"] : null,
@@ -204,25 +224,31 @@ export default function UrlTrackerPage() {
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
+    if (!sortDir) return arr;
     arr.sort((a, b) => {
-      switch (sortBy) {
+      const dir = sortDir === "desc" ? -1 : 1;
+      switch (sortCol) {
+        case "url":
+          return a.url.localeCompare(b.url) * dir;
+        case "topKeyword":
+          return (a.topKeyword ?? "").localeCompare(b.topKeyword ?? "") * dir;
         case "impressions":
-          return (b.impressions ?? 0) - (a.impressions ?? 0);
+          return ((a.impressions ?? 0) - (b.impressions ?? 0)) * dir;
         case "ctr":
-          return (b.ctr ?? 0) - (a.ctr ?? 0);
+          return ((a.ctr ?? 0) - (b.ctr ?? 0)) * dir;
         case "pos":
-          return (a.avgPos ?? 0) - (b.avgPos ?? 0);
+          return ((a.avgPos ?? 0) - (b.avgPos ?? 0)) * dir;
         case "keywords":
-          return (b.keywords ?? 0) - (a.keywords ?? 0);
+          return ((a.keywords ?? 0) - (b.keywords ?? 0)) * dir;
         case "traffic":
-          return (b.trafficShare ?? 0) - (a.trafficShare ?? 0);
+          return ((a.trafficShare ?? 0) - (b.trafficShare ?? 0)) * dir;
         case "clicks":
         default:
-          return (b.clicks ?? 0) - (a.clicks ?? 0);
+          return ((a.clicks ?? 0) - (b.clicks ?? 0)) * dir;
       }
     });
     return arr;
-  }, [filtered, sortBy]);
+  }, [filtered, sortCol, sortDir]);
 
   const limited = useMemo(() => {
     if (topN === "all") return sorted;
@@ -320,9 +346,14 @@ export default function UrlTrackerPage() {
   );
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="grid gap-4 md:grid-cols-3 lg:grid-cols-4 py-4">
+    <div className="space-y-6">
+      <PageHeader
+        title="URL-Tracker"
+        description="Sieh, welche URLs welche Keywords tragen – inklusive Verlauf."
+      />
+
+      {!notConnected && (
+        <FilterBar className="md:grid-cols-3 lg:grid-cols-6">
           <div className="space-y-2">
             <label className="text-sm font-medium">Start</label>
             <Input type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -334,28 +365,6 @@ export default function UrlTrackerPage() {
           <div className="space-y-2">
             <label className="text-sm font-medium">Suche (URL/Keyword)</label>
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="example.com/page" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Sortierung</label>
-            <div className="flex flex-wrap gap-2 text-xs">
-              {[
-                { key: "clicks", label: "Clicks" },
-                { key: "impressions", label: "Impressions" },
-                { key: "ctr", label: "CTR" },
-                { key: "pos", label: "Ø Position" },
-                { key: "keywords", label: "#Keywords" },
-                { key: "traffic", label: "Traffic %" }
-              ].map((opt) => (
-                <Button
-                  key={opt.key}
-                  size="sm"
-                  variant={sortBy === opt.key ? "secondary" : "outline"}
-                  onClick={() => setSortBy(opt.key as any)}
-                >
-                  {opt.label}
-                </Button>
-              ))}
-            </div>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Min Impressions</label>
@@ -380,86 +389,144 @@ export default function UrlTrackerPage() {
               ))}
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </FilterBar>
+      )}
 
       {notConnected && (
-        <Card className="border-dashed">
-          <CardContent className="flex items-center justify-between py-4">
+        <SectionCard>
+          <div className="flex items-center justify-between gap-3">
             <span className="text-sm text-muted-foreground">Bitte Google Search Console verbinden.</span>
             <Button onClick={() => (window.location.href = "/api/auth/google")}>Verbinden</Button>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
       )}
 
       {isLoading ? (
         <Skeleton className="h-[520px] w-full" />
       ) : (
-        <Card>
-          <CardContent className="py-4">
-            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground mb-3">
-              <Badge variant="secondary">URLs: {limited.length}</Badge>
-              <Badge variant="secondary">Zeitraum: {startDate} – {endDate}</Badge>
+        <SectionCard title="URLs" description="Sortiere die Spalten direkt in der Tabelle.">
+          <StatsRow>
+            <Badge variant="secondary">URLs: {limited.length}</Badge>
+            <Badge variant="secondary">Zeitraum: {startDate} – {endDate}</Badge>
+          </StatsRow>
+          {limited.length === 0 ? (
+            <div className="mt-3">
+              <EmptyState title="Keine Daten" description="Keine URLs im gewählten Zeitraum." />
             </div>
-            {limited.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Keine Daten im Zeitraum.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-muted-foreground">
-                      <th className="py-2 pr-4 text-left">URL</th>
-                      <th className="py-2 pr-4 text-right">Impr</th>
-                      <th className="py-2 pr-4 text-right">Clicks</th>
-                      <th className="py-2 pr-4 text-right">CTR</th>
-                      <th className="py-2 pr-4 text-right">Ø Pos</th>
-                      <th className="py-2 pr-4 text-right">#KW</th>
-                      <th className="py-2 pr-4 text-left">Top Keyword</th>
-                      <th className="py-2 pr-4 text-right">Traffic %</th>
-                      <th className="py-2 pr-2 text-right">Details</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {limited.map((row) => {
-                      const expanded = expandedUrl === row.url;
-                      return (
-                        <tr key={row.url} className="border-b border-border/70 align-top">
-                          <td className="py-2 pr-4">
-                            <a className="text-primary hover:underline break-all" href={row.url} target="_blank" rel="noreferrer">
-                              {row.url}
-                            </a>
-                          </td>
-                          <td className="py-2 pr-4 text-right">{row.impressions.toLocaleString("de-DE")}</td>
-                          <td className="py-2 pr-4 text-right font-semibold">{row.clicks.toLocaleString("de-DE")}</td>
-                          <td className="py-2 pr-4 text-right">{(row.ctr * 100).toFixed(2)}%</td>
-                          <td className="py-2 pr-4 text-right">{row.avgPos.toFixed(2)}</td>
-                          <td className="py-2 pr-4 text-right">{row.keywords}</td>
-                          <td className="py-2 pr-4 text-left">
-                            {row.topKeyword ? (
-                              <span className="text-foreground">{row.topKeyword} <span className="text-muted-foreground">(Pos {row.topPos?.toFixed(1)})</span></span>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </td>
-                          <td className="py-2 pr-4 text-right">{(row.trafficShare * 100).toFixed(2)}%</td>
-                          <td className="py-2 pr-2 text-right">
-                            <Button
-                              size="sm"
-                              variant={expanded ? "secondary" : "outline"}
-                              onClick={() => setExpandedUrl(expanded ? null : row.url)}
-                            >
-                              {expanded ? "Schließen" : "Keywords"}
-                            </Button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          ) : (
+            <div className="mt-3 overflow-x-auto">
+              <Table className="min-w-[900px] text-sm">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>
+                      <SortableHeader
+                        label="URL"
+                        active={sortCol === "url"}
+                        direction={sortCol === "url" ? sortDir : null}
+                        onClick={() => toggleSort("url")}
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <SortableHeader
+                        label="Impr"
+                        active={sortCol === "impressions"}
+                        direction={sortCol === "impressions" ? sortDir : null}
+                        onClick={() => toggleSort("impressions")}
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <SortableHeader
+                        label="Clicks"
+                        active={sortCol === "clicks"}
+                        direction={sortCol === "clicks" ? sortDir : null}
+                        onClick={() => toggleSort("clicks")}
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <SortableHeader
+                        label="CTR"
+                        active={sortCol === "ctr"}
+                        direction={sortCol === "ctr" ? sortDir : null}
+                        onClick={() => toggleSort("ctr")}
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <SortableHeader
+                        label="Ø Pos"
+                        active={sortCol === "pos"}
+                        direction={sortCol === "pos" ? sortDir : null}
+                        onClick={() => toggleSort("pos")}
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <SortableHeader
+                        label="#KW"
+                        active={sortCol === "keywords"}
+                        direction={sortCol === "keywords" ? sortDir : null}
+                        onClick={() => toggleSort("keywords")}
+                      />
+                    </TableHead>
+                    <TableHead>
+                      <SortableHeader
+                        label="Top Keyword"
+                        active={sortCol === "topKeyword"}
+                        direction={sortCol === "topKeyword" ? sortDir : null}
+                        onClick={() => toggleSort("topKeyword")}
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">
+                      <SortableHeader
+                        label="Traffic %"
+                        active={sortCol === "traffic"}
+                        direction={sortCol === "traffic" ? sortDir : null}
+                        onClick={() => toggleSort("traffic")}
+                      />
+                    </TableHead>
+                    <TableHead className="text-right">Details</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {limited.map((row) => {
+                    const expanded = expandedUrl === row.url;
+                    return (
+                      <TableRow key={row.url}>
+                        <TableCell className="max-w-[420px] truncate">
+                          <a className="text-primary hover:underline break-all" href={row.url} target="_blank" rel="noreferrer">
+                            {row.url}
+                          </a>
+                        </TableCell>
+                        <TableCell className="text-right">{row.impressions.toLocaleString("de-DE")}</TableCell>
+                        <TableCell className="text-right font-semibold">{row.clicks.toLocaleString("de-DE")}</TableCell>
+                        <TableCell className="text-right">{(row.ctr * 100).toFixed(2)}%</TableCell>
+                        <TableCell className="text-right">{row.avgPos.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">{row.keywords}</TableCell>
+                        <TableCell className="max-w-[280px] truncate">
+                          {row.topKeyword ? (
+                            <span className="text-foreground">
+                              {row.topKeyword} <span className="text-muted-foreground">(Pos {row.topPos?.toFixed(1)})</span>
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">{(row.trafficShare * 100).toFixed(2)}%</TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            variant={expanded ? "secondary" : "outline"}
+                            onClick={() => setExpandedUrl(expanded ? null : row.url)}
+                          >
+                            {expanded ? "Schließen" : "Keywords"}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </SectionCard>
       )}
 
       {expandedUrl && (

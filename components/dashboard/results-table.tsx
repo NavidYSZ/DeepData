@@ -1,3 +1,6 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import {
   Table,
   TableBody,
@@ -7,6 +10,7 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SortableHeader } from "@/components/dashboard/sortable-header";
 
 export interface ResultRow {
   keys: string[];
@@ -17,6 +21,39 @@ export interface ResultRow {
 }
 
 export function ResultsTable({ rows }: { rows: ResultRow[] }) {
+  type SortCol = "clicks" | "impressions" | "ctr" | "position" | null;
+  type SortDir = "asc" | "desc" | null;
+  const [sortCol, setSortCol] = useState<SortCol>("impressions");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function toggle(col: SortCol) {
+    if (col !== sortCol) {
+      setSortCol(col);
+      setSortDir("desc");
+    } else {
+      if (sortDir === "desc") setSortDir("asc");
+      else if (sortDir === "asc") {
+        setSortCol(null);
+        setSortDir(null);
+      } else {
+        setSortDir("desc");
+      }
+    }
+  }
+
+  const sorted = useMemo(() => {
+    if (!sortCol || !sortDir) return rows;
+    const arr = [...rows];
+    arr.sort((a, b) => {
+      const va = (a as any)[sortCol];
+      const vb = (b as any)[sortCol];
+      if (va === vb) return 0;
+      if (sortDir === "desc") return vb - va;
+      return va - vb;
+    });
+    return arr;
+  }, [rows, sortCol, sortDir]);
+
   return (
     <Card>
       <CardHeader>
@@ -28,21 +65,49 @@ export function ResultsTable({ rows }: { rows: ResultRow[] }) {
             <TableHeader>
               <TableRow>
                 <TableHead>Keys</TableHead>
-                <TableHead className="text-right">Clicks</TableHead>
-                <TableHead className="text-right">Impressions</TableHead>
-                <TableHead className="text-right">CTR</TableHead>
-                <TableHead className="text-right">Position</TableHead>
+                <TableHead className="text-right">
+                  <SortableHeader
+                    label="Clicks"
+                    active={sortCol === "clicks"}
+                    direction={sortCol === "clicks" ? sortDir : null}
+                    onClick={() => toggle("clicks")}
+                  />
+                </TableHead>
+                <TableHead className="text-right">
+                  <SortableHeader
+                    label="Impressions"
+                    active={sortCol === "impressions"}
+                    direction={sortCol === "impressions" ? sortDir : null}
+                    onClick={() => toggle("impressions")}
+                  />
+                </TableHead>
+                <TableHead className="text-right">
+                  <SortableHeader
+                    label="CTR"
+                    active={sortCol === "ctr"}
+                    direction={sortCol === "ctr" ? sortDir : null}
+                    onClick={() => toggle("ctr")}
+                  />
+                </TableHead>
+                <TableHead className="text-right">
+                  <SortableHeader
+                    label="Position"
+                    active={sortCol === "position"}
+                    direction={sortCol === "position" ? sortDir : null}
+                    onClick={() => toggle("position")}
+                  />
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.length === 0 && (
+              {sorted.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-muted">
                     Keine Daten
                   </TableCell>
                 </TableRow>
               )}
-              {rows.map((row, idx) => (
+              {sorted.map((row, idx) => (
                 <TableRow key={idx}>
                   <TableCell className="max-w-[280px] truncate">
                     {row.keys.join(" • ")}

@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useSite } from "@/components/dashboard/site-context";
 import { Loader2 } from "lucide-react";
 import { Trash2 } from "lucide-react";
+import { PageHeader, SectionCard } from "@/components/dashboard/page-shell";
 
 type SessionListItem = {
   id: string;
@@ -303,60 +304,61 @@ export default function ChatAgentPage() {
   const sessions = sessionsData?.sessions ?? [];
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[320px,1fr]">
-      <Card className="h-full">
-        <CardHeader className="flex flex-col gap-3">
-          <CardTitle>Verläufe</CardTitle>
-          <Button size="sm" onClick={startNewSession} variant="secondary">
-            Neue Unterhaltung
-          </Button>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="h-[70vh] overflow-y-auto">
-            <div className="space-y-1 p-3">
-              {sessions.map((s) => (
-                <button
-                  key={s.id}
-                  className={cn(
-                    "w-full rounded-md border border-transparent px-3 py-2 text-left text-sm hover:bg-muted",
-                    sessionId === s.id && "border-border bg-muted"
-                  )}
-                  onClick={() => loadSession(s.id)}
-                >
-                  <div className="flex items-start gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold truncate">{s.title || "Unterhaltung"}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(s.updatedAt).toLocaleString("de-DE")}
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:text-destructive"
-                      onClick={(ev) => deleteSession(s.id, ev)}
-                      aria-label="Verlauf löschen"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </button>
-              ))}
-              {!sessions.length && (
-                <p className="text-sm text-muted-foreground px-2">Noch keine Unterhaltungen.</p>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>GSC Chat Agent</CardTitle>
+    <div className="space-y-6">
+      <PageHeader
+        title="Chat Agent"
+        description="Runbooks ausführen oder frei chatten – alles auf GSC-Daten."
+      />
+      <div className="grid gap-4 lg:grid-cols-[320px,1fr]">
+        <Card className="h-full">
+          <CardHeader className="flex flex-col gap-3">
+            <CardTitle>Verläufe</CardTitle>
+            <Button size="sm" onClick={startNewSession} variant="secondary">
+              Neue Unterhaltung
+            </Button>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="p-0">
+            <div className="h-[70vh] overflow-y-auto">
+              <div className="space-y-1 p-3">
+                {sessions.map((s) => (
+                  <button
+                    key={s.id}
+                    className={cn(
+                      "w-full rounded-md border border-transparent px-3 py-2 text-left text-sm hover:bg-muted",
+                      sessionId === s.id && "border-border bg-muted"
+                    )}
+                    onClick={() => loadSession(s.id)}
+                  >
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold truncate">{s.title || "Unterhaltung"}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(s.updatedAt).toLocaleString("de-DE")}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={(ev) => deleteSession(s.id, ev)}
+                        aria-label="Verlauf löschen"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </button>
+                ))}
+                {!sessions.length && (
+                  <p className="text-sm text-muted-foreground px-2">Noch keine Unterhaltungen.</p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-4">
+          <SectionCard title="GSC Chat Agent" description="Quick Actions für typische Analysen.">
             <div className="flex flex-wrap gap-2">
               {runbooks.map((rb) => (
                 <Button
@@ -371,8 +373,8 @@ export default function ChatAgentPage() {
                 </Button>
               ))}
             </div>
-            <div className="h-px w-full bg-border" />
-            <div className="h-[60vh] rounded-md border border-border bg-card overflow-y-auto" ref={scrollRef}>
+            <div className="mt-3 h-px w-full bg-border" />
+            <div className="mt-3 h-[60vh] rounded-md border border-border bg-card overflow-y-auto" ref={scrollRef}>
               <div className="space-y-4 p-4">
                 {messages.map((m, idx) => {
                   const isUser = m.role === "user";
@@ -422,7 +424,7 @@ export default function ChatAgentPage() {
                 )}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="mt-3 flex gap-2">
               <Input
                 placeholder="Frage oder Auftrag eingeben…"
                 value={input}
@@ -439,8 +441,8 @@ export default function ChatAgentPage() {
                 Senden
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </SectionCard>
+        </div>
       </div>
     </div>
   );

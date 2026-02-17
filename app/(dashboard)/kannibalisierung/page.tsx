@@ -11,6 +11,8 @@ import { CannibalizationTable } from "@/components/dashboard/cannibalization-tab
 import { BubbleScatter, DumbbellChart } from "@/components/dashboard/cannibalization-visuals";
 import { useSite } from "@/components/dashboard/site-context";
 import type { QueryRow } from "@/components/dashboard/queries-table";
+import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashboard/page-shell";
+import { ErrorState } from "@/components/dashboard/states";
 import {
   aggregateQueryPage,
   computeCannibalRows,
@@ -259,20 +261,24 @@ export default function KannibalisierungPage() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Kannibalisierung"
+        description="Erkenne Keyword-Überlappung und priorisiere Handlungsbedarf."
+      />
+
       {notConnected && (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col gap-4 py-6 md:flex-row md:items-center md:justify-between">
+        <SectionCard>
+          <div className="flex flex-col gap-4 py-2 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-lg font-semibold">Verbinde Google Search Console</h2>
               <p className="text-sm text-muted-foreground">Klicke auf verbinden, um den OAuth-Flow zu starten.</p>
             </div>
             <Button onClick={() => (window.location.href = "/api/auth/google")}>Mit Google verbinden</Button>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
       )}
 
-      <Card>
-        <CardContent className="grid gap-4 py-4 md:grid-cols-6 md:items-end">
+      <FilterBar className="md:grid-cols-6 md:items-end">
           <div className="space-y-2">
             <label className="text-sm font-medium">Start</label>
             <Input type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -358,19 +364,18 @@ export default function KannibalisierungPage() {
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </FilterBar>
 
-      {error && !notConnected && <p className="text-sm text-destructive">{error}</p>}
+      {error && !notConnected && <ErrorState>{error}</ErrorState>}
 
-      <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+      <StatsRow>
         <Badge variant="secondary">Zeitraum: {startDate} – {endDate}</Badge>
         <Badge variant="secondary">Queries: {stats?.queries ?? 0}</Badge>
         <Badge variant="secondary">Impressions: {(stats?.impressions ?? 0).toLocaleString("de-DE")}</Badge>
         <Badge variant="secondary">Clicks: {(stats?.clicks ?? 0).toLocaleString("de-DE")}</Badge>
         <Badge variant="secondary">Ø Top Share: {stats ? (stats.avgTopShare * 100).toFixed(1) : "-"}%</Badge>
         <Badge variant="secondary">Ø URLs/Query: {stats ? stats.avgUrls.toFixed(1) : "-"}</Badge>
-      </div>
+      </StatsRow>
 
       {loading ? (
         <Skeleton className="h-[520px] w-full" />

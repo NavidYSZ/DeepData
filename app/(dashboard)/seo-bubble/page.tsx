@@ -21,8 +21,8 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
 import { Maximize2 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useSite } from "@/components/dashboard/site-context";
+import { FilterBar, PageHeader, SectionCard } from "@/components/dashboard/page-shell";
 
 type Mode = "query" | "page";
 
@@ -327,9 +327,13 @@ export default function SeoBubblePage() {
   );
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="flex flex-wrap gap-3 py-4">
+    <div className="space-y-6">
+      <PageHeader
+        title="SEO Bubble"
+        description="CTR vs. Position als Bubble-Chart, inkl. Quadranten-Analyse."
+      />
+
+      <FilterBar className="md:grid-cols-4">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">Mode</span>
             <div className="flex gap-1">
@@ -389,8 +393,7 @@ export default function SeoBubblePage() {
               Referenzlinien
             </label>
           </div>
-        </CardContent>
-      </Card>
+      </FilterBar>
 
       {fullscreen && (
         <FullscreenOverlay title="SEO Bubble: Position vs CTR" onClose={() => setFullscreen(false)}>
@@ -398,8 +401,8 @@ export default function SeoBubblePage() {
         </FullscreenOverlay>
       )}
       {notConnected && (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col gap-4 py-6 md:flex-row md:items-center md:justify-between">
+        <SectionCard>
+          <div className="flex flex-col gap-4 py-2 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-lg font-semibold">Verbinde Google Search Console</h2>
               <p className="text-sm text-muted-foreground">
@@ -409,8 +412,8 @@ export default function SeoBubblePage() {
             <Button onClick={() => (window.location.href = "/api/auth/google")}>
               Mit Google verbinden
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
       )}
 
       <Card>

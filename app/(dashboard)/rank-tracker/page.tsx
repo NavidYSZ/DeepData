@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +15,8 @@ import {
 import { QueriesTable, type QueryRow } from "@/components/dashboard/queries-table";
 import { QueryMultiSelect } from "@/components/dashboard/query-multiselect";
 import { useSite } from "@/components/dashboard/site-context";
+import { FilterBar, PageHeader, SectionCard } from "@/components/dashboard/page-shell";
+import { ErrorState } from "@/components/dashboard/states";
 
 interface QueryResponse {
   rows: QueryRow[];
@@ -200,20 +201,24 @@ export default function RankTrackerPage() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Rank Tracker"
+        description="Verfolge Keyword-Positionen im Zeitverlauf."
+      />
+
       {notConnected && (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col gap-4 py-6 md:flex-row md:items-center md:justify-between">
+        <SectionCard>
+          <div className="flex flex-col gap-4 py-2 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-lg font-semibold">Verbinde Google Search Console</h2>
               <p className="text-sm text-muted-foreground">Klicke auf verbinden, um den OAuth-Flow zu starten.</p>
             </div>
             <Button onClick={() => (window.location.href = "/api/auth/google")}>Mit Google verbinden</Button>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
       )}
 
-      <Card>
-        <CardContent className="grid gap-4 py-4 md:grid-cols-5 md:items-end">
+      <FilterBar className="md:grid-cols-5 md:items-end">
           <div className="space-y-2">
             <label className="text-sm font-medium">Start</label>
             <Input type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -225,8 +230,7 @@ export default function RankTrackerPage() {
           <div className="md:col-span-3 text-sm text-muted-foreground flex items-end justify-end gap-2">
             <Badge variant="secondary">Zeitraum: {startDate} – {endDate}</Badge>
           </div>
-        </CardContent>
-      </Card>
+      </FilterBar>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
@@ -241,20 +245,22 @@ export default function RankTrackerPage() {
               onToggleTrend={() => setShowTrend((s) => !s)}
             />
           )}
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <ErrorState>{error}</ErrorState>}
         </div>
         <div className="lg:col-span-1 space-y-3">
-          <QueryMultiSelect
-            options={(tableRows || []).map((r) => ({
-              value: r.keys[0],
-              label: r.keys[0],
-              impressions: r.impressions
-            }))}
-            selected={selectedQueries}
-            onChange={(vals) => setSelectedQueries(Array.from(new Set(vals)))}
-            onOnly={(v) => setSelectedQueries([v])}
-            max={9999}
-          />
+          <SectionCard title="Keywords">
+            <QueryMultiSelect
+              options={(tableRows || []).map((r) => ({
+                value: r.keys[0],
+                label: r.keys[0],
+                impressions: r.impressions
+              }))}
+              selected={selectedQueries}
+              onChange={(vals) => setSelectedQueries(Array.from(new Set(vals)))}
+              onOnly={(v) => setSelectedQueries([v])}
+              max={9999}
+            />
+          </SectionCard>
           {topLoading ? (
             <Skeleton className="h-96 w-full" />
           ) : (

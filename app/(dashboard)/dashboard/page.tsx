@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useSite } from "@/components/dashboard/site-context";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KpiCards, type KpiData } from "@/components/dashboard/kpi-cards";
-import { ResultsTable, type ResultRow } from "@/components/dashboard/results-table";
-import { TrafficChart, type ChartPoint } from "@/components/dashboard/traffic-chart";
+import { type ResultRow } from "@/components/dashboard/results-table";
+import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashboard/page-shell";
+import { ErrorState } from "@/components/dashboard/states";
 
 interface SitesResponse {
   sites: { siteUrl: string; permissionLevel: string }[];
@@ -44,7 +44,6 @@ export default function DashboardPage() {
   const [startDate, setStartDate] = useState(lastNDaysRange(28).start);
   const [endDate, setEndDate] = useState(lastNDaysRange(28).end);
   const [tableRows, setTableRows] = useState<ResultRow[]>([]);
-  const [timeRows, setTimeRows] = useState<ResultRow[]>([]);
   const [loadingQuery, setLoadingQuery] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
 
@@ -76,65 +75,34 @@ export default function DashboardPage() {
     };
   }, [tableRows]);
 
-  const chartData: ChartPoint[] = useMemo(() => {
-    return timeRows
-      .filter((r) => r.keys[0]?.match(/\\d{4}-\\d{2}-\\d{2}/))
-      .map((r) => ({
-        date: r.keys[0],
-        clicks: r.clicks,
-        impressions: r.impressions
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-  }, [timeRows]);
-
   async function handleQuery() {
     if (!site) return;
     setLoadingQuery(true);
     setQueryError(null);
     try {
-      const [timeRes, tableRes] = await Promise.all([
-        fetch("/api/gsc/query", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            siteUrl: site,
-            startDate,
-            endDate,
-            dimensions: ["date"],
-            rowLimit: 250
-          })
-        }),
-        fetch("/api/gsc/query", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            siteUrl: site,
-            startDate,
-            endDate,
-            dimensions: ["query"],
-            rowLimit: 250
-          })
+      const tableRes = await fetch("/api/gsc/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteUrl: site,
+          startDate,
+          endDate,
+          dimensions: ["query"],
+          rowLimit: 250
         })
-      ]);
+      });
 
-      if (!timeRes.ok) {
-        const text = await timeRes.text();
-        throw new Error(text || `Time series request failed: ${timeRes.status}`);
-      }
       if (!tableRes.ok) {
         const text = await tableRes.text();
         throw new Error(text || `Table request failed: ${tableRes.status}`);
       }
 
-      const timeData: QueryResponse = await timeRes.json();
       const tableData: QueryResponse = await tableRes.json();
 
-      setTimeRows(timeData.rows || []);
       setTableRows(tableData.rows || []);
     } catch (err: any) {
       console.error(err);
       setQueryError(err.message ?? "Fehler beim Laden");
-      setTimeRows([]);
       setTableRows([]);
     } finally {
       setLoadingQuery(false);
@@ -145,9 +113,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Dashboard"
+        description="Kompakter Überblick über Performance und Trends."
+      />
+
       {notConnected && (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col gap-4 py-6 md:flex-row md:items-center md:justify-between">
+        <SectionCard>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-lg font-semibold">Verbinde Google Search Console</h2>
               <p className="text-sm text-muted-foreground">
@@ -157,18 +130,17 @@ export default function DashboardPage() {
             <Button onClick={() => (window.location.href = "/api/auth/google")}>
               Mit Google verbinden
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
       )}
 
       {!notConnected && (
-        <Card>
-          <CardContent className="grid gap-4 py-4 md:grid-cols-3 md:items-end">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Start</label>
-              <Input
-                type="date"
-                value={startDate}
+        <FilterBar className="md:grid-cols-3 md:items-end">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Start</label>
+            <Input
+              type="date"
+              value={startDate}
                 max={endDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
@@ -188,25 +160,24 @@ export default function DashboardPage() {
                 {loadingQuery ? "Laden..." : "Laden"}
               </Button>
             </div>
-          </CardContent>
-        </Card>
+        </FilterBar>
       )}
 
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <StatsRow>
         <Badge variant="secondary">
           Status: {notConnected ? "Nicht verbunden" : "Verbunden"}
         </Badge>
         <span>
           Zeitraum: {startDate} – {endDate}
         </span>
-      </div>
+      </StatsRow>
 
       <KpiCards data={kpiData} />
 
       {/* Performance overview moved to Rank Tracker */}
 
       {queryError && (
-        <p className="text-sm text-destructive">Fehler beim Laden: {queryError}</p>
+        <ErrorState>Fehler beim Laden: {queryError}</ErrorState>
       )}
     </div>
   );

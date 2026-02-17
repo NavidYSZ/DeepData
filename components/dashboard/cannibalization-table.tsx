@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronUp, Info } from "lucide-react";
+import { ChevronDown, ChevronUp, Info } from "lucide-react";
+import { SortableHeader } from "@/components/dashboard/sortable-header";
 import type { CannibalRow, UrlAgg } from "@/lib/cannibalization";
 
 type SortCol = "score" | "totalImpressions" | "totalClicks" | "topShare" | "secondShare" | "spread" | "switches" | null;
@@ -67,26 +68,15 @@ export function CannibalizationTable({ rows, showSwitches }: { rows: CannibalRow
     URL.revokeObjectURL(url);
   }
 
-  const headerBtn = (col: SortCol, label: string, help?: React.ReactNode) => {
-    const icon =
-      sortCol !== col ? <ArrowUpDown className="h-3 w-3" /> : sortDir === "desc" ? (
-        <ArrowDown className="h-3 w-3" />
-      ) : sortDir === "asc" ? (
-        <ArrowUp className="h-3 w-3" />
-      ) : (
-        <ArrowUpDown className="h-3 w-3" />
-      );
-    return (
-      <button
-        className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground"
-        onClick={() => toggle(col)}
-      >
-        {label}
-        {help && <InfoTooltip text={help} />}
-        {icon}
-      </button>
-    );
-  };
+  const headerBtn = (col: SortCol, label: string, help?: React.ReactNode) => (
+    <SortableHeader
+      label={label}
+      active={sortCol === col}
+      direction={sortCol === col ? sortDir : null}
+      onClick={() => toggle(col)}
+      help={help ? <InfoTooltip text={help} /> : undefined}
+    />
+  );
 
   return (
     <Card>

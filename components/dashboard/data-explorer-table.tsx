@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { SortableHeader } from "@/components/dashboard/sortable-header";
 import type { QueryRow } from "./queries-table";
 import { Button } from "@/components/ui/button";
 
@@ -55,24 +55,14 @@ export function DataExplorerTable({
     return arr;
   }, [rows, sortCol, sortDir]);
 
-  const header = (col: SortCol, label: string) => {
-    const icon =
-      sortCol !== col ? <ArrowUpDown className="h-3 w-3" /> : sortDir === "desc" ? (
-        <ArrowDown className="h-3 w-3" />
-      ) : sortDir === "asc" ? (
-        <ArrowUp className="h-3 w-3" />
-      ) : (
-        <ArrowUpDown className="h-3 w-3" />
-      );
-    return (
-      <button
-        className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground"
-        onClick={() => toggle(col)}
-      >
-        {label} {icon}
-      </button>
-    );
-  };
+  const header = (col: SortCol, label: string) => (
+    <SortableHeader
+      label={label}
+      active={sortCol === col}
+      direction={sortCol === col ? sortDir : null}
+      onClick={() => toggle(col)}
+    />
+  );
 
   function exportCsv() {
     const header = ["Query", "Position", "Impressions", "Clicks", "Page"];

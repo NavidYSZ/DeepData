@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSite } from "@/components/dashboard/site-context";
 import { DataExplorerTable } from "@/components/dashboard/data-explorer-table";
 import { type QueryRow } from "@/components/dashboard/queries-table";
+import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashboard/page-shell";
+import { ErrorState } from "@/components/dashboard/states";
 
 interface SitesResponse {
   sites: { siteUrl: string; permissionLevel: string }[];
@@ -146,9 +147,14 @@ export default function DataExplorerPage() {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Data Explorer"
+        description="Filtere Keywords und analysiere Query/Page-Kombinationen."
+      />
+
       {notConnected && (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col gap-4 py-6 md:flex-row md:items-center md:justify-between">
+        <SectionCard>
+          <div className="flex flex-col gap-4 py-2 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-lg font-semibold">Verbinde Google Search Console</h2>
               <p className="text-sm text-muted-foreground">
@@ -158,13 +164,12 @@ export default function DataExplorerPage() {
             <Button onClick={() => (window.location.href = "/api/auth/google")}>
               Mit Google verbinden
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </SectionCard>
       )}
 
       {!notConnected && (
-        <Card>
-          <CardContent className="grid gap-4 py-4 md:grid-cols-5 md:items-end">
+        <FilterBar className="md:grid-cols-5 md:items-end">
             <div className="space-y-2">
               <label className="text-sm font-medium">Start</label>
               <Input type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} />
@@ -242,14 +247,13 @@ export default function DataExplorerPage() {
                 )}
               </div>
             </div>
-          </CardContent>
-        </Card>
+        </FilterBar>
       )}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <ErrorState>{error}</ErrorState>}
 
       {!notConnected && (
-        <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+        <StatsRow>
           <Badge variant="secondary">Zeitraum: {startDate} – {endDate}</Badge>
           <Badge variant="secondary">Keywords: {stats?.keywords ?? 0}</Badge>
           <Badge variant="secondary">Impressions: {(stats?.impressions ?? 0).toLocaleString("de-DE")}</Badge>
@@ -272,7 +276,7 @@ export default function DataExplorerPage() {
               </Button>
             </div>
           )}
-        </div>
+        </StatsRow>
       )}
 
       {!notConnected && (
