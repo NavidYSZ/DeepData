@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,12 +36,21 @@ type ParsedSegment = { type: "text"; text: string } | { type: "block"; block: Ui
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-const quickPrompts = [
-  "Quick Wins: letzte 90 Tage. Tabelle (JSON-Block) mit URL, Query, Impr, CTR, Pos. Fokus CTR niedrig & Pos 4–15.",
-  "Content Decay: vergleiche letzte 90 Tage vs vorherige 90. JSON-Metrics + Tabelle der Top-Verlierer.",
-  "Kannibalisierung: Top Queries mit mehreren URLs. JSON-Tabelle mit Query, URL, Clicks, Impr, CTR, Pos.",
-  "Top 20 Queries & Top 20 Pages der letzten 90 Tage. Zwei JSON-Tabellen.",
-  "GSC-Audit letzte 90 Tage: JSON-Metrics + Tabellen für Quick Wins, Content Decay, Cannibalization + 3 konkrete Actions."
+type RunbookId =
+  | "quick_wins"
+  | "content_decay"
+  | "cannibalization"
+  | "top_queries"
+  | "top_pages"
+  | "audit";
+
+const runbooks: { id: RunbookId; label: string; description: string }[] = [
+  { id: "quick_wins", label: "Quick Wins (28 Tage)", description: "CTR niedrig, Position 4–15" },
+  { id: "content_decay", label: "Content Decay (28 vs vorher)", description: "Verlierer im Vergleichszeitraum" },
+  { id: "cannibalization", label: "Cannibalization (28 Tage)", description: "Queries mit mehreren URLs" },
+  { id: "top_queries", label: "Top Queries (28 Tage)", description: "Top Keywords nach Impressions" },
+  { id: "top_pages", label: "Top Pages (28 Tage)", description: "Top URLs nach Impressions" },
+  { id: "audit", label: "Gesamt-Audit (28 Tage)", description: "Quick Wins, Decay, Cannibalization, Top Listen" }
 ];
 
 function parseAssistantContent(text: string): ParsedSegment[] {
@@ -231,18 +240,26 @@ export default function ChatAgentPage() {
     }
   }
 
-  async function sendMessage(prompt: string) {
-    if (!prompt.trim()) return;
+  async function sendMessage(prompt: string, runbookId?: RunbookId) {
+    const trimmed = prompt.trim();
+    const runbookLabel = runbookId ? runbooks.find((r) => r.id === runbookId)?.label : null;
+    const displayPrompt = trimmed || runbookLabel || "";
+    if (!displayPrompt) return;
     setLoading(true);
     const optimisticId = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`;
-    setMessages((prev) => [...prev, { id: optimisticId, role: "user", content: prompt }]);
-    console.log("[chat] send", { prompt, sessionId });
+    setMessages((prev) => [...prev, { id: optimisticId, role: "user", content: displayPrompt }]);
+    console.log("[chat] send", { prompt: displayPrompt, sessionId, runbookId });
     setInput("");
     try {
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: prompt, sessionId: sessionId ?? undefined, siteHint: site ?? undefined })
+        body: JSON.stringify({
+          message: displayPrompt,
+          runbookId,
+          sessionId: sessionId ?? undefined,
+          siteHint: site ?? undefined
+        })
       });
       if (!res.ok || !res.body) {
         const txt = await res.text();
@@ -341,9 +358,16 @@ export default function ChatAgentPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              {quickPrompts.map((p) => (
-                <Button key={p} size="sm" variant="outline" onClick={() => sendMessage(p)}>
-                  {p}
+              {runbooks.map((rb) => (
+                <Button
+                  key={rb.id}
+                  size="sm"
+                  variant="outline"
+                  className="h-auto whitespace-normal text-left"
+                  onClick={() => sendMessage("", rb.id)}
+                >
+                  <span className="block text-sm font-medium">{rb.label}</span>
+                  <span className="block text-xs text-muted-foreground">{rb.description}</span>
                 </Button>
               ))}
             </div>

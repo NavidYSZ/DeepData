@@ -7,7 +7,7 @@ import fs from "fs";
 import crypto from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { createOpenAI } from "@ai-sdk/openai";
-import { createTextStreamResponse, stepCountIs, streamText, tool, zodSchema } from "ai";
+import { createTextStreamResponse, stepCountIs, streamText, tool } from "ai";
 import { ChatSession } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -15,12 +15,29 @@ import { decrypt } from "@/lib/crypto";
 import { refreshAccessToken } from "@/lib/google-oauth";
 import { listSites, searchAnalyticsQuery } from "@/lib/gsc";
 import { stringify } from "csv-stringify/sync";
+import { resolveDateRanges, resolveSite } from "@/lib/agent/context";
+import { RUNBOOKS, runAudit, runCannibalization, runContentDecay, runQuickWins, runTopPages, runTopQueries } from "@/lib/agent/runbooks";
+import type { UiBlock } from "@/lib/agent/analysis";
 
-const inputSchema = z.object({
-  message: z.string().min(1),
-  sessionId: z.string().optional(),
-  siteHint: z.string().optional()
-});
+const runbookSchema = z.enum([
+  "quick_wins",
+  "content_decay",
+  "cannibalization",
+  "top_queries",
+  "top_pages",
+  "audit"
+]);
+
+const inputSchema = z
+  .object({
+    message: z.string().optional(),
+    sessionId: z.string().optional(),
+    siteHint: z.string().optional(),
+    runbookId: runbookSchema.optional()
+  })
+  .refine((data) => (data.message && data.message.trim().length > 0) || data.runbookId, {
+    message: "message or runbookId required"
+  });
 
 const querySchema = z.object({
   siteUrl: z.string().min(1),
@@ -55,6 +72,23 @@ type ToolStatusState = "running" | "done" | "error";
 
 function formatStatusBlock(label: string, state: ToolStatusState) {
   return `\n[[JSON]]${JSON.stringify({ type: "status", label, state })}[[/JSON]]\n`;
+}
+
+function formatJsonBlock(block: UiBlock) {
+  return `\n[[JSON]]${JSON.stringify(block)}[[/JSON]]\n`;
+}
+
+function renderBlocks(blocks: UiBlock[]) {
+  return blocks.map((b) => formatJsonBlock(b)).join("");
+}
+
+function textStreamFromString(text: string) {
+  return new ReadableStream<string>({
+    start(controller) {
+      controller.enqueue(text);
+      controller.close();
+    }
+  });
 }
 
 async function ensureDir(dir: string) {
@@ -159,20 +193,23 @@ export async function POST(req: Request) {
   const body = inputSchema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
-  const { message, sessionId: incomingSessionId, siteHint } = body.data;
+  const { message: rawMessage, sessionId: incomingSessionId, siteHint, runbookId } = body.data;
+  const message = rawMessage?.trim() ?? "";
+  const runbookLabel = runbookId ? RUNBOOKS[runbookId]?.label : null;
 
   // upsert session
   const sessionRecord = incomingSessionId
     ? await prisma.chatSession.findFirst({ where: { id: incomingSessionId, userId, archived: false } })
     : null;
 
+  const titleSeed = message || runbookLabel || "Neue Unterhaltung";
   const chatSession: ChatSession =
     sessionRecord ??
     (await prisma.chatSession.create({
-      data: { userId, title: message.slice(0, 60) }
+      data: { userId, title: titleSeed.slice(0, 60) }
     }));
 
-  console.log("[agent] request", { userId, sessionId: chatSession.id, message });
+  console.log("[agent] request", { userId, sessionId: chatSession.id, message, runbookId });
 
   const history = await prisma.chatMessage.findMany({
     where: { sessionId: chatSession.id },
@@ -186,21 +223,104 @@ export async function POST(req: Request) {
   }));
 
   // append new user message for the call
-  coreMessages.push({ role: "user", content: message });
+  if (message) {
+    coreMessages.push({ role: "user", content: message });
+  }
 
   // resolve default property: prefer exact siteHint, else last session property if stored, else first available
   let resolvedSite: string | null = null;
+  let accessToken: string | null = null;
   try {
-    const token = await getAccessToken(userId);
-    const sites = await listSites(token);
-    if (siteHint) {
-      resolvedSite = sites.find((s) => s.siteUrl === siteHint)?.siteUrl ?? null;
-    }
-    if (!resolvedSite && sites.length > 0) {
-      resolvedSite = sites[0].siteUrl;
-    }
+    accessToken = await getAccessToken(userId);
+    const sites = await listSites(accessToken);
+    resolvedSite = resolveSite(sites, siteHint);
   } catch (err) {
     console.error("[agent] resolve site error", err);
+  }
+
+  if (runbookId) {
+    if (!accessToken) {
+      const text = "Die GSC-Verbindung ist nicht aktiv. Bitte verbinde dein Konto erneut.";
+      return createTextStreamResponse({ textStream: textStreamFromString(text) });
+    }
+    if (!resolvedSite) {
+      const text = "Es konnte keine Property gefunden werden. Bitte wähle zuerst eine GSC-Property aus.";
+      return createTextStreamResponse({ textStream: textStreamFromString(text) });
+    }
+
+    const ranges = resolveDateRanges();
+    const ctx = {
+      siteUrl: resolvedSite,
+      ranges,
+      rowLimit: MAX_GSC_ROW_LIMIT,
+      topN: 50,
+      cannibalTopQueries: 200,
+      cannibalMinImpr: 100
+    };
+
+    let output;
+    try {
+      if (runbookId === "quick_wins") output = await runQuickWins(accessToken, ctx);
+      else if (runbookId === "content_decay") output = await runContentDecay(accessToken, ctx);
+      else if (runbookId === "cannibalization") output = await runCannibalization(accessToken, ctx);
+      else if (runbookId === "top_queries") output = await runTopQueries(accessToken, ctx);
+      else if (runbookId === "top_pages") output = await runTopPages(accessToken, ctx);
+      else output = await runAudit(accessToken, ctx);
+    } catch (err: any) {
+      console.error("[agent] runbook error", err);
+      const text = "Beim Abrufen der GSC-Daten ist ein Fehler aufgetreten. Bitte versuche es erneut.";
+      return createTextStreamResponse({ textStream: textStreamFromString(text) });
+    }
+
+    const runbookSystem = `RUNBOOK-MODUS
+- Du erhältst vorbereitete GSC-Daten (JSON). Nutze ausschließlich diese Daten.
+- Keine Tool-Calls, keine Rückfragen.
+- Antworte auf Deutsch, prägnant.
+- Gib eine kurze Zusammenfassung (max. 5 Sätze) und füge danach EINEN Actions-Block hinzu.
+- Actions-Block Format:
+  [[JSON]]
+  { "type": "actions", "items": ["...", "..."] }
+  [[/JSON]]
+`;
+
+    const llmPayload = {
+      runbookId,
+      label: runbookLabel,
+      siteUrl: resolvedSite,
+      ranges,
+      facts: output.facts
+    };
+
+    const result = await streamText({
+      model: openai("gpt-5-mini-2025-08-07"),
+      system: runbookSystem,
+      messages: [{ role: "user", content: JSON.stringify(llmPayload) }],
+      stopWhen: stepCountIs(5)
+    });
+
+    const summaryText = (await result.text).trim();
+    const blocksText = renderBlocks(output.blocks);
+    const finalText = summaryText ? `${summaryText}${blocksText}` : blocksText;
+
+    try {
+      await persistUserMessage(chatSession.id, userId, {
+        text: message || runbookLabel || "Runbook",
+        runbookId
+      });
+      await persistAssistantMessage(chatSession.id, { text: finalText }, (result as any)?.response?.modelId);
+      await prisma.chatSession.update({
+        where: { id: chatSession.id },
+        data: {
+          title: chatSession.title?.startsWith("Neue Unterhaltung")
+            ? (message || runbookLabel || "Runbook").slice(0, 60)
+            : chatSession.title
+        }
+      });
+    } catch (err) {
+      console.error("[agent] runbook persist error", err);
+    }
+
+    return createTextStreamResponse({ textStream: textStreamFromString(finalText) });
   }
 
   const agentTools: any = {
@@ -329,6 +449,11 @@ export async function POST(req: Request) {
       system: `ZUSÄTZLICHE BETRIEBSREGELN
 DEFAULT_PROPERTY: ${resolvedSite ?? "unbekannt"}
 
+STANDARDZEITRÄUME
+- Standard: letzte 28 Tage.
+- Vergleich: vorherige 28 Tage.
+- Wenn der User keinen Zeitraum nennt, nutze den Standard.
+
 SPRACHE & STIL
 - Antworte auf Deutsch, präzise und prägnant.
 - Vermeide lange Einleitungen. Fokus auf Erkenntnisse und Maßnahmen.
@@ -357,6 +482,7 @@ TOOL-CONTRACT (VERBINDLICH)
   2) querySearchAnalytics(siteUrl, startDate, endDate, dimensions[], rowLimit?, filters?)
   3) exportCsv(rows, filename?)
 - Wenn echte GSC-Daten benötigt werden, nutze immer Tools (nie schätzen, nie erfinden).
+- Wenn der Intent klar ist: sofort ausführen, nicht nachfragen.
 
 PROPERTY-AUFLÖSUNG
 - Nutze DEFAULT_PROPERTY. Keine Setup-Fragen. Rückfrage nur bei harten Blockern (kein Property / OAuth / Toolfehler).
@@ -367,7 +493,7 @@ FEHLERBEHANDLUNG
 - Bei leeren Daten: transparent "keine ausreichenden Daten im gewählten Zeitraum".
 
 EXPORT-REGELN
-- Bei umfangreichen Ergebnissen oder Report-Intent: exportCsv proaktiv ausführen und Download bereitstellen.
+- exportCsv nur auf ausdrückliche Nachfrage des Users.
 - Dateiname sprechend benennen: {property}_{intent}_{start}_{end}.csv
 - Bei großen Abfragen paginiere: rowLimit <= 5000, nutze startRow.
 - Wenn Tool ein Fehlerobjekt {type:"error", code, message} zurückgibt, erkläre den Fehler und biete nächsten Schritt an.
