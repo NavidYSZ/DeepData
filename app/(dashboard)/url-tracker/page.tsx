@@ -9,7 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSite } from "@/components/dashboard/site-context";
 import type { QueryRow } from "@/components/dashboard/queries-table";
-import { cn } from "@/lib/utils";
+import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
+import {
+  RankCharts,
+  type SeriesPoint,
+  type TrendPoint,
+  type ChartPoint
+} from "@/components/dashboard/rank-charts";
 
 interface QueryResponse {
   rows: QueryRow[];
@@ -46,6 +52,51 @@ function lastNDaysRange(days: number) {
   return { start: toISO(start), end: toISO(end) };
 }
 
+function buildChartData(series: SeriesPoint[], queries: string[]): ChartPoint[] {
+  if (!series.length || queries.length === 0) return [];
+  const dateNums = Array.from(new Set(series.map((p) => p.dateNum))).sort((a, b) => a - b);
+  const minDate = dateNums[0];
+  const maxDate = dateNums[dateNums.length - 1];
+  const oneDay = 24 * 60 * 60 * 1000;
+
+  const byDate = new Map<number, Map<string, number>>();
+  series.forEach((p) => {
+    if (!queries.includes(p.query)) return;
+    const entry = byDate.get(p.dateNum) || new Map<string, number>();
+    entry.set(p.query, p.position);
+    byDate.set(p.dateNum, entry);
+  });
+
+  const result: ChartPoint[] = [];
+  for (let ts = minDate; ts <= maxDate; ts += oneDay) {
+    const date = new Date(ts).toISOString().slice(0, 10);
+    const point: ChartPoint = { date, dateNum: ts };
+    queries.forEach((q) => {
+      const val = byDate.get(ts)?.get(q);
+      point[q] = val ?? null;
+    });
+    result.push(point);
+  }
+  return result;
+}
+
+function buildTrendData(series: SeriesPoint[]): TrendPoint[] {
+  const byDate = new Map<number, { sum: number; count: number; date: string }>();
+  series.forEach((p) => {
+    const entry = byDate.get(p.dateNum) || { sum: 0, count: 0, date: p.date };
+    entry.sum += p.position;
+    entry.count += 1;
+    byDate.set(p.dateNum, entry);
+  });
+  return Array.from(byDate.entries())
+    .map(([dateNum, { sum, count, date }]) => ({
+      dateNum,
+      date,
+      position: sum / count
+    }))
+    .sort((a, b) => a.dateNum - b.dateNum);
+}
+
 export default function UrlTrackerPage() {
   const { site } = useSite();
   const [startDate, setStartDate] = useState(lastNDaysRange(28).start);
@@ -56,6 +107,7 @@ export default function UrlTrackerPage() {
   const [sortBy, setSortBy] = useState<"clicks" | "impressions" | "ctr" | "pos" | "keywords" | "traffic">("clicks");
   const [topN, setTopN] = useState<"200" | "500" | "all">("all");
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
+  const [detailShowTrend, setDetailShowTrend] = useState(false);
 
   const { data, error, isLoading } = useSWR<QueryResponse>(
     site ? ["/api/gsc/query", site, startDate, endDate, "page-query"] : null,
@@ -197,6 +249,74 @@ export default function UrlTrackerPage() {
         })
       });
     }
+  );
+
+  const {
+    data: detailSeriesData,
+    isLoading: detailSeriesLoading,
+    error: detailSeriesError,
+    mutate: reloadSeries
+  } = useSWR<QueryResponse>(
+    expandedUrl && site
+      ? ["/api/gsc/query", "detail-series", expandedUrl, site, startDate, endDate]
+      : null,
+    async () => {
+      return fetcher("/api/gsc/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteUrl: site,
+          startDate,
+          endDate,
+          dimensions: ["date", "query", "page"],
+          filters: [{ dimension: "page", operator: "equals", expression: expandedUrl }],
+          rowLimit: 25000
+        })
+      });
+    }
+  );
+
+  useEffect(() => {
+    if (expandedUrl) setDetailShowTrend(false);
+  }, [expandedUrl]);
+
+  const detailRows = useMemo(() => detailData?.rows || [], [detailData]);
+
+  const detailImpressions = useMemo(() => {
+    const map = new Map<string, number>();
+    detailRows.forEach((r) => {
+      const query = r.keys[0];
+      map.set(query, (map.get(query) ?? 0) + (r.impressions ?? 0));
+    });
+    return map;
+  }, [detailRows]);
+
+  const detailChartQueries = useMemo(() => {
+    const queries = Array.from(detailImpressions.entries())
+      .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+      .map(([q]) => q)
+      .slice(0, 15);
+    return queries;
+  }, [detailImpressions]);
+
+  const detailSeriesPoints: SeriesPoint[] = useMemo(() => {
+    const rows = detailSeriesData?.rows || [];
+    return rows.map((r) => ({
+      date: r.keys[0],
+      dateNum: new Date(r.keys[0]).getTime(),
+      query: r.keys[1],
+      position: r.position
+    }));
+  }, [detailSeriesData]);
+
+  const detailChartData = useMemo(
+    () => buildChartData(detailSeriesPoints, detailChartQueries),
+    [detailSeriesPoints, detailChartQueries]
+  );
+
+  const detailTrendData = useMemo(
+    () => buildTrendData(detailSeriesPoints.filter((p) => detailChartQueries.includes(p.query))),
+    [detailSeriesPoints, detailChartQueries]
   );
 
   return (
@@ -343,11 +463,11 @@ export default function UrlTrackerPage() {
       )}
 
       {expandedUrl && (
-        <Card className="border-primary/30">
-          <CardContent className="py-3 space-y-3">
-            <div className="flex items-center justify-between">
+        <FullscreenOverlay title="Keyword-Verlauf pro URL" onClose={() => setExpandedUrl(null)}>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-sm">
-                <span className="font-semibold">Keywords für:</span>{" "}
+                <span className="font-semibold">URL:</span>{" "}
                 <span className="text-primary break-all">{expandedUrl}</span>
               </div>
               <div className="flex items-center gap-2">
@@ -356,45 +476,72 @@ export default function UrlTrackerPage() {
                     Erneut laden
                   </Button>
                 )}
-                <Button size="sm" variant="ghost" onClick={() => setExpandedUrl(null)}>
-                  Schließen
-                </Button>
+                {detailSeriesError && (
+                  <Button size="sm" variant="outline" onClick={() => reloadSeries()}>
+                    Charts neu laden
+                  </Button>
+                )}
               </div>
             </div>
-            {detailLoading ? (
-              <Skeleton className="h-48 w-full" />
-            ) : detailError ? (
-              <p className="text-sm text-destructive">Fehler beim Laden</p>
+
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <Badge variant="secondary">Zeitraum: {startDate} – {endDate}</Badge>
+              <Badge variant="secondary">Top 15 Keywords (nach Impr.)</Badge>
+            </div>
+
+            {detailSeriesLoading ? (
+              <Skeleton className="h-[520px] w-full" />
+            ) : detailSeriesError ? (
+              <p className="text-sm text-destructive">Fehler beim Laden der Zeitreihen</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-muted-foreground">
-                      <th className="py-2 pr-4 text-left">Keyword</th>
-                      <th className="py-2 pr-4 text-right">Impr</th>
-                      <th className="py-2 pr-4 text-right">Clicks</th>
-                      <th className="py-2 pr-4 text-right">CTR</th>
-                      <th className="py-2 pr-4 text-right">Position</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(detailData?.rows || []).map((r) => (
-                      <tr key={r.keys.join("|")} className="border-b border-border/70">
-                        <td className="py-2 pr-4">{r.keys[0]}</td>
-                        <td className="py-2 pr-4 text-right">{(r.impressions ?? 0).toLocaleString("de-DE")}</td>
-                        <td className="py-2 pr-4 text-right">{(r.clicks ?? 0).toLocaleString("de-DE")}</td>
-                        <td className="py-2 pr-4 text-right">
-                          {r.impressions ? (((r.clicks ?? 0) / r.impressions) * 100).toFixed(2) : "-"}%
-                        </td>
-                        <td className="py-2 pr-4 text-right">{(r.position ?? 0).toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <RankCharts
+                chartData={detailChartData}
+                queries={detailChartQueries}
+                trend={detailTrendData}
+                showTrend={detailShowTrend}
+                onToggleTrend={() => setDetailShowTrend((s) => !s)}
+              />
             )}
-          </CardContent>
-        </Card>
+
+            <div className="rounded-md border border-border p-3">
+              <div className="mb-2 text-sm font-semibold">Keywords (Aggregiert)</div>
+              {detailLoading ? (
+                <Skeleton className="h-48 w-full" />
+              ) : detailError ? (
+                <p className="text-sm text-destructive">Fehler beim Laden</p>
+              ) : detailRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Keine Keywords im Zeitraum.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-muted-foreground">
+                        <th className="py-2 pr-4 text-left">Keyword</th>
+                        <th className="py-2 pr-4 text-right">Impr</th>
+                        <th className="py-2 pr-4 text-right">Clicks</th>
+                        <th className="py-2 pr-4 text-right">CTR</th>
+                        <th className="py-2 pr-4 text-right">Position</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailRows.map((r) => (
+                        <tr key={r.keys.join("|")} className="border-b border-border/70">
+                          <td className="py-2 pr-4">{r.keys[0]}</td>
+                          <td className="py-2 pr-4 text-right">{(r.impressions ?? 0).toLocaleString("de-DE")}</td>
+                          <td className="py-2 pr-4 text-right">{(r.clicks ?? 0).toLocaleString("de-DE")}</td>
+                          <td className="py-2 pr-4 text-right">
+                            {r.impressions ? (((r.clicks ?? 0) / r.impressions) * 100).toFixed(2) : "-"}%
+                          </td>
+                          <td className="py-2 pr-4 text-right">{(r.position ?? 0).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </FullscreenOverlay>
       )}
     </div>
   );
