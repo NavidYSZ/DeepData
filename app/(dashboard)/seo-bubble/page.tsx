@@ -9,6 +9,7 @@ import {
   YAxis,
   CartesianGrid,
   ResponsiveContainer,
+  ZAxis,
   Tooltip,
   ReferenceLine,
   ReferenceArea
@@ -33,6 +34,8 @@ import { useSite } from "@/components/dashboard/site-context";
 import { FilterBar, PageHeader, SectionCard } from "@/components/dashboard/page-shell";
 
 type Mode = "query" | "page";
+type PositionWindow = "all" | "top10" | "top20" | "top50";
+type CtrWindow = "all" | "ctr2" | "ctr5" | "ctr10";
 
 type RawRow = {
   keys: string[];
@@ -89,6 +92,9 @@ export default function SeoBubblePage() {
   const [mode, setMode] = useState<Mode>("query");
   const [topN, setTopN] = useState(300);
   const [range, setRange] = useState(28);
+  const [minImpressions, setMinImpressions] = useState(50);
+  const [positionWindow, setPositionWindow] = useState<PositionWindow>("all");
+  const [ctrWindow, setCtrWindow] = useState<CtrWindow>("all");
   const [showZones, setShowZones] = useState(true);
   const [showRefs, setShowRefs] = useState(true);
   const [selected, setSelected] = useState<DataPoint | null>(null);
@@ -159,18 +165,36 @@ export default function SeoBubblePage() {
   }, [posValues]);
 
   const ctrLowThreshold = maxCtr < 0.02 ? maxCtr * 0.6 : 0.02;
+  const positionCap = useMemo(() => {
+    if (positionWindow === "top10") return 10;
+    if (positionWindow === "top20") return 20;
+    if (positionWindow === "top50") return 50;
+    return null;
+  }, [positionWindow]);
+  const ctrCap = useMemo(() => {
+    if (ctrWindow === "ctr2") return 0.02;
+    if (ctrWindow === "ctr5") return 0.05;
+    if (ctrWindow === "ctr10") return 0.1;
+    return null;
+  }, [ctrWindow]);
 
   const notConnected = (error as any)?.status === 401;
 
   const displayPoints = useMemo(() => {
-    if (activeQuadrant === "all") return points;
+    const base = points.filter(
+      (p) =>
+        p.impressions >= minImpressions &&
+        (positionCap == null || p.position <= positionCap) &&
+        (ctrCap == null || p.ctr <= ctrCap)
+    );
+    if (activeQuadrant === "all") return base;
     const isQ1 = (p: DataPoint) => p.ctr > ctrLowThreshold && p.position < 10;
     const isQ2 = (p: DataPoint) => p.ctr <= ctrLowThreshold && p.position < 10;
     const isQ3 = (p: DataPoint) => p.ctr > ctrLowThreshold && p.position >= 10;
     const isQ4 = (p: DataPoint) => p.ctr <= ctrLowThreshold && p.position >= 10;
     const match = { q1: isQ1, q2: isQ2, q3: isQ3, q4: isQ4 }[activeQuadrant];
-    return points.filter(match);
-  }, [points, activeQuadrant, ctrLowThreshold]);
+    return base.filter(match);
+  }, [points, activeQuadrant, ctrLowThreshold, minImpressions, positionCap, ctrCap]);
 
   useEffect(() => {
     if (selected && !displayPoints.find((p) => p.id === selected.id)) {
@@ -182,16 +206,18 @@ export default function SeoBubblePage() {
   const displayPosValues = displayPoints.map((p) => p.position);
 
   const displayMaxCtr = useMemo(() => {
+    if (ctrCap != null) return ctrCap;
     if (!displayCtrValues.length) return maxCtr;
     return Math.min(0.3, Math.max(...displayCtrValues, maxCtr));
-  }, [displayCtrValues, maxCtr]);
+  }, [displayCtrValues, maxCtr, ctrCap]);
 
   const displayYMax = useMemo(() => {
+    if (positionCap != null) return positionCap;
     if (!displayPosValues.length) return yMax;
     const maxVal = Math.max(...displayPosValues, yMax);
     const p95v = p95(displayPosValues) * 1.2;
     return Math.min(100, Math.max(maxVal, p95v));
-  }, [displayPosValues, yMax]);
+  }, [displayPosValues, yMax, positionCap]);
 
   // Fetch detail rankings for a page when selected in page mode
   useEffect(() => {
@@ -251,6 +277,7 @@ export default function SeoBubblePage() {
               tick={{ fontSize: 11 }}
               ticks={[1, 3, 10, 20, 50, 100].filter((t) => t <= (displayYMax || 100))}
             />
+            <ZAxis dataKey="impressions" range={[60, 800]} type="number" name="Impressions" />
             {showRefs && (
               <>
                 {[3, 10, 20].map((y) => (
@@ -325,9 +352,11 @@ export default function SeoBubblePage() {
               data={displayPoints}
               fill="#6366f1"
               shape="circle"
+              fillOpacity={0.7}
+              stroke="#312e81"
               onClick={(p: any) => setSelected(p.payload as DataPoint)}
             >
-              {/* radius via data.r */}
+              {/* radius is handled by ZAxis (impressions) */}
             </Scatter>
             </ScatterChart>
           </ResponsiveContainer>
@@ -343,7 +372,7 @@ export default function SeoBubblePage() {
         description="CTR vs. Position als Bubble-Chart, inkl. Quadranten-Analyse."
       />
 
-      <FilterBar className="md:grid-cols-2 xl:grid-cols-4">
+      <FilterBar className="md:grid-cols-2 xl:grid-cols-6">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium">Mode</span>
             <div className="flex gap-1">
@@ -382,6 +411,44 @@ export default function SeoBubblePage() {
                 <SelectItem value="7">7 Tage</SelectItem>
                 <SelectItem value="28">28 Tage</SelectItem>
                 <SelectItem value="90">90 Tage</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium">Min. Impr.</span>
+            <Input
+              type="number"
+              min={0}
+              className="h-9 w-24"
+              value={minImpressions}
+              onChange={(e) => setMinImpressions(Math.max(0, Number(e.target.value) || 0))}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium">Pos-Zoom</span>
+            <Select value={positionWindow} onValueChange={(val) => setPositionWindow(val as PositionWindow)}>
+              <SelectTrigger className="h-9 w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle</SelectItem>
+                <SelectItem value="top10">Top 10</SelectItem>
+                <SelectItem value="top20">Top 20</SelectItem>
+                <SelectItem value="top50">Top 50</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium">CTR-Zoom</span>
+            <Select value={ctrWindow} onValueChange={(val) => setCtrWindow(val as CtrWindow)}>
+              <SelectTrigger className="h-9 w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle</SelectItem>
+                <SelectItem value="ctr2">bis 2%</SelectItem>
+                <SelectItem value="ctr5">bis 5%</SelectItem>
+                <SelectItem value="ctr10">bis 10%</SelectItem>
               </SelectContent>
             </Select>
           </div>
