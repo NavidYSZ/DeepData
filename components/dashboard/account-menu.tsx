@@ -2,10 +2,19 @@
 
 import { useEffect, useState } from "react";
 import useSWR from "swr";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 import { useSession, signIn } from "next-auth/react";
+import { ChevronDown } from "lucide-react";
+
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 
 interface Account {
   id: string;
@@ -23,17 +32,13 @@ const fetcher = async (url: string) => {
   return res.json();
 };
 
-type RenderButton = (args: { current?: Account; open: boolean }) => React.ReactNode;
-
 interface AccountMenuProps {
-  renderButton?: RenderButton;
   className?: string;
 }
 
-export function AccountMenu({ renderButton, className }: AccountMenuProps) {
+export function AccountMenu({ className }: AccountMenuProps) {
   const { status } = useSession();
   const { data, mutate } = useSWR<AccountsResponse>(status === "authenticated" ? "/api/accounts" : null, fetcher);
-  const [open, setOpen] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
 
   const accounts = data?.accounts ?? [];
@@ -45,86 +50,57 @@ export function AccountMenu({ renderButton, className }: AccountMenuProps) {
     window.location.reload();
   }
 
-  // choose the first account as current heuristic (cookie is server-side; we display first)
   const current = accounts[0];
 
   useEffect(() => {
-    const handle = () => setOpen(false);
-    window.addEventListener("click", handle);
-    return () => window.removeEventListener("click", handle);
-  }, []);
-
-  const buttonContent =
-    renderButton?.({ current, open }) ??
-    (
-      <Button
-        variant="secondary"
-        size="sm"
-        className="min-w-[180px] justify-between"
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((o) => !o);
-        }}
-      >
-        <span className="truncate text-left">
-          {current?.email ?? "Account auswählen"}
-        </span>
-        <span className="text-xs text-muted-foreground">▼</span>
-      </Button>
-    );
+    if (!selecting) return;
+    const timer = setTimeout(() => setSelecting(null), 1200);
+    return () => clearTimeout(timer);
+  }, [selecting]);
 
   return (
-    <div className={cn("relative", className)}>
-      <div
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((o) => !o);
-        }}
-      >
-        {buttonContent}
-      </div>
-
-      {open && (
-        <Card
-          className="absolute left-0 z-30 mt-2 w-72 shadow-lg"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <CardContent className="space-y-2 py-3">
-            <p className="text-xs font-semibold text-muted-foreground">GSC Konten</p>
-            {accounts.map((acc) => (
-              <button
-                key={acc.id}
-                className={cn(
-                  "w-full rounded-md border border-transparent px-3 py-2 text-left text-sm hover:bg-muted",
-                  selecting === acc.id && "opacity-60"
-                )}
-                onClick={() => selectAccount(acc.id)}
-                disabled={!!selecting}
-              >
-                {acc.email ?? "Ohne E-Mail"}{" "}
-                <span className="text-[11px] text-muted-foreground">({acc.id.slice(0, 6)})</span>
-              </button>
-            ))}
-
-            <div className="pt-2 border-t border-border/80">
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => {
-                  if (status !== "authenticated") {
-                    signIn("google");
-                  } else {
-                    window.location.href = "/api/auth/google";
-                  }
-                }}
-              >
-                Search Console verbinden
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+    <div className={cn(className)}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="w-full justify-between">
+            <span className="flex items-center gap-2">
+              <Avatar className="h-6 w-6">
+                <AvatarFallback>G</AvatarFallback>
+              </Avatar>
+              <span className="truncate text-left text-sm">
+                {current?.email ?? "Account auswählen"}
+              </span>
+            </span>
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-72" align="start">
+          {accounts.map((acc) => (
+            <DropdownMenuItem
+              key={acc.id}
+              onClick={() => selectAccount(acc.id)}
+              disabled={!!selecting}
+            >
+              <div className="flex w-full items-center justify-between">
+                <span className="truncate">{acc.email ?? "Ohne E-Mail"}</span>
+                <span className="text-xs text-muted-foreground">{acc.id.slice(0, 6)}</span>
+              </div>
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => {
+              if (status !== "authenticated") {
+                signIn("google");
+              } else {
+                window.location.href = "/api/auth/google";
+              }
+            }}
+          >
+            Search Console verbinden
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

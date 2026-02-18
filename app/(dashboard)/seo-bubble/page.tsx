@@ -18,7 +18,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
 import { Maximize2 } from "lucide-react";
 import { useSite } from "@/components/dashboard/site-context";
@@ -351,47 +358,51 @@ export default function SeoBubblePage() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">Top N</span>
-            <Select
-              value={String(topN)}
-              onChange={(val) => setTopN(Number(val))}
-              options={[
-                { value: "100", label: "100" },
-                { value: "300", label: "300" },
-                { value: "1000", label: "1000" }
-              ]}
-              className="h-9 w-24"
-            />
+            <Select value={String(topN)} onValueChange={(val) => setTopN(Number(val))}>
+              <SelectTrigger className="h-9 w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="100">100</SelectItem>
+                <SelectItem value="300">300</SelectItem>
+                <SelectItem value="1000">1000</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">Zeitraum</span>
-            <Select
-              value={String(range)}
-              onChange={(val) => setRange(Number(val))}
-              options={[
-                { value: "7", label: "7 Tage" },
-                { value: "28", label: "28 Tage" },
-                { value: "90", label: "90 Tage" }
-              ]}
-              className="h-9 w-28"
-            />
+            <Select value={String(range)} onValueChange={(val) => setRange(Number(val))}>
+              <SelectTrigger className="h-9 w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">7 Tage</SelectItem>
+                <SelectItem value="28">28 Tage</SelectItem>
+                <SelectItem value="90">90 Tage</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-sm">
+              <Checkbox
+                id="seo-bubble-zones"
                 checked={showZones}
-                onChange={(e) => setShowZones(e.target.checked)}
+                onCheckedChange={(val) => setShowZones(Boolean(val))}
               />
-              Zonen
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+              <label htmlFor="seo-bubble-zones" className="text-sm font-medium leading-none">
+                Zonen
+              </label>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <Checkbox
+                id="seo-bubble-refs"
                 checked={showRefs}
-                onChange={(e) => setShowRefs(e.target.checked)}
+                onCheckedChange={(val) => setShowRefs(Boolean(val))}
               />
-              Referenzlinien
-            </label>
+              <label htmlFor="seo-bubble-refs" className="text-sm font-medium leading-none">
+                Referenzlinien
+              </label>
+            </div>
           </div>
       </FilterBar>
 

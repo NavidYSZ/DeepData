@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CannibalizationTable } from "@/components/dashboard/cannibalization-table";
 import { BubbleScatter, DumbbellChart } from "@/components/dashboard/cannibalization-visuals";
@@ -289,16 +291,24 @@ export default function KannibalisierungPage() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Shares</label>
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <label className="flex items-center gap-1">
-                <input type="radio" name="shareMetric" value="clicks" checked={shareMetric === "clicks"} onChange={() => setShareMetric("clicks")} />
-                Clicks
-              </label>
-              <label className="flex items-center gap-1">
-                <input type="radio" name="shareMetric" value="impressions" checked={shareMetric === "impressions"} onChange={() => setShareMetric("impressions")} />
-                Impressions
-              </label>
-            </div>
+            <RadioGroup
+              value={shareMetric}
+              onValueChange={(val) => setShareMetric(val as "clicks" | "impressions")}
+              className="flex items-center gap-4 text-sm text-muted-foreground"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="clicks" id="share-clicks" />
+                <label htmlFor="share-clicks" className="text-sm font-medium leading-none">
+                  Clicks
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="impressions" id="share-impressions" />
+                <label htmlFor="share-impressions" className="text-sm font-medium leading-none">
+                  Impressions
+                </label>
+              </div>
+            </RadioGroup>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Min Impressions</label>
@@ -315,8 +325,14 @@ export default function KannibalisierungPage() {
           <div className="space-y-2">
             <label className="text-sm font-medium">Switching</label>
             <div className="flex items-center gap-2">
-              <input type="checkbox" checked={includeSwitches} onChange={(e) => setIncludeSwitches(e.target.checked)} />
-              <span className="text-sm text-muted-foreground">URL-Wechsel berechnen</span>
+              <Checkbox
+                id="include-switches"
+                checked={includeSwitches}
+                onCheckedChange={(val) => setIncludeSwitches(Boolean(val))}
+              />
+              <label htmlFor="include-switches" className="text-sm text-muted-foreground">
+                URL-Wechsel berechnen
+              </label>
             </div>
           </div>
           <div className="space-y-2 md:col-span-3">
@@ -359,8 +375,14 @@ export default function KannibalisierungPage() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Nur kritisch</label>
               <div className="flex items-center gap-2">
-                <input type="checkbox" checked={onlyCritical} onChange={(e) => setOnlyCritical(e.target.checked)} />
-                <span className="text-sm text-muted-foreground">Top Share &lt; 60% und Spread &gt; 20</span>
+                <Checkbox
+                  id="only-critical"
+                  checked={onlyCritical}
+                  onCheckedChange={(val) => setOnlyCritical(Boolean(val))}
+                />
+                <label htmlFor="only-critical" className="text-sm text-muted-foreground">
+                  Top Share &lt; 60% und Spread &gt; 20
+                </label>
               </div>
             </div>
           </div>

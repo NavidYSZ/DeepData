@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export function PageHeader({
@@ -15,8 +15,8 @@ export function PageHeader({
 }) {
   return (
     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <div>
-        <h1 className="text-2xl font-semibold">{title}</h1>
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
       </div>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
@@ -51,9 +51,9 @@ export function SectionCard({
     <Card className={className}>
       {title ? (
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
+          <div className="space-y-1">
             <CardTitle>{title}</CardTitle>
-            {description ? <p className="text-xs text-muted-foreground mt-1">{description}</p> : null}
+            {description ? <CardDescription>{description}</CardDescription> : null}
           </div>
           {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
         </CardHeader>

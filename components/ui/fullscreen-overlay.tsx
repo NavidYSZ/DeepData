@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 interface FullscreenOverlayProps {
   children: React.ReactNode;
@@ -27,22 +28,18 @@ export function FullscreenOverlay({ children, onClose, title, className }: Fulls
   }, [onClose]);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 backdrop-blur">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
       <div
         className={cn(
-          "relative w-[95vw] max-w-6xl max-h-[95vh] rounded-xl border border-border bg-card shadow-2xl",
+          "relative w-[95vw] max-w-6xl max-h-[95vh] overflow-hidden rounded-xl border bg-card shadow-2xl",
           className
         )}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="text-sm font-semibold">{title}</div>
-          <button
-            aria-label="Schließen"
-            className="rounded-md p-2 text-muted-foreground hover:bg-muted"
-            onClick={onClose}
-          >
+          <Button variant="ghost" size="icon" aria-label="Schließen" onClick={onClose}>
             <X className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
         <div className="p-3 overflow-auto">{children}</div>
       </div>

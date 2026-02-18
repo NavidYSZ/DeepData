@@ -3,8 +3,14 @@
 import useSWR from "swr";
 import { useEffect } from "react";
 import { useSite } from "@/components/dashboard/site-context";
-import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 
 interface SitesResponse {
   sites: { siteUrl: string; permissionLevel: string }[];
@@ -50,7 +56,7 @@ export function PropertyMenu() {
       {isLoading ? (
         <Skeleton className="h-9 w-full" />
       ) : error ? (
-        <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+        <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/10 p-3">
           <p className="text-xs font-semibold text-destructive">Keine Properties</p>
           {scopeError && (
             <button
@@ -65,14 +71,18 @@ export function PropertyMenu() {
           )}
         </div>
       ) : (
-        <Select
-          value={site ?? ""}
-          onChange={(val) => setSite(val || null)}
-          options={options}
-          placeholder="Property wählen"
-          searchable
-          searchPlaceholder="Property suchen…"
-        />
+        <Select value={site ?? ""} onValueChange={(val) => setSite(val || null)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Property wählen" />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
     </div>
   );

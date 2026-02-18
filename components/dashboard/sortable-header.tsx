@@ -2,6 +2,8 @@
 
 import { ReactNode } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export type SortDirection = "asc" | "desc" | null;
 
@@ -10,13 +12,15 @@ export function SortableHeader({
   active,
   direction,
   onClick,
-  help
+  help,
+  className
 }: {
   label: string;
   active: boolean;
   direction: SortDirection;
   onClick: () => void;
   help?: ReactNode;
+  className?: string;
 }) {
   const icon = !active ? (
     <ArrowUpDown className="h-3 w-3" />
@@ -29,14 +33,19 @@ export function SortableHeader({
   );
 
   return (
-    <button
-      className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
-      onClick={onClick}
+    <Button
       type="button"
+      variant="ghost"
+      size="sm"
+      className={cn(
+        "h-auto px-2 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground",
+        className
+      )}
+      onClick={onClick}
     >
-      {label}
+      <span>{label}</span>
       {help}
       {icon}
-    </button>
+    </Button>
   );
 }
