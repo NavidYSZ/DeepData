@@ -3,11 +3,13 @@
 import { Fragment, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableContainer } from "@/components/ui/table-container";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp, Info } from "lucide-react";
 import { SortableHeader } from "@/components/dashboard/sortable-header";
 import type { CannibalRow, UrlAgg } from "@/lib/cannibalization";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type SortCol = "score" | "totalImpressions" | "totalClicks" | "topShare" | "secondShare" | "spread" | "switches" | null;
 type SortDir = "asc" | "desc" | null;
@@ -87,120 +89,113 @@ export function CannibalizationTable({ rows, showSwitches }: { rows: CannibalRow
         </Button>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
-          <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 260px)" }}>
-            <Table className="text-sm min-w-full">
-              <TableHeader className="sticky top-0 z-10 bg-card">
-                <TableRow>
-                  <TableHead>Query</TableHead>
-                  <TableHead className="text-right">{headerBtn("score", "Score")}</TableHead>
-                  <TableHead className="text-right">{headerBtn("totalImpressions", "Impr.")}</TableHead>
-                  <TableHead className="text-right">{headerBtn("totalClicks", "Clicks")}</TableHead>
-                  <TableHead className="text-right">URLs</TableHead>
-                  <TableHead className="text-right">
-                    {headerBtn(
-                      "topShare",
-                      "Top Share",
-                      <div className="space-y-2">
-                        <div className="space-y-1">
-                          <p className="font-semibold">Definition</p>
-                          <p>Top Share zeigt, wie viel Prozent der Query-Leistung auf die stärkste URL entfallen (Clicks/Impr. Summe aller URLs). Beispiel: URL A hat 80 von 100 Klicks → Top Share 80%.</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="font-semibold">Interpretation</p>
-                          <p>Hoch = klare Haupt-URL. Niedrig = Leistung verteilt, oft Hinweis auf Kannibalisierung/überlappende Inhalte.</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="font-semibold">Richtwerte</p>
-                          <div className="space-y-1">
-                            <p>- &gt;70–80%: meist stabil</p>
-                            <p>- 40–70%: beobachten</p>
-                            <p>- &lt;40%: oft Handlungsbedarf</p>
-                          </div>
-                        </div>
-                        <p className="mb-0">Immer zusammen mit Impressions, #URLs und Suchintention bewerten.</p>
+        <TableContainer className="max-h-[calc(100vh-260px)] overflow-auto">
+          <Table className="min-w-[980px] text-sm">
+            <TableHeader className="sticky top-0 z-10 bg-card">
+              <TableRow>
+                <TableHead>Query</TableHead>
+                <TableHead className="text-right">{headerBtn("score", "Score")}</TableHead>
+                <TableHead className="text-right">{headerBtn("totalImpressions", "Impr.")}</TableHead>
+                <TableHead className="text-right">{headerBtn("totalClicks", "Clicks")}</TableHead>
+                <TableHead className="text-right">URLs</TableHead>
+                <TableHead className="text-right">
+                  {headerBtn(
+                    "topShare",
+                    "Top Share",
+                    <div className="space-y-2">
+                      <div className="space-y-1">
+                        <p className="font-semibold">Definition</p>
+                        <p>Top Share zeigt, wie viel Prozent der Query-Leistung auf die stärkste URL entfallen (Clicks/Impr. Summe aller URLs). Beispiel: URL A hat 80 von 100 Klicks und Top Share 80%.</p>
                       </div>
-                    )}
-                  </TableHead>
-                  <TableHead className="text-right">
-                    {headerBtn(
-                      "secondShare",
-                      "2nd Share",
-                      <div className="space-y-2">
-                        <p className="mb-2 last:mb-0">2nd Share ist der Leistungsanteil der zweitstärksten URL innerhalb derselben Query. Diese Kennzahl zeigt, wie stark die zweite URL in die Sichtbarkeit der Haupt-URL hineinragt.</p>
-                        <p className="mb-2 last:mb-0">Liegt der 2nd Share nahe am Top Share, konkurrieren zwei URLs direkt um dieselbe Query – ein klassisches Muster für Kannibalisierung oder zumindest für eine nicht sauber entschiedene URL-Priorisierung.</p>
-                        <p className="mb-2 last:mb-0">Ist der 2nd Share dagegen deutlich kleiner, gibt es zwar weitere rankende URLs, aber keine ernsthafte Rivalität zur Haupt-URL.</p>
-                        <p className="mb-2 last:mb-0">Typische Nutzung in der Praxis: Hoher 2nd Share plus niedriger Top Share ist ein starkes Signal, dass Titel/H1, interne Verlinkung oder Content-Fokus zwischen zwei Seiten zu ähnlich sind.</p>
+                      <div className="space-y-1">
+                        <p className="font-semibold">Interpretation</p>
+                        <p>Hoch ist eine klare Haupt-URL. Niedrig bedeutet verteilte Leistung und oft ein Hinweis auf Kannibalisierung.</p>
                       </div>
-                    )}
-                  </TableHead>
-                  <TableHead className="text-right">
-                    {headerBtn(
-                      "spread",
-                      "Spread",
-                      <div className="space-y-2">
-                        <p className="mb-2 last:mb-0">Spread beschreibt den Positionsabstand zwischen der stärksten und der zweitstärksten URL für eine Query (hier: max(Position) – min(Position)).</p>
-                        <p className="mb-2 last:mb-0">Bedeutung: Ein kleiner Spread steht für ein Kopf-an-Kopf-Rennen – Google schwankt zwischen zwei Seiten, was häufig auf Kannibalisierung, Intent-Überlappung oder unklare Informationsarchitektur hinweist.</p>
-                        <p className="mb-2 last:mb-0">Ein großer Spread bedeutet, dass die Haupt-URL klar vor der zweiten URL liegt und die Query-Zuordnung stabiler ist.</p>
-                        <p className="mb-2 last:mb-0">Wichtig: Spread nie isoliert lesen. Ein kleiner Spread bei wenigen Impressions kann irrelevant sein; ein kleiner Spread bei hohem Query-Volumen ist hingegen ein priorisierter Optimierungsfall. Für Entscheidungen immer gemeinsam mit Top Share, 2nd Share, URLs/Query und absolutem Traffic-Potenzial betrachten.</p>
+                      <div className="space-y-1">
+                        <p className="font-semibold">Richtwerte</p>
+                        <p>{">"}70 bis 80% meist stabil</p>
+                        <p>40 bis 70% beobachten</p>
+                        <p>{"<"}40% häufig Handlungsbedarf</p>
                       </div>
-                    )}
-                  </TableHead>
-                  {showSwitches && (
-                    <TableHead className="text-right">
-                      {headerBtn("switches", "Switches", "Anzahl Wechsel der Top-URL über den Zeitraum")}
-                    </TableHead>
+                    </div>
                   )}
-                  <TableHead className="text-right">Details</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sorted.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={showSwitches ? 10 : 9} className="text-center text-muted-foreground">
-                      Keine Daten
-                    </TableCell>
-                  </TableRow>
+                </TableHead>
+                <TableHead className="text-right">
+                  {headerBtn(
+                    "secondShare",
+                    "2nd Share",
+                    <div className="space-y-2">
+                      <p>2nd Share ist der Anteil der zweitstärksten URL innerhalb derselben Query.</p>
+                      <p>Liegt er nahe am Top Share, konkurrieren zwei URLs direkt miteinander.</p>
+                      <p>Niedriger 2nd Share spricht für klarere Priorisierung.</p>
+                    </div>
+                  )}
+                </TableHead>
+                <TableHead className="text-right">
+                  {headerBtn(
+                    "spread",
+                    "Spread",
+                    <div className="space-y-2">
+                      <p>Spread ist der Positionsabstand zwischen stärkster und zweitstärkster URL.</p>
+                      <p>Kleiner Spread steht für ein Kopf-an-Kopf-Rennen und instabile URL-Zuordnung.</p>
+                      <p>Großer Spread deutet auf eine klare Haupt-URL hin.</p>
+                    </div>
+                  )}
+                </TableHead>
+                {showSwitches && (
+                  <TableHead className="text-right">
+                    {headerBtn("switches", "Switches", "Anzahl Wechsel der Top-URL über den Zeitraum")}
+                  </TableHead>
                 )}
-                {sorted.map((r, idx) => {
-                  const isOpen = open[r.query];
-                  return (
-                    <Fragment key={r.query}>
-                      <TableRow key={r.query} className={cn(idx % 2 === 0 && "bg-muted/30") }>
-                        <TableCell className="max-w-[240px] truncate" title={r.query}>{r.query}</TableCell>
-                        <TableCell className="text-right">{r.score.toFixed(3)}</TableCell>
-                        <TableCell className="text-right">{r.totalImpressions.toLocaleString("de-DE")}</TableCell>
-                        <TableCell className="text-right">{r.totalClicks.toLocaleString("de-DE")}</TableCell>
-                        <TableCell className="text-right">{r.urls.length}</TableCell>
-                        <TableCell className="text-right">{(r.topShare * 100).toFixed(1)}%</TableCell>
-                        <TableCell className="text-right">{(r.secondShare * 100).toFixed(1)}%</TableCell>
-                        <TableCell className="text-right">{r.spread.toFixed(2)}</TableCell>
-                        {showSwitches && <TableCell className="text-right">{r.switches ?? 0}</TableCell>}
-                        <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setOpen((o) => ({ ...o, [r.query]: !isOpen }))}
-                            className="h-7 px-2 text-xs"
-                          >
-                            {isOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />} Details
-                          </Button>
+                <TableHead className="text-right">Details</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sorted.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={showSwitches ? 10 : 9} className="text-center text-muted-foreground">
+                    Keine Daten
+                  </TableCell>
+                </TableRow>
+              )}
+              {sorted.map((r, idx) => {
+                const isOpen = open[r.query];
+                return (
+                  <Fragment key={r.query}>
+                    <TableRow className={cn(idx % 2 === 0 && "bg-muted/30")}>
+                      <TableCell className="max-w-[240px] truncate" title={r.query}>{r.query}</TableCell>
+                      <TableCell className="text-right">{r.score.toFixed(3)}</TableCell>
+                      <TableCell className="text-right">{r.totalImpressions.toLocaleString("de-DE")}</TableCell>
+                      <TableCell className="text-right">{r.totalClicks.toLocaleString("de-DE")}</TableCell>
+                      <TableCell className="text-right">{r.urls.length}</TableCell>
+                      <TableCell className="text-right">{(r.topShare * 100).toFixed(1)}%</TableCell>
+                      <TableCell className="text-right">{(r.secondShare * 100).toFixed(1)}%</TableCell>
+                      <TableCell className="text-right">{r.spread.toFixed(2)}</TableCell>
+                      {showSwitches && <TableCell className="text-right">{r.switches ?? 0}</TableCell>}
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setOpen((o) => ({ ...o, [r.query]: !isOpen }))}
+                          className="h-7 px-2 text-xs"
+                        >
+                          {isOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />} Details
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                    {isOpen && (
+                      <TableRow className="bg-muted/20">
+                        <TableCell colSpan={showSwitches ? 10 : 9}>
+                          <UrlList urls={r.urls} totalClicks={r.totalClicks} totalImpr={r.totalImpressions} />
                         </TableCell>
                       </TableRow>
-                      {isOpen && (
-                        <TableRow className="bg-muted/20">
-                          <TableCell colSpan={showSwitches ? 10 : 9}>
-                            <UrlList urls={r.urls} totalClicks={r.totalClicks} totalImpr={r.totalImpressions} />
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </CardContent>
     </Card>
   );
@@ -211,7 +206,7 @@ function UrlList({ urls, totalClicks, totalImpr }: { urls: UrlAgg[]; totalClicks
   return (
     <div className="space-y-2">
       <p className="text-xs font-semibold text-muted-foreground">URLs</p>
-      <div className="overflow-x-auto">
+      <TableContainer>
         <Table className="text-xs">
           <TableHeader>
             <TableRow>
@@ -234,21 +229,24 @@ function UrlList({ urls, totalClicks, totalImpr }: { urls: UrlAgg[]; totalClicks
             ))}
           </TableBody>
         </Table>
-      </div>
+      </TableContainer>
     </div>
   );
 }
 
 function InfoTooltip({ text, maxWidth = 420 }: { text: React.ReactNode; maxWidth?: number }) {
   return (
-    <span className="relative inline-flex items-center group">
-      <Info className="h-3 w-3 text-muted-foreground" />
-      <span
-        className="pointer-events-auto absolute left-1/2 top-full z-30 mt-1 hidden -translate-x-1/2 rounded-md border border-border bg-card px-3 py-2 text-[11px] leading-relaxed text-foreground shadow-md group-hover:block group-focus-within:block"
-        style={{ maxWidth }}
-      >
-        {text}
-      </span>
-    </span>
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" className="inline-flex items-center text-muted-foreground hover:text-foreground" aria-label="Definition anzeigen">
+            <Info className="h-3 w-3" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" align="center" className="max-h-[60vh] max-w-[min(90vw,420px)] overflow-y-auto text-[11px] leading-relaxed">
+          <div style={{ maxWidth }}>{text}</div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

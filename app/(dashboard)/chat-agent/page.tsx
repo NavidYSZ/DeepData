@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableContainer } from "@/components/ui/table-container";
 import { cn } from "@/lib/utils";
 import { useSite } from "@/components/dashboard/site-context";
 import { Loader2 } from "lucide-react";
@@ -92,7 +93,7 @@ function renderBlock(block: UiBlock, key: string) {
             {block.title}
           </div>
         ) : null}
-        <div className="overflow-x-auto">
+        <TableContainer>
           <Table className="min-w-[640px]">
             <TableHeader>
               <TableRow>
@@ -111,7 +112,7 @@ function renderBlock(block: UiBlock, key: string) {
               ))}
             </TableBody>
           </Table>
-        </div>
+        </TableContainer>
       </div>
     );
   }
@@ -309,7 +310,7 @@ export default function ChatAgentPage() {
         title="Chat Agent"
         description="Runbooks ausführen oder frei chatten – alles auf GSC-Daten."
       />
-      <div className="grid gap-4 lg:grid-cols-[320px,1fr]">
+      <div className="grid gap-4 md:grid-cols-[280px,1fr] lg:grid-cols-[320px,1fr]">
         <Card className="h-full">
           <CardHeader className="flex flex-col gap-3">
             <CardTitle>Verläufe</CardTitle>
@@ -318,7 +319,7 @@ export default function ChatAgentPage() {
             </Button>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="h-[70vh] overflow-y-auto">
+            <div className="h-[60vh] overflow-y-auto md:h-[70vh]">
               <div className="space-y-1 p-3">
                 {sessions.map((s) => (
                   <button
@@ -374,7 +375,7 @@ export default function ChatAgentPage() {
               ))}
             </div>
             <div className="mt-3 h-px w-full bg-border" />
-            <div className="mt-3 h-[60vh] rounded-md border border-border bg-card overflow-y-auto" ref={scrollRef}>
+            <div className="mt-3 h-[58vh] overflow-auto rounded-md border border-border bg-card md:h-[60vh]" ref={scrollRef}>
               <div className="space-y-4 p-4">
                 {messages.map((m, idx) => {
                   const isUser = m.role === "user";
@@ -384,7 +385,7 @@ export default function ChatAgentPage() {
                     <div key={m.id ?? idx} className={cn("flex", isUser ? "justify-end" : "justify-start")}>
                       <div
                         className={cn(
-                          "w-full max-w-[85%] space-y-2 rounded-lg border px-3 py-2",
+                          "w-full max-w-[92%] space-y-2 rounded-lg border px-3 py-2 sm:max-w-[88%]",
                           isUser ? "border-primary/20 bg-primary text-primary-foreground" : "border-border bg-card"
                         )}
                       >

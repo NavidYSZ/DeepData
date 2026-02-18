@@ -222,10 +222,14 @@ export default function RankTrackerPage() {
         </SectionCard>
       )}
 
-      <FilterBar className="md:grid-cols-3 md:items-end">
+      <FilterBar className="md:grid-cols-2 md:items-end">
         <div className="space-y-2">
           <label className="text-sm font-medium">Zeitraum</label>
           <DateRangePicker value={range} onChange={setRange} />
+        </div>
+        <div className="space-y-2 md:justify-self-end">
+          <label className="text-sm font-medium opacity-0">Auswahl</label>
+          <Badge variant="secondary">{selectedQueries.length} Keywords aktiv</Badge>
         </div>
       </FilterBar>
 
@@ -233,8 +237,8 @@ export default function RankTrackerPage() {
         <Badge variant="secondary">Zeitraum: {formatRange(range, 28)}</Badge>
       </StatsRow>
 
-      <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-12 lg:col-span-8 space-y-4">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-w-0 space-y-4">
           {loadingSeries ? (
             <Skeleton className="h-[680px] w-full" />
           ) : (
@@ -248,7 +252,7 @@ export default function RankTrackerPage() {
           )}
           {error && <ErrorState>{error}</ErrorState>}
         </div>
-        <div className="col-span-12 lg:col-span-4 space-y-3">
+        <div className="min-w-0 space-y-3">
           <SectionCard title="Keywords">
             <QueryMultiSelect
               options={(tableRows || []).map((r) => ({

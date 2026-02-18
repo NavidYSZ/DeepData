@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 type Option = { value: string; label: string; impressions: number };
 
@@ -18,7 +19,6 @@ export function QueryMultiSelect({ options, selected, onChange, onOnly, max = 15
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlight, setHighlight] = useState(0);
-  const panelRef = useRef<HTMLDivElement | null>(null);
 
   const filtered = useMemo(() => {
     const term = search.toLowerCase();
@@ -26,16 +26,6 @@ export function QueryMultiSelect({ options, selected, onChange, onOnly, max = 15
     return [...list].sort((a, b) => b.impressions - a.impressions);
   }, [options, search]);
   const allOptions = useMemo(() => options.map((o) => o.value), [options]);
-
-  useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("click", onDocClick);
-    return () => document.removeEventListener("click", onDocClick);
-  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -65,6 +55,7 @@ export function QueryMultiSelect({ options, selected, onChange, onOnly, max = 15
 
   function handleKey(e: React.KeyboardEvent) {
     if (!open) return;
+    if (!filtered.length) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setHighlight((h) => Math.min(h + 1, filtered.length - 1));
@@ -81,26 +72,27 @@ export function QueryMultiSelect({ options, selected, onChange, onOnly, max = 15
   }
 
   return (
-    <div className="relative" ref={panelRef} onKeyDown={handleKey}>
-      <button
-        type="button"
-        className={cn(
-          "flex w-full items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm shadow-sm transition hover:border-primary",
-          open && "ring-2 ring-primary/40"
-        )}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((o) => !o);
-        }}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "flex w-full items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm shadow-sm transition hover:border-primary",
+            open && "ring-2 ring-primary/40"
+          )}
+        >
+          <span className="text-left">
+            Keywords <span className="text-muted-foreground">· {countLabel}</span>
+          </span>
+          <span className="text-muted-foreground text-xs">▼</span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[min(32rem,calc(100vw-2rem))] p-0"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        onKeyDown={handleKey}
       >
-        <span className="text-left">
-          Keywords <span className="text-muted-foreground">· {countLabel}</span>
-        </span>
-        <span className="text-muted-foreground text-xs">▼</span>
-      </button>
-
-      {open && (
-        <div className="absolute z-40 mt-2 w-full rounded-md border border-border bg-card shadow-xl">
           <div className="flex items-center justify-between px-3 py-2 text-xs font-semibold text-muted-foreground">
             <div className="flex items-center gap-2">
               <button
@@ -121,7 +113,7 @@ export function QueryMultiSelect({ options, selected, onChange, onOnly, max = 15
                   <Check className="h-3 w-3" />
                 )}
               </button>
-              OR select
+              ODER auswählen
             </div>
             <span>Impressions</span>
           </div>
@@ -134,6 +126,7 @@ export function QueryMultiSelect({ options, selected, onChange, onOnly, max = 15
                 placeholder="Suchbegriff eingeben"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
                 autoFocus
               />
               {search && (
@@ -205,8 +198,7 @@ export function QueryMultiSelect({ options, selected, onChange, onOnly, max = 15
             <span>Ausgewählt: {countLabel}</span>
             {disabled && <span>Max erreicht ({max})</span>}
           </div>
-        </div>
-      )}
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }

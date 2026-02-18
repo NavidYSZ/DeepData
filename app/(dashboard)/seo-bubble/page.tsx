@@ -343,8 +343,8 @@ export default function SeoBubblePage() {
         description="CTR vs. Position als Bubble-Chart, inkl. Quadranten-Analyse."
       />
 
-      <FilterBar className="md:grid-cols-4">
-          <div className="flex items-center gap-2">
+      <FilterBar className="md:grid-cols-2 xl:grid-cols-4">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium">Mode</span>
             <div className="flex gap-1">
               {["query", "page"].map((m) => (
@@ -359,7 +359,7 @@ export default function SeoBubblePage() {
               ))}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium">Top N</span>
             <Select value={String(topN)} onValueChange={(val) => setTopN(Number(val))}>
               <SelectTrigger className="h-9 w-24">
@@ -372,7 +372,7 @@ export default function SeoBubblePage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium">Zeitraum</span>
             <Select value={String(range)} onValueChange={(val) => setRange(Number(val))}>
               <SelectTrigger className="h-9 w-28">
@@ -385,7 +385,7 @@ export default function SeoBubblePage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2 text-sm">
               <Checkbox
                 id="seo-bubble-zones"
@@ -456,10 +456,10 @@ export default function SeoBubblePage() {
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-4">
-          <div className="lg:col-span-3 h-[520px]">
+          <div className="h-[520px] min-w-0 lg:col-span-3">
             {renderChart("h-full")}
           </div>
-          <div className="lg:col-span-1 space-y-3">
+          <div className="min-w-0 space-y-3 lg:col-span-1">
             <Card className="h-full">
               <CardHeader>
                 <CardTitle>Details</CardTitle>

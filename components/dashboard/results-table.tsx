@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
+import { TableContainer } from "@/components/ui/table-container";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SortableHeader } from "@/components/dashboard/sortable-header";
 
@@ -60,7 +61,7 @@ export function ResultsTable({ rows }: { rows: ResultRow[] }) {
         <CardTitle>Top Rows</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
+        <TableContainer>
           <Table>
             <TableHeader>
               <TableRow>
@@ -102,7 +103,7 @@ export function ResultsTable({ rows }: { rows: ResultRow[] }) {
             <TableBody>
               {sorted.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
                     Keine Daten
                   </TableCell>
                 </TableRow>
@@ -122,7 +123,7 @@ export function ResultsTable({ rows }: { rows: ResultRow[] }) {
               ))}
             </TableBody>
           </Table>
-        </div>
+        </TableContainer>
       </CardContent>
     </Card>
   );

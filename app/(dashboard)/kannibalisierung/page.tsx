@@ -285,7 +285,7 @@ export default function KannibalisierungPage() {
         </SectionCard>
       )}
 
-      <FilterBar className="md:grid-cols-6 md:items-end">
+      <FilterBar className="lg:grid-cols-6 lg:items-end">
           <div className="space-y-2">
             <label className="text-sm font-medium">Zeitraum</label>
             <DateRangePicker value={range} onChange={setRange} />
@@ -336,15 +336,15 @@ export default function KannibalisierungPage() {
               </label>
             </div>
           </div>
-          <div className="space-y-2 md:col-span-3">
+          <div className="space-y-2 lg:col-span-3">
             <label className="text-sm font-medium">Query enthält</label>
             <Input placeholder="z.B. kaufen" value={contains} onChange={(e) => setContains(e.target.value)} />
           </div>
-          <div className="space-y-2 md:col-span-3">
+          <div className="space-y-2 lg:col-span-3">
             <label className="text-sm font-medium">Query enthält nicht</label>
             <Input placeholder="z.B. gratis" value={notContains} onChange={(e) => setNotContains(e.target.value)} />
           </div>
-          <div className="md:col-span-6 grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 lg:col-span-6 lg:grid-cols-3">
             <div className="space-y-2">
               <label className="text-sm font-medium">Min Impressions (Slider)</label>
               <input

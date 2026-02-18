@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableContainer } from "@/components/ui/table-container";
 import { cn } from "@/lib/utils";
 import { SortableHeader } from "@/components/dashboard/sortable-header";
 import type { QueryRow } from "./queries-table";
@@ -92,24 +93,23 @@ export function DataExplorerTable({
         </Button>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
-          <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 260px)" }}>
-            <Table className="text-sm min-w-full">
-              <TableHeader className="sticky top-0 bg-card z-10">
-                <TableRow>
-                  {selectedKeyword ? (
-                    <TableHead>URL (Slug)</TableHead>
-                  ) : (
-                    <TableHead>Keyword</TableHead>
-                  )}
-                  <TableHead className="text-right">Pos.</TableHead>
-                  <TableHead className="text-right">{header("impressions", "Impr.")}</TableHead>
-                  <TableHead className="text-right">{header("clicks", "Clicks")}</TableHead>
-                  {selectedKeyword ? null : <TableHead>URL (Slug)</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sorted.length === 0 && (
+        <TableContainer className="max-h-[calc(100vh-260px)] overflow-auto">
+          <Table className="min-w-[760px] text-sm">
+            <TableHeader className="sticky top-0 z-10 bg-card">
+              <TableRow>
+                {selectedKeyword ? (
+                  <TableHead>URL (Slug)</TableHead>
+                ) : (
+                  <TableHead>Keyword</TableHead>
+                )}
+                <TableHead className="text-right">Pos.</TableHead>
+                <TableHead className="text-right">{header("impressions", "Impr.")}</TableHead>
+                <TableHead className="text-right">{header("clicks", "Clicks")}</TableHead>
+                {selectedKeyword ? null : <TableHead>URL (Slug)</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sorted.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={selectedKeyword ? 4 : 5} className="text-center text-muted-foreground">
                     Keine Daten
@@ -117,7 +117,7 @@ export function DataExplorerTable({
                 </TableRow>
               )}
               {sorted.map((r, idx) => (
-                <TableRow key={idx} className={cn(idx % 2 === 0 && "bg-muted/30") }>
+                <TableRow key={idx} className={cn(idx % 2 === 0 && "bg-muted/30")}>
                   {selectedKeyword ? (
                     <TableCell className="max-w-[280px] truncate" title={r.keys[1]}>
                       {r.keys[1] ? (
@@ -190,10 +190,9 @@ export function DataExplorerTable({
                   )}
                 </TableRow>
               ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+            </TableBody>
+          </Table>
+        </TableContainer>
       </CardContent>
     </Card>
   );

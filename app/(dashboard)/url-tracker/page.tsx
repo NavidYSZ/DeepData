@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableContainer } from "@/components/ui/table-container";
 import { useSite } from "@/components/dashboard/site-context";
 import type { QueryRow } from "@/components/dashboard/queries-table";
 import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
@@ -423,8 +424,8 @@ export default function UrlTrackerPage() {
               <EmptyState title="Keine Daten" description="Keine URLs im gewählten Zeitraum." />
             </div>
           ) : (
-            <div className="mt-3 overflow-x-auto">
-              <Table className="min-w-[900px] text-sm">
+            <TableContainer className="mt-3">
+              <Table className="min-w-[760px] text-sm lg:min-w-[920px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>
@@ -475,7 +476,7 @@ export default function UrlTrackerPage() {
                         onClick={() => toggleSort("keywords")}
                       />
                     </TableHead>
-                    <TableHead>
+                    <TableHead className="hidden xl:table-cell">
                       <SortableHeader
                         label="Top Keyword"
                         active={sortCol === "topKeyword"}
@@ -483,7 +484,7 @@ export default function UrlTrackerPage() {
                         onClick={() => toggleSort("topKeyword")}
                       />
                     </TableHead>
-                    <TableHead className="text-right">
+                    <TableHead className="hidden text-right xl:table-cell">
                       <SortableHeader
                         label="Traffic %"
                         active={sortCol === "traffic"}
@@ -509,7 +510,7 @@ export default function UrlTrackerPage() {
                         <TableCell className="text-right">{(row.ctr * 100).toFixed(2)}%</TableCell>
                         <TableCell className="text-right">{row.avgPos.toFixed(2)}</TableCell>
                         <TableCell className="text-right">{row.keywords}</TableCell>
-                        <TableCell className="max-w-[280px] truncate">
+                        <TableCell className="hidden max-w-[280px] truncate xl:table-cell">
                           {row.topKeyword ? (
                             <span className="text-foreground">
                               {row.topKeyword} <span className="text-muted-foreground">(Pos {row.topPos?.toFixed(1)})</span>
@@ -518,7 +519,7 @@ export default function UrlTrackerPage() {
                             <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">{(row.trafficShare * 100).toFixed(2)}%</TableCell>
+                        <TableCell className="hidden text-right xl:table-cell">{(row.trafficShare * 100).toFixed(2)}%</TableCell>
                         <TableCell className="text-right">
                           <Button
                             size="sm"
@@ -533,7 +534,7 @@ export default function UrlTrackerPage() {
                   })}
                 </TableBody>
               </Table>
-            </div>
+            </TableContainer>
           )}
         </SectionCard>
       )}

@@ -7,11 +7,13 @@ import { cn } from "@/lib/utils";
 export function PageHeader({
   title,
   description,
-  actions
+  actions,
+  actionsWrap = true
 }: {
   title: string;
   description?: string;
   actions?: ReactNode;
+  actionsWrap?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -19,15 +21,23 @@ export function PageHeader({
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
       </div>
-      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+      {actions ? <div className={cn("flex items-center gap-2", actionsWrap && "flex-wrap")}>{actions}</div> : null}
     </div>
   );
 }
 
-export function FilterBar({ children, className }: { children: ReactNode; className?: string }) {
+export function FilterBar({
+  children,
+  className,
+  compact = false
+}: {
+  children: ReactNode;
+  className?: string;
+  compact?: boolean;
+}) {
   return (
     <Card>
-      <CardContent className={cn("grid gap-4 py-4", className)}>{children}</CardContent>
+      <CardContent className={cn("grid gap-4", compact ? "py-3" : "py-4", className)}>{children}</CardContent>
     </Card>
   );
 }

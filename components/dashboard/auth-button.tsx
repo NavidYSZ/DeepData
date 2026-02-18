@@ -10,8 +10,10 @@ export function AuthButton() {
 
   if (status === "authenticated") {
     return (
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground truncate max-w-[180px]">{data?.user?.email}</span>
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="hidden max-w-[180px] truncate text-sm text-muted-foreground xl:inline">
+          {data?.user?.email}
+        </span>
         <Button variant="outline" size="sm" onClick={() => signOut({ callbackUrl: "/" })}>
           Logout
         </Button>

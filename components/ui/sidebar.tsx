@@ -69,7 +69,7 @@ const Sidebar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement>>
       return (
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetContent side="left" className={cn("w-72 p-0", className)}>
-            <aside className="flex h-full w-full flex-col bg-background" {...props}>
+            <aside className="flex h-full w-full flex-col bg-sidebar text-sidebar-foreground" {...props}>
               {children}
             </aside>
           </SheetContent>
@@ -83,7 +83,7 @@ const Sidebar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement>>
           ref={ref}
           data-collapsed={collapsed ? "true" : "false"}
           className={cn(
-            "group hidden h-screen flex-col border-r bg-background transition-all md:flex",
+            "group hidden h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all md:flex",
             collapsed ? "w-16" : "w-72",
             className
           )}
@@ -99,7 +99,7 @@ Sidebar.displayName = "Sidebar";
 
 const SidebarInset = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("flex min-h-screen flex-1 flex-col bg-muted/40", className)} {...props} />
+    <div ref={ref} className={cn("flex min-h-screen flex-1 flex-col bg-muted/30", className)} {...props} />
   )
 );
 SidebarInset.displayName = "SidebarInset";
@@ -153,7 +153,7 @@ const SidebarHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
     return (
       <div
         ref={ref}
-        className={cn("flex flex-col gap-2 border-b p-4", collapsed && "items-center", className)}
+        className={cn("flex flex-col gap-2 border-b border-sidebar-border p-4", collapsed && "items-center", className)}
         {...props}
       />
     );
@@ -170,7 +170,7 @@ SidebarContent.displayName = "SidebarContent";
 
 const SidebarFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("border-t p-4", className)} {...props} />
+    <div ref={ref} className={cn("border-t border-sidebar-border p-4", className)} {...props} />
   )
 );
 SidebarFooter.displayName = "SidebarFooter";
@@ -237,7 +237,7 @@ const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenuButtonP
         ref={ref}
         data-active={isActive ? "true" : undefined}
         className={cn(
-          "group flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[active=true]:bg-accent data-[active=true]:text-foreground",
+          "group flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground",
           collapsed && "justify-center",
           className
         )}

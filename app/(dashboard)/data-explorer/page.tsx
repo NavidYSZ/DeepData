@@ -12,6 +12,7 @@ import { type QueryRow } from "@/components/dashboard/queries-table";
 import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashboard/page-shell";
 import { ErrorState } from "@/components/dashboard/states";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { DateRange } from "react-day-picker";
 import { formatRange, getLastNDaysRange, rangeToIso } from "@/lib/date-range";
 import { toast } from "sonner";
@@ -189,64 +190,59 @@ export default function DataExplorerPage() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-transparent">.</label>
-            <div className="relative">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full justify-between"
-                onClick={() => setFilterOpen((o) => !o)}
-              >
-                Filter
-                <span className="text-xs text-muted-foreground">▼</span>
-              </Button>
-              {filterOpen && (
-                <div className="absolute right-0 z-30 mt-2 w-72 rounded-md border border-border bg-card p-3 shadow-lg space-y-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Keyword enthält</label>
-                    <Input
-                      placeholder="z.B. kaufen"
-                      value={contains}
-                      onChange={(e) => setContains(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Keyword enthält nicht</label>
-                    <Input
-                      placeholder="z.B. gratis"
-                      value={notContains}
-                      onChange={(e) => setNotContains(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Min. Wortanzahl</label>
-                    <Input
-                      type="number"
-                      min={1}
-                      placeholder="z.B. 4"
-                      value={minWords === "" ? "" : minWords}
-                      onChange={(e) => setMinWords(e.target.value ? Number(e.target.value) : "")}
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2 text-xs">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setContains("");
-                        setNotContains("");
-                        setMinWords("");
-                      }}
-                    >
-                      Zurücksetzen
-                    </Button>
-                    <Button type="button" size="sm" onClick={() => setFilterOpen(false)}>
-                      Schließen
-                    </Button>
-                  </div>
+            <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button type="button" variant="outline" className="w-full justify-between">
+                  Filter
+                  <span className="text-xs text-muted-foreground">▼</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72 space-y-3 p-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Keyword enthält</label>
+                  <Input
+                    placeholder="z.B. kaufen"
+                    value={contains}
+                    onChange={(e) => setContains(e.target.value)}
+                  />
                 </div>
-              )}
-            </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Keyword enthält nicht</label>
+                  <Input
+                    placeholder="z.B. gratis"
+                    value={notContains}
+                    onChange={(e) => setNotContains(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Min. Wortanzahl</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    placeholder="z.B. 4"
+                    value={minWords === "" ? "" : minWords}
+                    onChange={(e) => setMinWords(e.target.value ? Number(e.target.value) : "")}
+                  />
+                </div>
+                <div className="flex justify-end gap-2 text-xs">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setContains("");
+                      setNotContains("");
+                      setMinWords("");
+                    }}
+                  >
+                    Zurücksetzen
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => setFilterOpen(false)}>
+                    Schließen
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </FilterBar>
       )}
@@ -267,7 +263,7 @@ export default function DataExplorerPage() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="rounded-full border border-black/60 px-3"
+                className="rounded-full border border-border px-3"
                 onClick={() => {
                   setSelectedPage(null);
                   setSelectedKeyword(null);

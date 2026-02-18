@@ -138,14 +138,14 @@ export default function DashboardPage() {
       )}
 
       {!notConnected && (
-        <FilterBar className="md:grid-cols-3 md:items-end">
+        <FilterBar className="md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
           <div className="space-y-2">
             <label className="text-sm font-medium">Zeitraum</label>
             <DateRangePicker value={range} onChange={setRange} />
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-transparent">.</label>
-            <Button onClick={handleQuery} disabled={loadingQuery || !site}>
+          <div className="space-y-2 md:min-w-[120px]">
+            <label className="text-sm font-medium opacity-0">Aktion</label>
+            <Button className="w-full" onClick={handleQuery} disabled={loadingQuery || !site}>
               {loadingQuery ? "Laden..." : "Laden"}
             </Button>
           </div>
