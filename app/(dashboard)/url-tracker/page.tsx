@@ -9,7 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TableContainer } from "@/components/ui/table-container";
 import { useSite } from "@/components/dashboard/site-context";
-import type { QueryRow } from "@/components/dashboard/queries-table";
+import { QueriesTable, type QueryRow } from "@/components/dashboard/queries-table";
+import { QueryMultiSelect } from "@/components/dashboard/query-multiselect";
 import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
 import {
   RankCharts,
@@ -109,6 +110,8 @@ export default function UrlTrackerPage() {
   const [topN, setTopN] = useState<"200" | "500" | "all">("all");
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [detailShowTrend, setDetailShowTrend] = useState(false);
+  const [detailSelectedQueries, setDetailSelectedQueries] = useState<string[]>([]);
+  const detailSelectionInitUrl = useRef<string | null>(null);
   const toasted = useRef(false);
 
   function toggleSort(col: SortCol) {
@@ -309,10 +312,19 @@ export default function UrlTrackerPage() {
   );
 
   useEffect(() => {
-    if (expandedUrl) setDetailShowTrend(false);
+    if (expandedUrl) {
+      setDetailShowTrend(false);
+      return;
+    }
+    detailSelectionInitUrl.current = null;
+    setDetailSelectedQueries([]);
   }, [expandedUrl]);
 
   const detailRows = useMemo(() => detailData?.rows || [], [detailData]);
+  const allDetailQueries = useMemo(
+    () => Array.from(new Set(detailRows.map((r) => r.keys[0]))),
+    [detailRows]
+  );
 
   const detailImpressions = useMemo(() => {
     const map = new Map<string, number>();
@@ -323,13 +335,45 @@ export default function UrlTrackerPage() {
     return map;
   }, [detailRows]);
 
+  useEffect(() => {
+    if (!expandedUrl || !allDetailQueries.length) return;
+    if (detailSelectionInitUrl.current === expandedUrl) return;
+    setDetailSelectedQueries(allDetailQueries);
+    detailSelectionInitUrl.current = expandedUrl;
+  }, [expandedUrl, allDetailQueries]);
+
+  useEffect(() => {
+    setDetailSelectedQueries((prev) => {
+      if (!prev.length) return prev;
+      const next = prev.filter((q) => allDetailQueries.includes(q));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [allDetailQueries]);
+
+  const detailQueryOptions = useMemo(
+    () =>
+      allDetailQueries
+        .map((query) => ({
+          value: query,
+          label: query,
+          impressions: detailImpressions.get(query) ?? 0
+        }))
+        .sort((a, b) => b.impressions - a.impressions),
+    [allDetailQueries, detailImpressions]
+  );
+
+  const filteredDetailRows = useMemo(() => {
+    if (!detailSelectedQueries.length) return detailRows;
+    return detailRows.filter((r) => detailSelectedQueries.includes(r.keys[0]));
+  }, [detailRows, detailSelectedQueries]);
+
   const detailChartQueries = useMemo(() => {
-    const queries = Array.from(detailImpressions.entries())
-      .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
-      .map(([q]) => q)
+    const pool = detailSelectedQueries.length ? detailSelectedQueries : allDetailQueries;
+    const queries = [...pool]
+      .sort((a, b) => (detailImpressions.get(b) ?? 0) - (detailImpressions.get(a) ?? 0))
       .slice(0, 15);
     return queries;
-  }, [detailImpressions]);
+  }, [detailSelectedQueries, allDetailQueries, detailImpressions]);
 
   const detailSeriesPoints: SeriesPoint[] = useMemo(() => {
     const rows = detailSeriesData?.rows || [];
@@ -564,6 +608,23 @@ export default function UrlTrackerPage() {
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
               <Badge variant="secondary">Zeitraum: {formatRange(range, 28)}</Badge>
               <Badge variant="secondary">Top 15 Keywords (nach Impr.)</Badge>
+              <Badge variant="secondary">
+                {detailSelectedQueries.length || allDetailQueries.length} Keywords aktiv
+              </Badge>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(260px,360px)] md:items-end">
+              <div className="hidden md:block" />
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Keywords</label>
+                <QueryMultiSelect
+                  options={detailQueryOptions}
+                  selected={detailSelectedQueries}
+                  onChange={(vals) => setDetailSelectedQueries(Array.from(new Set(vals)))}
+                  onOnly={(v) => setDetailSelectedQueries([v])}
+                  max={9999}
+                />
+              </div>
             </div>
 
             {detailSeriesLoading ? (
@@ -577,46 +638,17 @@ export default function UrlTrackerPage() {
                 trend={detailTrendData}
                 showTrend={detailShowTrend}
                 onToggleTrend={() => setDetailShowTrend((s) => !s)}
+                mode="single"
               />
             )}
 
-            <div className="rounded-md border border-border p-3">
-              <div className="mb-2 text-sm font-semibold">Keywords (Aggregiert)</div>
-              {detailLoading ? (
-                <Skeleton className="h-48 w-full" />
-              ) : detailError ? (
-                <p className="text-sm text-destructive">Fehler beim Laden</p>
-              ) : detailRows.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Keine Keywords im Zeitraum.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-muted-foreground">
-                        <th className="py-2 pr-4 text-left">Keyword</th>
-                        <th className="py-2 pr-4 text-right">Impr</th>
-                        <th className="py-2 pr-4 text-right">Clicks</th>
-                        <th className="py-2 pr-4 text-right">CTR</th>
-                        <th className="py-2 pr-4 text-right">Position</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {detailRows.map((r) => (
-                        <tr key={r.keys.join("|")} className="border-b border-border/70">
-                          <td className="py-2 pr-4">{r.keys[0]}</td>
-                          <td className="py-2 pr-4 text-right">{(r.impressions ?? 0).toLocaleString("de-DE")}</td>
-                          <td className="py-2 pr-4 text-right">{(r.clicks ?? 0).toLocaleString("de-DE")}</td>
-                          <td className="py-2 pr-4 text-right">
-                            {r.impressions ? (((r.clicks ?? 0) / r.impressions) * 100).toFixed(2) : "-"}%
-                          </td>
-                          <td className="py-2 pr-4 text-right">{(r.position ?? 0).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+            {detailLoading ? (
+              <Skeleton className="h-[460px] w-full" />
+            ) : detailError ? (
+              <p className="text-sm text-destructive">Fehler beim Laden</p>
+            ) : (
+              <QueriesTable rows={filteredDetailRows} />
+            )}
           </div>
         </FullscreenOverlay>
       )}

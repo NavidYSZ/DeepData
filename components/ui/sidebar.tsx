@@ -83,7 +83,7 @@ const Sidebar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement>>
           ref={ref}
           data-collapsed={collapsed ? "true" : "false"}
           className={cn(
-            "group hidden h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all md:flex",
+            "group sticky top-0 hidden h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all md:flex",
             collapsed ? "w-16" : "w-72",
             className
           )}
