@@ -54,13 +54,32 @@ export function ChartTooltipContent({
   label,
   className
 }: TooltipProps<number, string> & { className?: string }) {
+  function formatLabel(value: string | number | undefined) {
+    if (value == null) return "";
+    const maybeDate = (n: number) => {
+      // treat as timestamp in ms if within plausible range
+      if (n > 1e11 && n < 4e12) {
+        const d = new Date(n);
+        if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+      }
+      return String(value);
+    };
+
+    if (typeof value === "number") return maybeDate(value);
+    const num = Number(value);
+    if (!Number.isNaN(num) && value.length >= 8) return maybeDate(num);
+    return value;
+  }
+
+  const formattedLabel = formatLabel(label);
+
   const { config } = useChart();
 
   if (!active || !payload?.length) return null;
 
   return (
     <div className={cn("rounded-md border bg-card px-3 py-2 text-xs shadow-md", className)}>
-      {label ? <div className="mb-2 font-semibold text-foreground">{label}</div> : null}
+      {formattedLabel ? <div className="mb-2 font-semibold text-foreground">{formattedLabel}</div> : null}
       <div className="space-y-1">
         {payload.map((item) => {
           const key = item.dataKey as string;
