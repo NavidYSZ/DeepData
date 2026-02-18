@@ -175,12 +175,12 @@ export default function DataExplorerPage() {
       )}
 
       {!notConnected && (
-        <FilterBar className="md:grid-cols-5 md:items-end">
-          <div className="space-y-2">
+        <FilterBar className="md:grid-cols-2 lg:grid-cols-12 lg:items-end">
+          <div className="space-y-2 md:col-span-2 lg:col-span-5">
             <label className="text-sm font-medium">Zeitraum</label>
             <DateRangePicker value={range} onChange={setRange} />
           </div>
-          <div className="space-y-2 md:col-span-2">
+          <div className="space-y-2 md:col-span-2 lg:col-span-5">
             <label className="text-sm font-medium">Suche</label>
             <Input
               placeholder="Keyword suchen"
@@ -188,7 +188,7 @@ export default function DataExplorerPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 lg:col-span-2">
             <label className="text-sm font-medium text-transparent">.</label>
             <Popover open={filterOpen} onOpenChange={setFilterOpen}>
               <PopoverTrigger asChild>

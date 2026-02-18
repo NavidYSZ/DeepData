@@ -10,8 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { TableContainer } from "@/components/ui/table-container";
 import { cn } from "@/lib/utils";
 import { useSite } from "@/components/dashboard/site-context";
-import { Loader2 } from "lucide-react";
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { PageHeader, SectionCard } from "@/components/dashboard/page-shell";
 
 type SessionListItem = {
@@ -123,14 +122,14 @@ function renderBlock(block: UiBlock, key: string) {
         {block.title ? (
           <div className="mb-2 text-xs font-semibold text-muted-foreground">{block.title}</div>
         ) : null}
-      <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
-        {block.items.map((item, idx) => (
-          <div key={`${key}-metric-${idx}`} className="rounded-md border border-border bg-card px-3 py-2">
-            <div className="text-xs text-muted-foreground">{item.label}</div>
-            <div className="text-sm font-semibold">{item.value}</div>
-          </div>
-        ))}
-      </div>
+        <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
+          {block.items.map((item, idx) => (
+            <div key={`${key}-metric-${idx}`} className="rounded-md border border-border bg-card px-3 py-2">
+              <div className="text-xs text-muted-foreground">{item.label}</div>
+              <div className="text-sm font-semibold">{item.value}</div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -151,7 +150,10 @@ function renderBlock(block: UiBlock, key: string) {
   }
 
   if (block.type === "note") {
-    const toneClass = block.tone === "warn" ? "border-amber-200 bg-amber-50/40" : "border-blue-200 bg-blue-50/40";
+    const toneClass =
+      block.tone === "warn"
+        ? "border-amber-300/60 bg-amber-50/40 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100"
+        : "border-blue-300/60 bg-blue-50/40 text-blue-900 dark:border-blue-700/60 dark:bg-blue-950/30 dark:text-blue-100";
     return (
       <div key={key} className={cn("rounded-md border p-3 text-sm", toneClass)}>
         {block.text}
@@ -228,8 +230,7 @@ export default function ChatAgentPage() {
     setInput("");
   }
 
-  async function deleteSession(id: string, ev?: React.MouseEvent) {
-    ev?.stopPropagation();
+  async function deleteSession(id: string) {
     try {
       const res = await fetch(`/api/agent/sessions/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`Löschen fehlgeschlagen (${res.status})`);
@@ -322,33 +323,34 @@ export default function ChatAgentPage() {
             <div className="h-[60vh] overflow-y-auto md:h-[70vh]">
               <div className="space-y-1 p-3">
                 {sessions.map((s) => (
-                  <button
+                  <div
                     key={s.id}
                     className={cn(
-                      "w-full rounded-md border border-transparent px-3 py-2 text-left text-sm hover:bg-muted",
+                      "relative w-full rounded-md border border-transparent text-left text-sm hover:bg-muted",
                       sessionId === s.id && "border-border bg-muted"
                     )}
-                    onClick={() => loadSession(s.id)}
                   >
-                    <div className="flex items-start gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold truncate">{s.title || "Unterhaltung"}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {new Date(s.updatedAt).toLocaleString("de-DE")}
+                    <button type="button" className="w-full px-3 py-2 text-left" onClick={() => loadSession(s.id)}>
+                      <div className="flex items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-semibold">{s.title || "Unterhaltung"}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(s.updatedAt).toLocaleString("de-DE")}
+                          </div>
                         </div>
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:text-destructive"
-                        onClick={(ev) => deleteSession(s.id, ev)}
-                        aria-label="Verlauf löschen"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </button>
+                    </button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-2 top-2 h-8 w-8 shrink-0 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteSession(s.id)}
+                      aria-label="Verlauf löschen"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 ))}
                 {!sessions.length && (
                   <p className="text-sm text-muted-foreground px-2">Noch keine Unterhaltungen.</p>

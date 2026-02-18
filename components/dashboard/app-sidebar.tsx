@@ -47,7 +47,7 @@ export function AppSidebar({ pathname }: { pathname: string }) {
       <SidebarHeader>
         <div className="flex items-center justify-between gap-2">
           <AccountMenu className="flex-1 group-data-[collapsed=true]:hidden" />
-          <SidebarRail />
+          <SidebarRail className="hidden md:inline-flex" />
         </div>
         <PropertyMenu className="group-data-[collapsed=true]:hidden" />
         <Button

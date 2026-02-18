@@ -62,16 +62,16 @@ export function AccountMenu({ className }: AccountMenuProps) {
     <div className={cn(className)}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="w-full justify-between">
-            <span className="flex items-center gap-2">
-              <Avatar className="h-6 w-6">
+          <Button variant="outline" className="w-full min-w-0 justify-between overflow-hidden">
+            <span className="flex min-w-0 items-center gap-2">
+              <Avatar className="h-6 w-6 shrink-0">
                 <AvatarFallback>G</AvatarFallback>
               </Avatar>
-              <span className="truncate text-left text-sm">
+              <span className="min-w-0 truncate text-left text-sm">
                 {current?.email ?? "Account auswählen"}
               </span>
             </span>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-72" align="start">
@@ -81,9 +81,9 @@ export function AccountMenu({ className }: AccountMenuProps) {
               onClick={() => selectAccount(acc.id)}
               disabled={!!selecting}
             >
-              <div className="flex w-full items-center justify-between">
-                <span className="truncate">{acc.email ?? "Ohne E-Mail"}</span>
-                <span className="text-xs text-muted-foreground">{acc.id.slice(0, 6)}</span>
+              <div className="flex w-full min-w-0 items-center justify-between gap-2">
+                <span className="min-w-0 truncate">{acc.email ?? "Ohne E-Mail"}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{acc.id.slice(0, 6)}</span>
               </div>
             </DropdownMenuItem>
           ))}

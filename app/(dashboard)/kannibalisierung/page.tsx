@@ -16,6 +16,7 @@ import type { QueryRow } from "@/components/dashboard/queries-table";
 import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashboard/page-shell";
 import { ErrorState } from "@/components/dashboard/states";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { DateRange } from "react-day-picker";
 import { formatRange, getLastNDaysRange, rangeToIso } from "@/lib/date-range";
 import { toast } from "sonner";
@@ -26,7 +27,7 @@ import {
   assignPriorityLevels,
   type CannibalRow
 } from "@/lib/cannibalization";
-import { Maximize2 } from "lucide-react";
+import { Maximize2, SlidersHorizontal } from "lucide-react";
 import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
 
 interface SitesResponse {
@@ -81,9 +82,9 @@ export default function KannibalisierungPage() {
   const [notContains, setNotContains] = useState("");
   const [includeSwitches, setIncludeSwitches] = useState(false);
   const [shareMetric, setShareMetric] = useState<"clicks" | "impressions">("clicks");
-  const [minImprSlider, setMinImprSlider] = useState(0);
   const [urlBucket, setUrlBucket] = useState<"all" | "2" | "3-4" | "5+">("all");
   const [onlyCritical, setOnlyCritical] = useState(false);
+  const [queryFilterOpen, setQueryFilterOpen] = useState(false);
   const [selectedBubble, setSelectedBubble] = useState<CannibalRow | null>(null);
   const toasted = useRef(false);
 
@@ -156,8 +157,7 @@ export default function KannibalisierungPage() {
 
     const list = base.filter((r) => {
       const passesUrls = r.urls.length >= 2;
-      const passesThreshold =
-        r.totalImpressions >= Math.max(minImpr, minImprSlider) || r.totalClicks >= minClicks;
+      const passesThreshold = r.totalImpressions >= minImpr || r.totalClicks >= minClicks;
       const bucket = r.urls.length <= 2 ? "2" : r.urls.length <= 4 ? "3-4" : "5+";
       const bucketOk = urlBucket === "all" || urlBucket === bucket;
       const criticalOk = !onlyCritical || (r.topShare < 0.6 && r.spread > 20);
@@ -168,7 +168,7 @@ export default function KannibalisierungPage() {
     });
 
     return list.slice(0, topN);
-  }, [rows, dailyRows, minImpr, minClicks, minImprSlider, urlBucket, onlyCritical, contains, notContains, topN, includeSwitches, shareMetric]);
+  }, [rows, dailyRows, minImpr, minClicks, urlBucket, onlyCritical, contains, notContains, topN, includeSwitches, shareMetric]);
 
   useEffect(() => {
     if (selectedBubble && !filteredRows.find((r) => r.query === selectedBubble.query)) {
@@ -265,6 +265,7 @@ export default function KannibalisierungPage() {
         priority: r.priority
       }));
   }, [filteredRows]);
+  const queryFilterActive = Boolean(contains.trim() || notContains.trim());
 
   return (
     <div className="space-y-6">
@@ -285,12 +286,12 @@ export default function KannibalisierungPage() {
         </SectionCard>
       )}
 
-      <FilterBar className="lg:grid-cols-6 lg:items-end">
-          <div className="space-y-2">
+      <FilterBar className="md:grid-cols-2 lg:grid-cols-12 lg:items-end">
+          <div className="space-y-2 md:col-span-2 lg:col-span-5">
             <label className="text-sm font-medium">Zeitraum</label>
             <DateRangePicker value={range} onChange={setRange} />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 lg:col-span-3">
             <label className="text-sm font-medium">Shares</label>
             <RadioGroup
               value={shareMetric}
@@ -311,21 +312,53 @@ export default function KannibalisierungPage() {
               </div>
             </RadioGroup>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Min Impressions</label>
-            <Input type="number" min={0} value={minImpr} onChange={(e) => setMinImpr(Number(e.target.value) || 0)} />
+          <div className="space-y-2 lg:col-span-2">
+            <label className="text-sm font-medium text-transparent">.</label>
+            <Popover open={queryFilterOpen} onOpenChange={setQueryFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button type="button" variant={queryFilterActive ? "secondary" : "outline"} className="w-full justify-between">
+                  <span className="inline-flex items-center gap-2">
+                    <SlidersHorizontal className="h-4 w-4" />
+                    Query-Filter
+                  </span>
+                  {queryFilterActive ? (
+                    <span className="text-xs text-muted-foreground">aktiv</span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">▼</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72 space-y-3 p-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Query enthält</label>
+                  <Input placeholder="z.B. kaufen" value={contains} onChange={(e) => setContains(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Query enthält nicht</label>
+                  <Input placeholder="z.B. gratis" value={notContains} onChange={(e) => setNotContains(e.target.value)} />
+                </div>
+                <div className="flex justify-end gap-2 text-xs">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setContains("");
+                      setNotContains("");
+                    }}
+                  >
+                    Zurücksetzen
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => setQueryFilterOpen(false)}>
+                    Schließen
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Min Clicks</label>
-            <Input type="number" min={0} value={minClicks} onChange={(e) => setMinClicks(Number(e.target.value) || 0)} />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Top N</label>
-            <Input type="number" min={1} value={topN} onChange={(e) => setTopN(Number(e.target.value) || 1)} />
-          </div>
-          <div className="space-y-2">
+          <div className="space-y-2 lg:col-span-2">
             <label className="text-sm font-medium">Switching</label>
-            <div className="flex items-center gap-2">
+            <div className="flex h-10 items-center gap-2">
               <Checkbox
                 id="include-switches"
                 checked={includeSwitches}
@@ -336,28 +369,19 @@ export default function KannibalisierungPage() {
               </label>
             </div>
           </div>
-          <div className="space-y-2 lg:col-span-3">
-            <label className="text-sm font-medium">Query enthält</label>
-            <Input placeholder="z.B. kaufen" value={contains} onChange={(e) => setContains(e.target.value)} />
+          <div className="space-y-2 lg:col-span-2">
+            <label className="text-sm font-medium">Min Impressions</label>
+            <Input type="number" min={0} value={minImpr} onChange={(e) => setMinImpr(Number(e.target.value) || 0)} />
           </div>
-          <div className="space-y-2 lg:col-span-3">
-            <label className="text-sm font-medium">Query enthält nicht</label>
-            <Input placeholder="z.B. gratis" value={notContains} onChange={(e) => setNotContains(e.target.value)} />
+          <div className="space-y-2 lg:col-span-2">
+            <label className="text-sm font-medium">Min Clicks</label>
+            <Input type="number" min={0} value={minClicks} onChange={(e) => setMinClicks(Number(e.target.value) || 0)} />
           </div>
-          <div className="grid gap-3 lg:col-span-6 lg:grid-cols-3">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Min Impressions (Slider)</label>
-              <input
-                type="range"
-                min={0}
-                max={5000}
-                step={50}
-                value={minImprSlider}
-                onChange={(e) => setMinImprSlider(Number(e.target.value))}
-                className="w-full"
-              />
-              <div className="text-xs text-muted-foreground">Aktuell: {minImprSlider}</div>
-            </div>
+          <div className="space-y-2 lg:col-span-2">
+            <label className="text-sm font-medium">Top N</label>
+            <Input type="number" min={1} value={topN} onChange={(e) => setTopN(Number(e.target.value) || 1)} />
+          </div>
+          <div className="grid gap-3 md:col-span-2 lg:col-span-8 lg:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">URL-Bucket</label>
               <div className="flex flex-wrap gap-2">
@@ -375,7 +399,7 @@ export default function KannibalisierungPage() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Nur kritisch</label>
-              <div className="flex items-center gap-2">
+              <div className="flex h-10 items-center gap-2">
                 <Checkbox
                   id="only-critical"
                   checked={onlyCritical}

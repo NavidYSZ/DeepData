@@ -359,24 +359,24 @@ export default function UrlTrackerPage() {
       />
 
       {!notConnected && (
-        <FilterBar className="md:grid-cols-3 lg:grid-cols-6">
-          <div className="space-y-2">
+        <FilterBar className="md:grid-cols-2 lg:grid-cols-12 lg:items-end">
+          <div className="space-y-2 md:col-span-2 lg:col-span-5">
             <label className="text-sm font-medium">Zeitraum</label>
             <DateRangePicker value={range} onChange={setRange} />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 md:col-span-2 lg:col-span-3">
             <label className="text-sm font-medium">Suche (URL/Keyword)</label>
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="example.com/page" />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 lg:col-span-2">
             <label className="text-sm font-medium">Min Impressions</label>
             <Input type="number" min={0} value={minImpr} onChange={(e) => setMinImpr(Number(e.target.value) || 0)} />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 lg:col-span-2">
             <label className="text-sm font-medium">Min Clicks</label>
             <Input type="number" min={0} value={minClicks} onChange={(e) => setMinClicks(Number(e.target.value) || 0)} />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 lg:col-span-2">
             <label className="text-sm font-medium">Top N</label>
             <div className="flex gap-2">
               {["200", "500", "all"].map((val) => (

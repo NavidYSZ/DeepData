@@ -14,6 +14,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEffect, useMemo, useState } from "react";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
+import { Button } from "@/components/ui/button";
 import {
   CHART_LINE_WIDTH_EVENT,
   CHART_LINE_WIDTH_KEY,
@@ -144,7 +145,8 @@ function SeriesChart({
   trend,
   showTrend,
   onToggleTrend,
-  fixed
+  fixed,
+  onToggleAxisMode
 }: {
   title: string;
   data: ChartPoint[];
@@ -153,6 +155,7 @@ function SeriesChart({
   showTrend: boolean;
   onToggleTrend: () => void;
   fixed?: boolean;
+  onToggleAxisMode?: () => void;
 }) {
   const sortedData = useMemo(() => [...data], [data]);
   const regressionLine = useMemo(() => buildRegressionLine(trend, sortedData), [trend, sortedData]);
@@ -160,22 +163,23 @@ function SeriesChart({
 
   const domain = fixed ? [1, 100] : ["auto", "auto"];
   const ticks = fixed ? Array.from({ length: 10 }, (_, i) => i * 10 + 1).concat(100) : undefined;
+  const axisLabel = fixed ? "Y-Achse: Normal" : "Y-Achse: Dynamisch";
 
   if (!sortedData.length) {
     return (
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
           <CardTitle>{title}</CardTitle>
-          <button
-            type="button"
-            onClick={onToggleTrend}
-            className="ml-auto inline-flex shrink-0 items-center gap-2 text-xs text-muted-foreground transition hover:text-foreground"
-          >
-            {showTrend ? "Trendlinien aus" : "Trendlinien an"}
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-border">
-              {showTrend ? "👁" : "🙈"}
-            </span>
-          </button>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {onToggleAxisMode ? (
+              <Button type="button" variant="outline" size="sm" onClick={onToggleAxisMode} className="h-8">
+                {axisLabel}
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" size="sm" onClick={onToggleTrend} className="h-8">
+              {showTrend ? "Trendlinien aus" : "Trendlinien an"}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="h-[450px] flex items-center justify-center text-sm text-muted-foreground">
           Keine Daten für die aktuelle Auswahl
@@ -201,16 +205,19 @@ function SeriesChart({
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
         <CardTitle>{title}</CardTitle>
-        <button
-          type="button"
-          onClick={onToggleTrend}
-          className="ml-auto inline-flex shrink-0 items-center gap-2 text-xs text-muted-foreground transition hover:text-foreground"
-        >
-          {showTrend ? "Trendlinien aus" : "Trendlinien an"}
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-border">
-            {showTrend ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-          </span>
-        </button>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {onToggleAxisMode ? (
+            <Button type="button" variant="outline" size="sm" onClick={onToggleAxisMode} className="h-8">
+              {axisLabel}
+            </Button>
+          ) : null}
+          <Button type="button" variant="outline" size="sm" onClick={onToggleTrend} className="h-8">
+            {showTrend ? "Trendlinien aus" : "Trendlinien an"}
+            <span className="ml-2 inline-flex h-4 w-4 items-center justify-center">
+              {showTrend ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            </span>
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="h-[450px]">
         <ChartContainer config={config} className="h-full">
@@ -243,7 +250,9 @@ function SeriesChart({
                   dot={{ r: 2 }}
                   activeDot={{ r: 4 }}
                   strokeWidth={lineWidth}
-                  isAnimationActive={false}
+                  isAnimationActive
+                  animationDuration={300}
+                  animationEasing="ease-in-out"
                 />
               ))}
               {showTrend && regressionLine.length > 0 && (
@@ -255,7 +264,9 @@ function SeriesChart({
                   stroke="hsl(var(--foreground))"
                   strokeWidth={lineWidth}
                   dot={false}
-                  isAnimationActive={false}
+                  isAnimationActive
+                  animationDuration={300}
+                  animationEasing="ease-in-out"
                 />
               )}
             </LineChart>
@@ -271,14 +282,35 @@ export function RankCharts({
   queries,
   trend,
   showTrend,
-  onToggleTrend
+  onToggleTrend,
+  mode = "dual",
+  axisMode = "fixed",
+  onToggleAxisMode
 }: {
   chartData: ChartPoint[];
   queries: string[];
   trend: TrendPoint[];
   showTrend: boolean;
   onToggleTrend: () => void;
+  mode?: "dual" | "single";
+  axisMode?: "fixed" | "dynamic";
+  onToggleAxisMode?: () => void;
 }) {
+  if (mode === "single") {
+    return (
+      <SeriesChart
+        title="Average Position"
+        data={chartData}
+        queries={queries}
+        trend={trend}
+        showTrend={showTrend}
+        onToggleTrend={onToggleTrend}
+        fixed={axisMode === "fixed"}
+        onToggleAxisMode={onToggleAxisMode}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       <SeriesChart

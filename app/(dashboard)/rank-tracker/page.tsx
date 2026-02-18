@@ -44,6 +44,7 @@ export default function RankTrackerPage() {
   const [loadingSeries, setLoadingSeries] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTrend, setShowTrend] = useState(false);
+  const [axisMode, setAxisMode] = useState<"fixed" | "dynamic">("fixed");
   const toasted = useRef(false);
 
   const { startDate, endDate } = useMemo(() => rangeToIso(range, 28), [range]);
@@ -222,14 +223,24 @@ export default function RankTrackerPage() {
         </SectionCard>
       )}
 
-      <FilterBar className="md:grid-cols-2 md:items-end">
-        <div className="space-y-2">
+      <FilterBar className="gap-4 md:grid-cols-[minmax(0,1fr)_minmax(260px,360px)] md:items-end">
+        <div className="min-w-0 space-y-2">
           <label className="text-sm font-medium">Zeitraum</label>
           <DateRangePicker value={range} onChange={setRange} />
         </div>
-        <div className="space-y-2 md:justify-self-end">
-          <label className="text-sm font-medium opacity-0">Auswahl</label>
-          <Badge variant="secondary">{selectedQueries.length} Keywords aktiv</Badge>
+        <div className="min-w-0 space-y-2 md:justify-self-end md:w-full">
+          <label className="text-sm font-medium">Keywords</label>
+          <QueryMultiSelect
+            options={(tableRows || []).map((r) => ({
+              value: r.keys[0],
+              label: r.keys[0],
+              impressions: r.impressions
+            }))}
+            selected={selectedQueries}
+            onChange={(vals) => setSelectedQueries(Array.from(new Set(vals)))}
+            onOnly={(v) => setSelectedQueries([v])}
+            max={9999}
+          />
         </div>
       </FilterBar>
 
@@ -237,41 +248,28 @@ export default function RankTrackerPage() {
         <Badge variant="secondary">Zeitraum: {formatRange(range, 28)}</Badge>
       </StatsRow>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0 space-y-4">
-          {loadingSeries ? (
-            <Skeleton className="h-[680px] w-full" />
-          ) : (
-            <RankCharts
-              chartData={chartData}
-              queries={chartQueries}
-              trend={trendData}
-              showTrend={showTrend}
-              onToggleTrend={() => setShowTrend((s) => !s)}
-            />
-          )}
-          {error && <ErrorState>{error}</ErrorState>}
-        </div>
-        <div className="min-w-0 space-y-3">
-          <SectionCard title="Keywords">
-            <QueryMultiSelect
-              options={(tableRows || []).map((r) => ({
-                value: r.keys[0],
-                label: r.keys[0],
-                impressions: r.impressions
-              }))}
-              selected={selectedQueries}
-              onChange={(vals) => setSelectedQueries(Array.from(new Set(vals)))}
-              onOnly={(v) => setSelectedQueries([v])}
-              max={9999}
-            />
-          </SectionCard>
-          {topLoading ? (
-            <Skeleton className="h-96 w-full" />
-          ) : (
-            <QueriesTable rows={filteredTableRows} />
-          )}
-        </div>
+      <div className="min-w-0 space-y-4">
+        {loadingSeries ? (
+          <Skeleton className="h-[480px] w-full" />
+        ) : (
+          <RankCharts
+            chartData={chartData}
+            queries={chartQueries}
+            trend={trendData}
+            showTrend={showTrend}
+            onToggleTrend={() => setShowTrend((s) => !s)}
+            mode="single"
+            axisMode={axisMode}
+            onToggleAxisMode={() => setAxisMode((s) => (s === "fixed" ? "dynamic" : "fixed"))}
+          />
+        )}
+        {error && <ErrorState>{error}</ErrorState>}
+
+        {topLoading ? (
+          <Skeleton className="h-[460px] w-full" />
+        ) : (
+          <QueriesTable rows={filteredTableRows} />
+        )}
       </div>
     </div>
   );
