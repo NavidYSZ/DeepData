@@ -13,6 +13,7 @@ import {
 import { Eye, EyeOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMemo } from "react";
+import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 
 export interface SeriesPoint {
   date: string;
@@ -35,21 +36,16 @@ export interface ChartPoint {
 }
 
 const colors = [
-  "#598cc0",
-  "#ba5e7d",
-  "#46b959",
-  "#c08459",
-  "#8c5eba",
-  "#59afc0",
-  "#b34d55",
-  "#5eba5e",
-  "#c0a659",
-  "#ba5eb3",
-  "#4ebc97",
-  "#c07259",
-  "#a6c059",
-  "#596ac0",
-  "#5495b6"
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
+  "#7c3aed",
+  "#0ea5e9",
+  "#f97316",
+  "#ef4444",
+  "#10b981"
 ];
 
 function mapColor(query: string) {
@@ -108,6 +104,19 @@ function SeriesChart({
     );
   }
 
+  const config = useMemo(() => {
+    const base: Record<string, { label: string; color: string }> = {
+      position: { label: "Trend", color: "hsl(var(--foreground))" }
+    };
+    const dynamic = Object.fromEntries(
+      queries.map((query) => [
+        query,
+        { label: query, color: mapColor(query) }
+      ])
+    );
+    return { ...base, ...dynamic };
+  }, [queries]);
+
   return (
     <Card>
       <CardHeader className="flex items-center justify-between">
@@ -124,52 +133,54 @@ function SeriesChart({
         </button>
       </CardHeader>
       <CardContent className="h-[450px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={sortedData} margin={{ top: 10, right: 20, left: 0, bottom: 28 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis
-              type="number"
-              dataKey="dateNum"
-              domain={["dataMin", "dataMax"]}
-              tickFormatter={(ts) => new Date(ts).toISOString().slice(5, 10)}
-              tick={{ fontSize: 11, dy: 6 }}
-            />
-            <YAxis
-              domain={domain}
-              reversed
-              tick={{ fontSize: 11, dx: -4 }}
-              ticks={ticks}
-              tickCount={fixed ? undefined : 10}
-            />
-            <Tooltip content={<CustomTooltip queries={queries} />} />
-            <Legend content={(props) => <CustomLegend {...props} />} />
-            {queries.map((query) => (
-              <Line
-                key={query}
-                type="monotone"
-                dataKey={query}
-                name={query}
-                stroke={mapColor(query)}
-                dot={{ r: 2 }}
-                activeDot={{ r: 4 }}
-                strokeWidth={1.2}
-                isAnimationActive={false}
+        <ChartContainer config={config} className="h-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={sortedData} margin={{ top: 10, right: 20, left: 0, bottom: 28 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis
+                type="number"
+                dataKey="dateNum"
+                domain={["dataMin", "dataMax"]}
+                tickFormatter={(ts) => new Date(ts).toISOString().slice(5, 10)}
+                tick={{ fontSize: 11, dy: 6 }}
               />
-            ))}
-            {showTrend && trend.length > 0 && (
-              <Line
-                type="monotone"
-                dataKey="position"
-                data={trend}
-                name="Trend"
-                stroke="#000000"
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
+              <YAxis
+                domain={domain}
+                reversed
+                tick={{ fontSize: 11, dx: -4 }}
+                ticks={ticks}
+                tickCount={fixed ? undefined : 10}
               />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
+              <Tooltip content={<ChartTooltipContent />} labelFormatter={(value) => new Date(Number(value)).toISOString().slice(0, 10)} />
+              <Legend content={(props) => <CustomLegend {...props} />} />
+              {queries.map((query) => (
+                <Line
+                  key={query}
+                  type="monotone"
+                  dataKey={query}
+                  name={query}
+                  stroke={mapColor(query)}
+                  dot={{ r: 2 }}
+                  activeDot={{ r: 4 }}
+                  strokeWidth={1.2}
+                  isAnimationActive={false}
+                />
+              ))}
+              {showTrend && trend.length > 0 && (
+                <Line
+                  type="monotone"
+                  dataKey="position"
+                  data={trend}
+                  name="Trend"
+                  stroke="hsl(var(--foreground))"
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              )}
+            </LineChart>
+          </ResponsiveContainer>
+        </ChartContainer>
       </CardContent>
     </Card>
   );
@@ -225,50 +236,5 @@ function CustomLegend({ payload }: any) {
         </li>
       ))}
     </ul>
-  );
-}
-
-function CustomTooltip({
-  active,
-  label,
-  payload,
-  queries
-}: {
-  active?: boolean;
-  label?: number | string;
-  payload?: any[];
-  queries: string[];
-}) {
-  if (!active || !payload?.length || label === undefined || label === null) return null;
-
-  const dateStr = new Date(Number(label)).toISOString().slice(0, 10);
-
-  const rows = payload
-    .filter((p) => queries.includes(p?.dataKey))
-    .map((p) => ({
-      query: p.dataKey as string,
-      value: Number(p.value)
-    }))
-    .filter((p) => !Number.isNaN(p.value))
-    .sort((a, b) => a.value - b.value);
-
-  if (!rows.length) return null;
-
-  return (
-    <div className="rounded-md border border-border bg-card px-3 py-2 shadow-md">
-      <div className="text-xs font-semibold mb-2">{dateStr}</div>
-      <div className="space-y-1 text-xs">
-        {rows.map((row, idx) => (
-          <div key={idx} className="flex items-center gap-2">
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-full"
-              style={{ backgroundColor: mapColor(row.query) }}
-            />
-            <span className="text-foreground">{row.query}</span>
-            <span className="text-muted-foreground">{row.value.toFixed(2)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }

@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { CannibalRow } from "@/lib/cannibalization";
 import React from "react";
+import { ChartContainer } from "@/components/ui/chart";
 
 interface BubblePoint {
   query: string;
@@ -69,9 +70,10 @@ export function BubbleScatter({
         </div>
       </CardHeader>
       <CardContent className="h-[520px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+        <ChartContainer config={{}} className="h-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               type="number"
               dataKey="x"
@@ -91,8 +93,8 @@ export function BubbleScatter({
             />
             <ZAxis dataKey="size" range={[60, 260]} />
 
-            <ReferenceLine x={60} stroke="#cbd5e1" strokeDasharray="4 4" />
-            <ReferenceLine y={20} stroke="#cbd5e1" strokeDasharray="4 4" />
+            <ReferenceLine x={60} stroke="hsl(var(--border))" strokeDasharray="4 4" />
+            <ReferenceLine y={20} stroke="hsl(var(--border))" strokeDasharray="4 4" />
             <ReferenceArea x1={60} x2={100} y1={0} y2={20} fill="#d1fae5" fillOpacity={0.25} />
             <ReferenceArea x1={0} x2={60} y1={20} y2={maxY} fill="#fee2e2" fillOpacity={0.25} />
 
@@ -146,8 +148,9 @@ export function BubbleScatter({
               formatter={(value) => value}
               payload={[]}
             />
-          </ScatterChart>
-        </ResponsiveContainer>
+            </ScatterChart>
+          </ResponsiveContainer>
+        </ChartContainer>
       </CardContent>
     </Card>
   );
@@ -170,9 +173,10 @@ export function DumbbellChart({ data }: { data: DumbbellPoint[] }) {
         <CardTitle>Top vs 2nd Share</CardTitle>
       </CardHeader>
       <CardContent className="h-[420px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={sorted} layout="vertical" margin={{ top: 10, right: 20, bottom: 10, left: 80 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+        <ChartContainer config={{}} className="h-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={sorted} layout="vertical" margin={{ top: 10, right: 20, bottom: 10, left: 80 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
             <YAxis dataKey="query" type="category" width={140} tick={{ fontSize: 11 }} interval={0} />
             <ReTooltip
@@ -208,8 +212,9 @@ export function DumbbellChart({ data }: { data: DumbbellPoint[] }) {
                 );
               }}
             />
-          </ComposedChart>
-        </ResponsiveContainer>
+            </ComposedChart>
+          </ResponsiveContainer>
+        </ChartContainer>
       </CardContent>
     </Card>
   );

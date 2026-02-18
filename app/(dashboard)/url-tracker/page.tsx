@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -19,6 +19,10 @@ import {
 import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashboard/page-shell";
 import { SortableHeader, type SortDirection } from "@/components/dashboard/sortable-header";
 import { EmptyState } from "@/components/dashboard/states";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import type { DateRange } from "react-day-picker";
+import { formatRange, getLastNDaysRange, rangeToIso } from "@/lib/date-range";
+import { toast } from "sonner";
 
 interface QueryResponse {
   rows: QueryRow[];
@@ -46,14 +50,6 @@ const fetcher = async (url: string, body?: any) => {
   }
   return json;
 };
-
-function lastNDaysRange(days: number) {
-  const end = new Date();
-  const start = new Date();
-  start.setDate(end.getDate() - days);
-  const toISO = (d: Date) => d.toISOString().slice(0, 10);
-  return { start: toISO(start), end: toISO(end) };
-}
 
 function buildChartData(series: SeriesPoint[], queries: string[]): ChartPoint[] {
   if (!series.length || queries.length === 0) return [];
@@ -102,8 +98,7 @@ function buildTrendData(series: SeriesPoint[]): TrendPoint[] {
 
 export default function UrlTrackerPage() {
   const { site } = useSite();
-  const [startDate, setStartDate] = useState(lastNDaysRange(28).start);
-  const [endDate, setEndDate] = useState(lastNDaysRange(28).end);
+  const [range, setRange] = useState<DateRange | undefined>(getLastNDaysRange(28));
   const [search, setSearch] = useState("");
   const [minImpr, setMinImpr] = useState(0);
   const [minClicks, setMinClicks] = useState(0);
@@ -113,6 +108,7 @@ export default function UrlTrackerPage() {
   const [topN, setTopN] = useState<"200" | "500" | "all">("all");
   const [expandedUrl, setExpandedUrl] = useState<string | null>(null);
   const [detailShowTrend, setDetailShowTrend] = useState(false);
+  const toasted = useRef(false);
 
   function toggleSort(col: SortCol) {
     if (col !== sortCol) {
@@ -128,6 +124,8 @@ export default function UrlTrackerPage() {
       }
     }
   }
+
+  const { startDate, endDate } = useMemo(() => rangeToIso(range, 28), [range]);
 
   const { data, error, isLoading } = useSWR<QueryResponse>(
     site ? ["/api/gsc/query", site, startDate, endDate, "page-query"] : null,
@@ -147,6 +145,13 @@ export default function UrlTrackerPage() {
   );
 
   const notConnected = (error as any)?.status === 401;
+
+  useEffect(() => {
+    if (notConnected && !toasted.current) {
+      toasted.current = true;
+      toast.error("GSC nicht verbunden", { description: "Bitte OAuth erneut verbinden." });
+    }
+  }, [notConnected]);
 
   const { rows = [] } = data ?? {};
 
@@ -355,12 +360,8 @@ export default function UrlTrackerPage() {
       {!notConnected && (
         <FilterBar className="md:grid-cols-3 lg:grid-cols-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Start</label>
-            <Input type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Ende</label>
-            <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
+            <label className="text-sm font-medium">Zeitraum</label>
+            <DateRangePicker value={range} onChange={setRange} />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Suche (URL/Keyword)</label>
@@ -392,6 +393,15 @@ export default function UrlTrackerPage() {
         </FilterBar>
       )}
 
+      {!notConnected && (
+        <StatsRow>
+          <Badge variant="secondary">Zeitraum: {formatRange(range, 28)}</Badge>
+          {search ? <Badge variant="secondary">Suche: {search}</Badge> : null}
+          {minImpr > 0 ? <Badge variant="secondary">Min Impr: {minImpr}</Badge> : null}
+          {minClicks > 0 ? <Badge variant="secondary">Min Clicks: {minClicks}</Badge> : null}
+        </StatsRow>
+      )}
+
       {notConnected && (
         <SectionCard>
           <div className="flex items-center justify-between gap-3">
@@ -407,7 +417,6 @@ export default function UrlTrackerPage() {
         <SectionCard title="URLs" description="Sortiere die Spalten direkt in der Tabelle.">
           <StatsRow>
             <Badge variant="secondary">URLs: {limited.length}</Badge>
-            <Badge variant="secondary">Zeitraum: {startDate} – {endDate}</Badge>
           </StatsRow>
           {limited.length === 0 ? (
             <div className="mt-3">
@@ -552,7 +561,7 @@ export default function UrlTrackerPage() {
             </div>
 
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              <Badge variant="secondary">Zeitraum: {startDate} – {endDate}</Badge>
+              <Badge variant="secondary">Zeitraum: {formatRange(range, 28)}</Badge>
               <Badge variant="secondary">Top 15 Keywords (nach Impr.)</Badge>
             </div>
 

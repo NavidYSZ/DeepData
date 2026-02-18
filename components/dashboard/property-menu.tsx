@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { useEffect } from "react";
 import { useSite } from "@/components/dashboard/site-context";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -30,7 +31,7 @@ const fetcher = async (url: string) => {
   return json as SitesResponse;
 };
 
-export function PropertyMenu() {
+export function PropertyMenu({ className }: { className?: string } = {}) {
   const { site, setSite } = useSite();
   const { data, error, isLoading } = useSWR<SitesResponse>("/api/gsc/sites", fetcher);
 
@@ -51,7 +52,7 @@ export function PropertyMenu() {
   const scopeError = (error as any)?.code === "insufficient_scope" || (error as any)?.status === 403;
 
   return (
-    <div className="space-y-1">
+    <div className={cn("space-y-1", className)}>
       <p className="text-xs font-semibold text-muted-foreground">Property</p>
       {isLoading ? (
         <Skeleton className="h-9 w-full" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,10 @@ import { useSite } from "@/components/dashboard/site-context";
 import type { QueryRow } from "@/components/dashboard/queries-table";
 import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashboard/page-shell";
 import { ErrorState } from "@/components/dashboard/states";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import type { DateRange } from "react-day-picker";
+import { formatRange, getLastNDaysRange, rangeToIso } from "@/lib/date-range";
+import { toast } from "sonner";
 import {
   aggregateQueryPage,
   computeCannibalRows,
@@ -38,14 +42,6 @@ const fetcher = async (url: string) => {
   }
   return res.json();
 };
-
-function lastNDaysRange(days: number) {
-  const end = new Date();
-  const start = new Date();
-  start.setDate(end.getDate() - days);
-  const toISO = (d: Date) => d.toISOString().slice(0, 10);
-  return { start: toISO(start), end: toISO(end) };
-}
 
 const PAGE_SIZE = 25000;
 const MAX_ROWS = 125000;
@@ -77,8 +73,7 @@ export default function KannibalisierungPage() {
   const { site, setSite } = useSite();
   const { data: sitesData } = useSWR<SitesResponse>("/api/gsc/sites", fetcher);
 
-  const [startDate, setStartDate] = useState(lastNDaysRange(28).start);
-  const [endDate, setEndDate] = useState(lastNDaysRange(28).end);
+  const [range, setRange] = useState<DateRange | undefined>(getLastNDaysRange(28));
   const [minImpr, setMinImpr] = useState(50);
   const [minClicks, setMinClicks] = useState(5);
   const [topN, setTopN] = useState(100);
@@ -90,6 +85,9 @@ export default function KannibalisierungPage() {
   const [urlBucket, setUrlBucket] = useState<"all" | "2" | "3-4" | "5+">("all");
   const [onlyCritical, setOnlyCritical] = useState(false);
   const [selectedBubble, setSelectedBubble] = useState<CannibalRow | null>(null);
+  const toasted = useRef(false);
+
+  const { startDate, endDate } = useMemo(() => rangeToIso(range, 28), [range]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -241,6 +239,13 @@ export default function KannibalisierungPage() {
   }, [filteredBubbleData, selectedBubble]);
 
   const notConnected = error && error.toLowerCase().includes("not connected");
+
+  useEffect(() => {
+    if (notConnected && !toasted.current) {
+      toasted.current = true;
+      toast.error("GSC nicht verbunden", { description: "Bitte OAuth erneut verbinden." });
+    }
+  }, [notConnected]);
   const recommendation = (r: CannibalRow) => {
     if (r.topShare < 0.6 && r.spread > 20) return "Merge/Simplify: klare Haupt-URL setzen, interne Links vereinheitlichen";
     if (r.urls.length >= 3 && r.secondShare > 0.2) return "Split intent / interne Verlinkung klarziehen";
@@ -282,12 +287,8 @@ export default function KannibalisierungPage() {
 
       <FilterBar className="md:grid-cols-6 md:items-end">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Start</label>
-            <Input type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Ende</label>
-            <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
+            <label className="text-sm font-medium">Zeitraum</label>
+            <DateRangePicker value={range} onChange={setRange} />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Shares</label>
@@ -391,7 +392,7 @@ export default function KannibalisierungPage() {
       {error && !notConnected && <ErrorState>{error}</ErrorState>}
 
       <StatsRow>
-        <Badge variant="secondary">Zeitraum: {startDate} – {endDate}</Badge>
+        <Badge variant="secondary">Zeitraum: {formatRange(range, 28)}</Badge>
         <Badge variant="secondary">Queries: {stats?.queries ?? 0}</Badge>
         <Badge variant="secondary">Impressions: {(stats?.impressions ?? 0).toLocaleString("de-DE")}</Badge>
         <Badge variant="secondary">Clicks: {(stats?.clicks ?? 0).toLocaleString("de-DE")}</Badge>

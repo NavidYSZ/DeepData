@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,8 +14,12 @@ import {
 import { QueriesTable, type QueryRow } from "@/components/dashboard/queries-table";
 import { QueryMultiSelect } from "@/components/dashboard/query-multiselect";
 import { useSite } from "@/components/dashboard/site-context";
-import { FilterBar, PageHeader, SectionCard } from "@/components/dashboard/page-shell";
+import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashboard/page-shell";
 import { ErrorState } from "@/components/dashboard/states";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import type { DateRange } from "react-day-picker";
+import { formatRange, getLastNDaysRange, rangeToIso } from "@/lib/date-range";
+import { toast } from "sonner";
 
 interface QueryResponse {
   rows: QueryRow[];
@@ -32,24 +35,18 @@ const fetcher = async (url: string, body?: any) => {
   return res.json();
 };
 
-function lastNDaysRange(days: number) {
-  const end = new Date();
-  const start = new Date();
-  start.setDate(end.getDate() - days);
-  const toISO = (d: Date) => d.toISOString().slice(0, 10);
-  return { start: toISO(start), end: toISO(end) };
-}
-
 export default function RankTrackerPage() {
   const { site } = useSite();
-  const [startDate, setStartDate] = useState(lastNDaysRange(28).start);
-  const [endDate, setEndDate] = useState(lastNDaysRange(28).end);
+  const [range, setRange] = useState<DateRange | undefined>(getLastNDaysRange(28));
   const [selectedQueries, setSelectedQueries] = useState<string[]>([]);
   const autoSelectedSite = useRef<string | null>(null);
   const [series, setSeries] = useState<SeriesPoint[]>([]);
   const [loadingSeries, setLoadingSeries] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTrend, setShowTrend] = useState(false);
+  const toasted = useRef(false);
+
+  const { startDate, endDate } = useMemo(() => rangeToIso(range, 28), [range]);
 
   const { data: topQueries, isLoading: topLoading, error: topError, mutate } = useSWR<QueryResponse>(
     site
@@ -127,6 +124,13 @@ export default function RankTrackerPage() {
   }, [selectedQueries, startDate, endDate, site]);
 
   const notConnected = topError && (topError as any).status === 401;
+
+  useEffect(() => {
+    if (notConnected && !toasted.current) {
+      toasted.current = true;
+      toast.error("GSC nicht verbunden", { description: "Bitte OAuth erneut verbinden." });
+    }
+  }, [notConnected]);
   const tableRows = useMemo(() => topQueries?.rows || [], [topQueries]);
   const filteredTableRows = useMemo(() => {
     if (!selectedQueries.length) return tableRows;
@@ -218,22 +222,19 @@ export default function RankTrackerPage() {
         </SectionCard>
       )}
 
-      <FilterBar className="md:grid-cols-5 md:items-end">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Start</label>
-            <Input type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Ende</label>
-            <Input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} />
-          </div>
-          <div className="md:col-span-3 text-sm text-muted-foreground flex items-end justify-end gap-2">
-            <Badge variant="secondary">Zeitraum: {startDate} – {endDate}</Badge>
-          </div>
+      <FilterBar className="md:grid-cols-3 md:items-end">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Zeitraum</label>
+          <DateRangePicker value={range} onChange={setRange} />
+        </div>
       </FilterBar>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4">
+      <StatsRow>
+        <Badge variant="secondary">Zeitraum: {formatRange(range, 28)}</Badge>
+      </StatsRow>
+
+      <div className="grid grid-cols-12 gap-6">
+        <div className="col-span-12 lg:col-span-8 space-y-4">
           {loadingSeries ? (
             <Skeleton className="h-[680px] w-full" />
           ) : (
@@ -247,7 +248,7 @@ export default function RankTrackerPage() {
           )}
           {error && <ErrorState>{error}</ErrorState>}
         </div>
-        <div className="lg:col-span-1 space-y-3">
+        <div className="col-span-12 lg:col-span-4 space-y-3">
           <SectionCard title="Keywords">
             <QueryMultiSelect
               options={(tableRows || []).map((r) => ({
@@ -264,7 +265,7 @@ export default function RankTrackerPage() {
           {topLoading ? (
             <Skeleton className="h-96 w-full" />
           ) : (
-            <QueriesTable rows={filteredTableRows} maxHeight={520} />
+            <QueriesTable rows={filteredTableRows} />
           )}
         </div>
       </div>

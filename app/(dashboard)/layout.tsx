@@ -34,7 +34,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger
+  SidebarTrigger,
+  SidebarRail
 } from "@/components/ui/sidebar";
 import {
   Breadcrumb,
@@ -87,8 +88,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="flex min-h-screen w-full">
           <Sidebar>
             <SidebarHeader>
-              <AccountMenu />
-              <PropertyMenu />
+              <div className="flex items-center justify-between">
+                <AccountMenu className="flex-1 group-data-[collapsed=true]:hidden" />
+                <SidebarRail />
+              </div>
+              <PropertyMenu className="group-data-[collapsed=true]:hidden" />
               <Button
                 variant="outline"
                 size="sm"
@@ -112,10 +116,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                           const Icon = item.icon;
                           return (
                             <SidebarMenuItem key={item.href}>
-                              <SidebarMenuButton asChild isActive={pathname === item.href}>
+                              <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label}>
                                 <Link href={item.href}>
                                   <Icon className="h-4 w-4" />
-                                  <span>{item.label}</span>
+                                  <span className="truncate">{item.label}</span>
                                 </Link>
                               </SidebarMenuButton>
                             </SidebarMenuItem>
@@ -127,11 +131,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 ))}
               </nav>
             </SidebarContent>
-            <SidebarFooter>
-              <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-                Single-User Modus. OAuth-Token bleibt serverseitig.
-              </div>
-            </SidebarFooter>
+            <SidebarFooter />
           </Sidebar>
 
           <SidebarInset>
@@ -159,7 +159,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 <AuthButton />
               </div>
             </header>
-            <main className={cn("flex-1 space-y-6 px-4 pb-10 pt-6 md:px-6")}>{children}</main>
+            <main className={cn("container max-w-screen-2xl space-y-6 px-6 py-6")}>{children}</main>
           </SidebarInset>
         </div>
       </SidebarProvider>

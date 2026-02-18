@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useSite } from "@/components/dashboard/site-context";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,6 +10,10 @@ import { KpiCards, type KpiData } from "@/components/dashboard/kpi-cards";
 import { type ResultRow } from "@/components/dashboard/results-table";
 import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashboard/page-shell";
 import { ErrorState } from "@/components/dashboard/states";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import type { DateRange } from "react-day-picker";
+import { formatRange, getLastNDaysRange, rangeToIso } from "@/lib/date-range";
+import { toast } from "sonner";
 
 interface SitesResponse {
   sites: { siteUrl: string; permissionLevel: string }[];
@@ -30,22 +33,14 @@ const fetcher = async (url: string) => {
   return res.json();
 };
 
-function lastNDaysRange(days: number) {
-  const end = new Date();
-  const start = new Date();
-  start.setDate(end.getDate() - days);
-  const toISO = (d: Date) => d.toISOString().slice(0, 10);
-  return { start: toISO(start), end: toISO(end) };
-}
-
 export default function DashboardPage() {
   const { data: sites, error: sitesError } = useSWR<SitesResponse>("/api/gsc/sites", fetcher);
   const { site, setSite } = useSite();
-  const [startDate, setStartDate] = useState(lastNDaysRange(28).start);
-  const [endDate, setEndDate] = useState(lastNDaysRange(28).end);
+  const [range, setRange] = useState<DateRange | undefined>(getLastNDaysRange(28));
   const [tableRows, setTableRows] = useState<ResultRow[]>([]);
   const [loadingQuery, setLoadingQuery] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
+  const toasted = useRef(false);
 
   useEffect(() => {
     if (!site && sites?.sites?.length) {
@@ -80,6 +75,7 @@ export default function DashboardPage() {
     setLoadingQuery(true);
     setQueryError(null);
     try {
+      const { startDate, endDate } = rangeToIso(range, 28);
       const tableRes = await fetch("/api/gsc/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -111,6 +107,13 @@ export default function DashboardPage() {
 
   const notConnected = sitesError?.status === 401;
 
+  useEffect(() => {
+    if (notConnected && !toasted.current) {
+      toasted.current = true;
+      toast.error("GSC nicht verbunden", { description: "Bitte OAuth erneut verbinden." });
+    }
+  }, [notConnected]);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -137,29 +140,15 @@ export default function DashboardPage() {
       {!notConnected && (
         <FilterBar className="md:grid-cols-3 md:items-end">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Start</label>
-            <Input
-              type="date"
-              value={startDate}
-                max={endDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Ende</label>
-              <Input
-                type="date"
-                value={endDate}
-                min={startDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-transparent">.</label>
-              <Button onClick={handleQuery} disabled={loadingQuery || !site}>
-                {loadingQuery ? "Laden..." : "Laden"}
-              </Button>
-            </div>
+            <label className="text-sm font-medium">Zeitraum</label>
+            <DateRangePicker value={range} onChange={setRange} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-transparent">.</label>
+            <Button onClick={handleQuery} disabled={loadingQuery || !site}>
+              {loadingQuery ? "Laden..." : "Laden"}
+            </Button>
+          </div>
         </FilterBar>
       )}
 
@@ -167,9 +156,7 @@ export default function DashboardPage() {
         <Badge variant="secondary">
           Status: {notConnected ? "Nicht verbunden" : "Verbunden"}
         </Badge>
-        <span>
-          Zeitraum: {startDate} – {endDate}
-        </span>
+        <Badge variant="secondary">Zeitraum: {formatRange(range, 28)}</Badge>
       </StatsRow>
 
       <KpiCards data={kpiData} />

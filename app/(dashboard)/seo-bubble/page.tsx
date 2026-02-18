@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
+import { ChartContainer } from "@/components/ui/chart";
 import { Maximize2 } from "lucide-react";
 import { useSite } from "@/components/dashboard/site-context";
 import { FilterBar, PageHeader, SectionCard } from "@/components/dashboard/page-shell";
@@ -229,9 +230,10 @@ export default function SeoBubblePage() {
       {isLoading ? (
         <Skeleton className="h-full w-full" />
       ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+        <ChartContainer config={{}} className="h-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               type="number"
               dataKey="ctr"
@@ -255,7 +257,7 @@ export default function SeoBubblePage() {
                   <ReferenceLine
                     key={y}
                     y={y}
-                    stroke="#e5e7eb"
+                    stroke="hsl(var(--border))"
                     strokeDasharray="4 4"
                     ifOverflow="extendDomain"
                   />
@@ -263,7 +265,7 @@ export default function SeoBubblePage() {
                 {displayMaxCtr >= 0.01 && (
                   <ReferenceLine
                     x={0.01}
-                    stroke="#e5e7eb"
+                    stroke="hsl(var(--border))"
                     strokeDasharray="4 4"
                     ifOverflow="extendDomain"
                   />
@@ -327,8 +329,9 @@ export default function SeoBubblePage() {
             >
               {/* radius via data.r */}
             </Scatter>
-          </ScatterChart>
-        </ResponsiveContainer>
+            </ScatterChart>
+          </ResponsiveContainer>
+        </ChartContainer>
       )}
     </div>
   );

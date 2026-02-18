@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { ArrowUpDown, Search } from "lucide-react";
+import { ColumnDef } from "@tanstack/react-table";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
-import { SortableHeader } from "@/components/dashboard/sortable-header";
+import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
 
 export interface QueryRow {
   keys: string[];
@@ -14,82 +16,103 @@ export interface QueryRow {
   position: number;
 }
 
-type SortCol = "impressions" | "position" | "ctr" | "clicks" | null;
-type SortDir = "asc" | "desc" | null;
+type KeywordRow = {
+  query: string;
+  impressions: number;
+  position: number;
+  ctr: number;
+  clicks: number;
+};
 
-export function QueriesTable({ rows, maxHeight = 520 }: { rows: QueryRow[]; maxHeight?: number }) {
-  const [sortCol, setSortCol] = useState<SortCol>("impressions");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+function DataTableColumnHeader({ column, title }: { column: any; title: string }) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      className="-ml-3 h-8 text-xs"
+    >
+      {title}
+      <ArrowUpDown className="ml-2 h-3 w-3" />
+    </Button>
+  );
+}
 
-  function toggle(col: SortCol) {
-    if (col !== sortCol) {
-      setSortCol(col);
-      setSortDir("desc");
-    } else {
-      if (sortDir === "desc") setSortDir("asc");
-      else if (sortDir === "asc") {
-        setSortCol(null);
-        setSortDir(null);
-      } else {
-        setSortDir("desc");
+export function QueriesTable({ rows }: { rows: QueryRow[] }) {
+  const data = useMemo<KeywordRow[]>(
+    () =>
+      rows.map((r) => ({
+        query: r.keys[0],
+        impressions: r.impressions,
+        position: r.position,
+        ctr: r.ctr,
+        clicks: r.clicks
+      })),
+    [rows]
+  );
+
+  const columns = useMemo<ColumnDef<KeywordRow>[]>(
+    () => [
+      {
+        accessorKey: "query",
+        header: "Query",
+        cell: ({ row }) => (
+          <div className="max-w-[240px] truncate" title={row.getValue("query") as string}>
+            {row.getValue("query")}
+          </div>
+        )
+      },
+      {
+        accessorKey: "impressions",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Impr." />,
+        cell: ({ row }) => <div className="text-right">{row.getValue("impressions")}</div>
+      },
+      {
+        accessorKey: "position",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Avg. Pos" />,
+        cell: ({ row }) => (
+          <div className="text-right">{Number(row.getValue("position")).toFixed(1)}</div>
+        )
+      },
+      {
+        accessorKey: "ctr",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="CTR" />,
+        cell: ({ row }) => (
+          <div className="text-right">{(Number(row.getValue("ctr")) * 100).toFixed(1)}%</div>
+        )
+      },
+      {
+        accessorKey: "clicks",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Clicks" />,
+        cell: ({ row }) => <div className="text-right">{row.getValue("clicks")}</div>
       }
-    }
-  }
+    ],
+    []
+  );
 
-  const sorted = useMemo(() => {
-    if (!sortCol || !sortDir) return rows;
-    const arr = [...rows];
-    arr.sort((a, b) => {
-      const va = (a as any)[sortCol];
-      const vb = (b as any)[sortCol];
-      if (va === vb) return 0;
-      if (sortDir === "desc") return vb - va;
-      return va - vb;
-    });
-    return arr;
-  }, [rows, sortCol, sortDir]);
-
-  const header = (col: SortCol, label: string) => (
-    <SortableHeader
-      label={label}
-      active={sortCol === col}
-      direction={sortCol === col ? sortDir : null}
-      onClick={() => toggle(col)}
-    />
+  const emptyState = (
+    <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
+      <Search className="h-4 w-4" />
+      <span className="text-sm">Select keywords to see results</span>
+      <Button variant="outline" size="sm">
+        Select keywords
+      </Button>
+    </div>
   );
 
   return (
     <Card className="h-full">
-      <CardHeader>
+      <CardHeader className="flex items-center justify-between">
         <CardTitle>Keywords</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
-          <div className="overflow-y-auto" style={{ maxHeight }}>
-            <Table className="text-sm min-w-full">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Query</TableHead>
-                  <TableHead className="text-right">{header("impressions", "Imp.")}</TableHead>
-                  <TableHead className="text-right">{header("position", "Avg. Pos")}</TableHead>
-                  <TableHead className="text-right">{header("ctr", "CTR")}</TableHead>
-                  <TableHead className="text-right">{header("clicks", "Clicks")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sorted.map((r, idx) => (
-                  <TableRow key={idx} className={cn(idx % 2 === 0 && "bg-muted/30") }>
-                    <TableCell className="max-w-[220px] truncate">{r.keys[0]}</TableCell>
-                    <TableCell className="text-right">{r.impressions}</TableCell>
-                    <TableCell className="text-right">{r.position.toFixed(1)}</TableCell>
-                    <TableCell className="text-right">{(r.ctr * 100).toFixed(1)}%</TableCell>
-                    <TableCell className="text-right">{r.clicks}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+        <DataTable
+          columns={columns}
+          data={data}
+          searchKey="query"
+          searchPlaceholder="Query..."
+          emptyState={emptyState}
+        />
       </CardContent>
     </Card>
   );
