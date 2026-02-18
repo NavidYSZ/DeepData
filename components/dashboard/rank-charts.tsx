@@ -165,6 +165,19 @@ function SeriesChart({
   const ticks = fixed ? Array.from({ length: 10 }, (_, i) => i * 10 + 1).concat(100) : undefined;
   const axisLabel = fixed ? "Y-Achse: Normal" : "Y-Achse: Dynamisch";
 
+  const config = useMemo(() => {
+    const base: Record<string, { label: string; color: string }> = {
+      position: { label: "Regression", color: "hsl(var(--foreground))" }
+    };
+    const dynamic = Object.fromEntries(
+      queries.map((query) => [
+        query,
+        { label: query, color: mapColor(query) }
+      ])
+    );
+    return { ...base, ...dynamic };
+  }, [queries]);
+
   if (!sortedData.length) {
     return (
       <Card>
@@ -187,19 +200,6 @@ function SeriesChart({
       </Card>
     );
   }
-
-  const config = useMemo(() => {
-    const base: Record<string, { label: string; color: string }> = {
-      position: { label: "Regression", color: "hsl(var(--foreground))" }
-    };
-    const dynamic = Object.fromEntries(
-      queries.map((query) => [
-        query,
-        { label: query, color: mapColor(query) }
-      ])
-    );
-    return { ...base, ...dynamic };
-  }, [queries]);
 
   return (
     <Card>
