@@ -11,6 +11,7 @@ import { TableContainer } from "@/components/ui/table-container";
 import { useSite } from "@/components/dashboard/site-context";
 import { QueriesTable, type QueryRow } from "@/components/dashboard/queries-table";
 import { QueryMultiSelect } from "@/components/dashboard/query-multiselect";
+import { cn } from "@/lib/utils";
 import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
 import {
   RankCharts,
@@ -611,6 +612,32 @@ export default function UrlTrackerPage() {
               <Badge variant="secondary">
                 {detailSelectedQueries.length || allDetailQueries.length} Keywords aktiv
               </Badge>
+            </div>
+
+            <div className="inline-flex h-9 overflow-hidden rounded-md border border-input bg-card">
+              {[7, 30, 90].map((days, idx) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => setRange(getLastNDaysRange(days))}
+                  className={cn(
+                    "px-3 text-xs font-medium transition-colors",
+                    idx > 0 && "border-l border-input",
+                    range && range.from && range.to
+                      ? (() => {
+                          const diff =
+                            (new Date(range.to).setHours(0, 0, 0, 0) -
+                              new Date(range.from).setHours(0, 0, 0, 0)) /
+                              (1000 * 60 * 60 * 24) +
+                            1;
+                          return diff === days ? "bg-primary text-primary-foreground" : "bg-card text-foreground hover:bg-accent";
+                        })()
+                      : "bg-card text-foreground hover:bg-accent"
+                  )}
+                >
+                  {days === 7 ? "7 Tage" : days === 30 ? "1 Monat" : "3 Monate"}
+                </button>
+              ))}
             </div>
 
             <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
