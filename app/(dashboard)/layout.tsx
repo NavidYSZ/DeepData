@@ -9,8 +9,8 @@ import { SiteHeader } from "@/components/dashboard/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 const pageTitles: Record<string, string> = {
-  "/rank-tracker": "Rank Tracker",
-  "/url-tracker": "URL-Tracker",
+  "/rank-tracker": "by Query",
+  "/url-tracker": "by Site",
   "/data-explorer": "Data Explorer",
   "/kannibalisierung": "Kannibalisierung",
   "/seo-bubble": "SEO Bubble",

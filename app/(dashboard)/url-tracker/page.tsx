@@ -354,7 +354,7 @@ export default function UrlTrackerPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="URL-Tracker"
+        title="by Site"
         description="Sieh, welche URLs welche Keywords tragen – inklusive Verlauf."
       />
 

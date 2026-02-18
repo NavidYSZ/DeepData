@@ -20,13 +20,14 @@ import {
   SidebarRail
 } from "@/components/ui/sidebar";
 
+const primaryItems = [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }];
+
 const navGroups = [
   {
-    label: "Core",
+    label: "Keywords",
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/rank-tracker", label: "Rank Tracker", icon: TrendingUp },
-      { href: "/url-tracker", label: "URL-Tracker", icon: Link2 },
+      { href: "/rank-tracker", label: "by Query", icon: TrendingUp },
+      { href: "/url-tracker", label: "by Site", icon: Link2 },
       { href: "/data-explorer", label: "Data Explorer", icon: Database }
     ]
   },
@@ -63,6 +64,25 @@ export function AppSidebar({ pathname }: { pathname: string }) {
       </SidebarHeader>
       <SidebarContent>
         <nav className="space-y-4">
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {primaryItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label}>
+                        <Link href={item.href}>
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="truncate">{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
           {navGroups.map((group) => (
             <SidebarGroup key={group.label}>
               <SidebarGroupLabel>{group.label}</SidebarGroupLabel>

@@ -6,7 +6,7 @@ export function AuthButton() {
   const { status, data } = useSession();
   const loading = status === "loading";
 
-  if (loading) return <Button variant="secondary" size="sm" disabled>Laden...</Button>;
+  if (loading) return <Button variant="secondary" size="sm" disabled className="shrink-0">Laden...</Button>;
 
   if (status === "authenticated") {
     return (
@@ -14,7 +14,7 @@ export function AuthButton() {
         <span className="hidden max-w-[180px] truncate text-sm text-muted-foreground xl:inline">
           {data?.user?.email}
         </span>
-        <Button variant="outline" size="sm" onClick={() => signOut({ callbackUrl: "/" })}>
+        <Button variant="outline" size="sm" className="shrink-0" onClick={() => signOut({ callbackUrl: "/" })}>
           Logout
         </Button>
       </div>
@@ -22,6 +22,9 @@ export function AuthButton() {
   }
 
   return (
-    <Button size="sm" onClick={() => signIn("google")}>Login mit Google</Button>
+    <Button size="sm" className="shrink-0" onClick={() => signIn("google")}>
+      <span className="hidden sm:inline">Login mit Google</span>
+      <span className="sm:hidden">Login</span>
+    </Button>
   );
 }

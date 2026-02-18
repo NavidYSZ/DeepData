@@ -206,7 +206,7 @@ export default function RankTrackerPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Rank Tracker"
+        title="by Query"
         description="Verfolge Keyword-Positionen im Zeitverlauf."
       />
 

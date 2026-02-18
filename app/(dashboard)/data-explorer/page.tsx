@@ -280,45 +280,19 @@ export default function DataExplorerPage() {
         loading ? (
           <Skeleton className="h-[500px] w-full" />
         ) : (
-          <div className="grid grid-cols-12 gap-6">
-            <div className="col-span-12 lg:col-span-8">
-              <DataExplorerTable
-                rows={filtered}
-                onSelectPage={(page) => {
-                  setSelectedPage(page);
-                  setSelectedKeyword(null);
-                }}
-                onSelectKeyword={(keyword) => {
-                  setSelectedKeyword(keyword);
-                  setSelectedPage(null);
-                }}
-                selectedPage={selectedPage}
-                selectedKeyword={selectedKeyword}
-              />
-            </div>
-            <div className="col-span-12 lg:col-span-4 space-y-4">
-              <SectionCard title="Auswahl" description="Aktiver Drilldown">
-                {selectedKeyword || selectedPage ? (
-                  <div className="space-y-2 text-sm">
-                    <div className="font-semibold">{selectedKeyword ?? selectedPage}</div>
-                    <div className="text-muted-foreground">Klicke eine Zeile, um zu wechseln.</div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedKeyword(null);
-                        setSelectedPage(null);
-                      }}
-                    >
-                      Auswahl zurücksetzen
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground">Keine Auswahl aktiv.</div>
-                )}
-              </SectionCard>
-            </div>
-          </div>
+          <DataExplorerTable
+            rows={filtered}
+            onSelectPage={(page) => {
+              setSelectedPage(page);
+              setSelectedKeyword(null);
+            }}
+            onSelectKeyword={(keyword) => {
+              setSelectedKeyword(keyword);
+              setSelectedPage(null);
+            }}
+            selectedPage={selectedPage}
+            selectedKeyword={selectedKeyword}
+          />
         )
       )}
     </div>

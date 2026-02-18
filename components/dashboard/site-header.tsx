@@ -11,7 +11,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbP
 
 export function SiteHeader({ pageTitle }: { pageTitle: string }) {
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:px-6">
+    <header className="sticky top-0 z-30 flex min-h-14 items-center gap-3 overflow-hidden border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:px-6">
       <SidebarTrigger />
       <Separator orientation="vertical" className="hidden h-4 md:block" />
       <Breadcrumb className="hidden min-w-0 flex-1 md:block">
@@ -30,7 +30,7 @@ export function SiteHeader({ pageTitle }: { pageTitle: string }) {
         </BreadcrumbList>
       </Breadcrumb>
       <div className="min-w-0 flex-1 truncate text-sm font-medium md:hidden">{pageTitle}</div>
-      <div className="ml-auto flex min-w-0 items-center gap-2">
+      <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2">
         <Badge variant="secondary" className="hidden lg:inline-flex">
           Multi User
         </Badge>

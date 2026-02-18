@@ -48,8 +48,8 @@ export function DateRangePicker({
   ];
   const label = value?.from
     ? value.to
-      ? `${format(value.from, "PPP")} – ${format(value.to, "PPP")}`
-      : format(value.from, "PPP")
+      ? `${format(value.from, "dd.MM.yyyy")} – ${format(value.to, "dd.MM.yyyy")}`
+      : format(value.from, "dd.MM.yyyy")
     : "Zeitraum wählen";
 
   function setPreset(days: number) {
