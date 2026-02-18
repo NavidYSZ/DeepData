@@ -248,28 +248,32 @@ export default function RankTrackerPage() {
         <Badge variant="secondary">Zeitraum: {formatRange(range, 28)}</Badge>
       </StatsRow>
 
-      <div className="min-w-0 space-y-4">
-        {loadingSeries ? (
-          <Skeleton className="h-[480px] w-full" />
-        ) : (
-          <RankCharts
-            chartData={chartData}
-            queries={chartQueries}
-            trend={trendData}
-            showTrend={showTrend}
-            onToggleTrend={() => setShowTrend((s) => !s)}
-            mode="single"
-            axisMode={axisMode}
-            onToggleAxisMode={() => setAxisMode((s) => (s === "fixed" ? "dynamic" : "fixed"))}
-          />
-        )}
-        {error && <ErrorState>{error}</ErrorState>}
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
+        <div className="min-w-0 space-y-4">
+          {loadingSeries ? (
+            <Skeleton className="h-[480px] w-full" />
+          ) : (
+            <RankCharts
+              chartData={chartData}
+              queries={chartQueries}
+              trend={trendData}
+              showTrend={showTrend}
+              onToggleTrend={() => setShowTrend((s) => !s)}
+              mode="single"
+              axisMode={axisMode}
+              onToggleAxisMode={() => setAxisMode((s) => (s === "fixed" ? "dynamic" : "fixed"))}
+            />
+          )}
+          {error && <ErrorState>{error}</ErrorState>}
+        </div>
 
-        {topLoading ? (
-          <Skeleton className="h-[460px] w-full" />
-        ) : (
-          <QueriesTable rows={filteredTableRows} />
-        )}
+        <div className="min-w-0">
+          {topLoading ? (
+            <Skeleton className="h-[460px] w-full" />
+          ) : (
+            <QueriesTable rows={filteredTableRows} />
+          )}
+        </div>
       </div>
     </div>
   );

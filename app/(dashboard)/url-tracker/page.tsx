@@ -613,42 +613,45 @@ export default function UrlTrackerPage() {
               </Badge>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(260px,360px)] md:items-end">
-              <div className="hidden md:block" />
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Keywords</label>
-                <QueryMultiSelect
-                  options={detailQueryOptions}
-                  selected={detailSelectedQueries}
-                  onChange={(vals) => setDetailSelectedQueries(Array.from(new Set(vals)))}
-                  onOnly={(v) => setDetailSelectedQueries([v])}
-                  max={9999}
-                />
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
+              <div className="space-y-3">
+                {detailSeriesLoading ? (
+                  <Skeleton className="h-[520px] w-full" />
+                ) : detailSeriesError ? (
+                  <p className="text-sm text-destructive">Fehler beim Laden der Zeitreihen</p>
+                ) : (
+                  <RankCharts
+                    chartData={detailChartData}
+                    queries={detailChartQueries}
+                    trend={detailTrendData}
+                    showTrend={detailShowTrend}
+                    onToggleTrend={() => setDetailShowTrend((s) => !s)}
+                    mode="single"
+                  />
+                )}
+              </div>
+
+              <div className="space-y-3 min-w-0">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Keywords</label>
+                  <QueryMultiSelect
+                    options={detailQueryOptions}
+                    selected={detailSelectedQueries}
+                    onChange={(vals) => setDetailSelectedQueries(Array.from(new Set(vals)))}
+                    onOnly={(v) => setDetailSelectedQueries([v])}
+                    max={9999}
+                  />
+                </div>
+
+                {detailLoading ? (
+                  <Skeleton className="h-[460px] w-full" />
+                ) : detailError ? (
+                  <p className="text-sm text-destructive">Fehler beim Laden</p>
+                ) : (
+                  <QueriesTable rows={filteredDetailRows} />
+                )}
               </div>
             </div>
-
-            {detailSeriesLoading ? (
-              <Skeleton className="h-[520px] w-full" />
-            ) : detailSeriesError ? (
-              <p className="text-sm text-destructive">Fehler beim Laden der Zeitreihen</p>
-            ) : (
-              <RankCharts
-                chartData={detailChartData}
-                queries={detailChartQueries}
-                trend={detailTrendData}
-                showTrend={detailShowTrend}
-                onToggleTrend={() => setDetailShowTrend((s) => !s)}
-                mode="single"
-              />
-            )}
-
-            {detailLoading ? (
-              <Skeleton className="h-[460px] w-full" />
-            ) : detailError ? (
-              <p className="text-sm text-destructive">Fehler beim Laden</p>
-            ) : (
-              <QueriesTable rows={filteredDetailRows} />
-            )}
           </div>
         </FullscreenOverlay>
       )}
