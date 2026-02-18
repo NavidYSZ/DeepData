@@ -41,8 +41,8 @@ const colors = [
   "hsl(var(--chart-3))",
   "hsl(var(--chart-4))",
   "hsl(var(--chart-5))",
+  "#6b7280",
   "#7c3aed",
-  "#0ea5e9",
   "#f97316",
   "#ef4444",
   "#10b981"
