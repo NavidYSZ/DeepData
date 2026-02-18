@@ -59,6 +59,51 @@ function hashCode(str: string) {
   return h;
 }
 
+function toIsoDate(dateNum: number) {
+  return new Date(dateNum).toISOString().slice(0, 10);
+}
+
+function buildRegressionLine(points: TrendPoint[], fallbackDomain: ChartPoint[]): TrendPoint[] {
+  if (!fallbackDomain.length) return [];
+
+  const sortedTrend = [...points].sort((a, b) => a.dateNum - b.dateNum);
+  const xMin = fallbackDomain[0].dateNum;
+  const xMax = fallbackDomain[fallbackDomain.length - 1].dateNum;
+
+  if (!sortedTrend.length) return [];
+
+  if (sortedTrend.length === 1) {
+    const y = sortedTrend[0].position;
+    return [
+      { dateNum: xMin, date: toIsoDate(xMin), position: y },
+      { dateNum: xMax, date: toIsoDate(xMax), position: y }
+    ];
+  }
+
+  const n = sortedTrend.length;
+  const sumX = sortedTrend.reduce((acc, p) => acc + p.dateNum, 0);
+  const sumY = sortedTrend.reduce((acc, p) => acc + p.position, 0);
+  const sumXY = sortedTrend.reduce((acc, p) => acc + p.dateNum * p.position, 0);
+  const sumXX = sortedTrend.reduce((acc, p) => acc + p.dateNum * p.dateNum, 0);
+  const denominator = n * sumXX - sumX * sumX;
+
+  if (denominator === 0) {
+    const avg = sumY / n;
+    return [
+      { dateNum: xMin, date: toIsoDate(xMin), position: avg },
+      { dateNum: xMax, date: toIsoDate(xMax), position: avg }
+    ];
+  }
+
+  const slope = (n * sumXY - sumX * sumY) / denominator;
+  const intercept = (sumY - slope * sumX) / n;
+
+  return [
+    { dateNum: xMin, date: toIsoDate(xMin), position: intercept + slope * xMin },
+    { dateNum: xMax, date: toIsoDate(xMax), position: intercept + slope * xMax }
+  ];
+}
+
 function SeriesChart({
   title,
   data,
@@ -77,6 +122,7 @@ function SeriesChart({
   fixed?: boolean;
 }) {
   const sortedData = useMemo(() => [...data], [data]);
+  const regressionLine = useMemo(() => buildRegressionLine(trend, sortedData), [trend, sortedData]);
 
   const domain = fixed ? [1, 100] : ["auto", "auto"];
   const ticks = fixed ? Array.from({ length: 10 }, (_, i) => i * 10 + 1).concat(100) : undefined;
@@ -84,12 +130,12 @@ function SeriesChart({
   if (!sortedData.length) {
     return (
       <Card>
-        <CardHeader className="flex items-center justify-between">
+        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
           <CardTitle>{title}</CardTitle>
           <button
             type="button"
             onClick={onToggleTrend}
-            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition"
+            className="ml-auto inline-flex shrink-0 items-center gap-2 text-xs text-muted-foreground transition hover:text-foreground"
           >
             {showTrend ? "Trendlinien aus" : "Trendlinien an"}
             <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-border">
@@ -106,7 +152,7 @@ function SeriesChart({
 
   const config = useMemo(() => {
     const base: Record<string, { label: string; color: string }> = {
-      position: { label: "Trend", color: "hsl(var(--foreground))" }
+      position: { label: "Regression", color: "hsl(var(--foreground))" }
     };
     const dynamic = Object.fromEntries(
       queries.map((query) => [
@@ -119,12 +165,12 @@ function SeriesChart({
 
   return (
     <Card>
-      <CardHeader className="flex items-center justify-between">
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
         <CardTitle>{title}</CardTitle>
         <button
           type="button"
           onClick={onToggleTrend}
-          className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition"
+          className="ml-auto inline-flex shrink-0 items-center gap-2 text-xs text-muted-foreground transition hover:text-foreground"
         >
           {showTrend ? "Trendlinien aus" : "Trendlinien an"}
           <span className="inline-flex h-5 w-5 items-center justify-center rounded border border-border">
@@ -166,12 +212,12 @@ function SeriesChart({
                   isAnimationActive={false}
                 />
               ))}
-              {showTrend && trend.length > 0 && (
+              {showTrend && regressionLine.length > 0 && (
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="position"
-                  data={trend}
-                  name="Trend"
+                  data={regressionLine}
+                  name="Regression"
                   stroke="hsl(var(--foreground))"
                   strokeWidth={2}
                   dot={false}
