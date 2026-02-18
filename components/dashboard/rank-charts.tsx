@@ -12,8 +12,14 @@ import {
 } from "recharts";
 import { Eye, EyeOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
+import {
+  CHART_LINE_WIDTH_EVENT,
+  CHART_LINE_WIDTH_KEY,
+  DEFAULT_CHART_LINE_WIDTH,
+  readChartLineWidth
+} from "@/lib/ui-settings";
 
 export interface SeriesPoint {
   date: string;
@@ -104,6 +110,33 @@ function buildRegressionLine(points: TrendPoint[], fallbackDomain: ChartPoint[])
   ];
 }
 
+function useChartLineWidth() {
+  const [lineWidth, setLineWidth] = useState(DEFAULT_CHART_LINE_WIDTH);
+
+  useEffect(() => {
+    const sync = () => setLineWidth(readChartLineWidth());
+    sync();
+
+    function onStorage(event: StorageEvent) {
+      if (event.key === CHART_LINE_WIDTH_KEY) sync();
+    }
+
+    function onLocalChange() {
+      sync();
+    }
+
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(CHART_LINE_WIDTH_EVENT, onLocalChange);
+
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(CHART_LINE_WIDTH_EVENT, onLocalChange);
+    };
+  }, []);
+
+  return lineWidth;
+}
+
 function SeriesChart({
   title,
   data,
@@ -123,6 +156,7 @@ function SeriesChart({
 }) {
   const sortedData = useMemo(() => [...data], [data]);
   const regressionLine = useMemo(() => buildRegressionLine(trend, sortedData), [trend, sortedData]);
+  const lineWidth = useChartLineWidth();
 
   const domain = fixed ? [1, 100] : ["auto", "auto"];
   const ticks = fixed ? Array.from({ length: 10 }, (_, i) => i * 10 + 1).concat(100) : undefined;
@@ -208,7 +242,7 @@ function SeriesChart({
                   stroke={mapColor(query)}
                   dot={{ r: 2 }}
                   activeDot={{ r: 4 }}
-                  strokeWidth={1.2}
+                  strokeWidth={lineWidth}
                   isAnimationActive={false}
                 />
               ))}
@@ -219,7 +253,7 @@ function SeriesChart({
                   data={regressionLine}
                   name="Regression"
                   stroke="hsl(var(--foreground))"
-                  strokeWidth={2}
+                  strokeWidth={lineWidth}
                   dot={false}
                   isAnimationActive={false}
                 />

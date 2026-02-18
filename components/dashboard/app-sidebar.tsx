@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutDashboard, TrendingUp, Link2, Database, Sparkles, GitMerge, MessageSquare, RefreshCcw } from "lucide-react";
+import { LayoutDashboard, TrendingUp, Link2, Database, Sparkles, GitMerge, MessageSquare, RefreshCcw, Settings } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { AccountMenu } from "@/components/dashboard/account-menu";
@@ -107,7 +107,23 @@ export function AppSidebar({ pathname }: { pathname: string }) {
           ))}
         </nav>
       </SidebarContent>
-      <SidebarFooter />
+      <SidebarFooter>
+        <div className="space-y-2">
+          <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground group-data-[collapsed=true]:sr-only">
+            Settings
+          </p>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Settings">
+                <Link href="/settings">
+                  <Settings className="h-4 w-4 shrink-0" />
+                  <span className="truncate">Settings</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </div>
+      </SidebarFooter>
     </Sidebar>
   );
 }

@@ -15,6 +15,7 @@ const pageTitles: Record<string, string> = {
   "/kannibalisierung": "Kannibalisierung",
   "/seo-bubble": "SEO Bubble",
   "/chat-agent": "Chat Agent",
+  "/settings": "Settings",
   "/dashboard": "Dashboard"
 };
 
