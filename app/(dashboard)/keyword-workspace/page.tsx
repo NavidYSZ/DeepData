@@ -9,10 +9,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle
+} from "@/components/ui/sheet";
 import { toast } from "sonner";
-import { Upload, Edit3, Eye, EyeOff, Check } from "lucide-react";
+import { Upload, Edit3, Eye, ChevronDown, ChevronRight } from "lucide-react";
 
 type WorkspaceResponse = {
   projectId: string;
@@ -74,8 +81,10 @@ export default function KeywordWorkspacePage() {
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
   const [focusOnly, setFocusOnly] = useState(false);
   const [focusIds, setFocusIds] = useState<string[]>([]);
-  const [focusPickMode, setFocusPickMode] = useState(false);
-  const [tempFocusIds, setTempFocusIds] = useState<string[]>([]);
+  const [showFocusSheet, setShowFocusSheet] = useState(false);
+  const [focusSelection, setFocusSelection] = useState<string[]>([]);
+  const [focusSearch, setFocusSearch] = useState("");
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isReclustering, setIsReclustering] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -89,9 +98,7 @@ export default function KeywordWorkspacePage() {
   const projectId = workspace?.projectId ?? null;
 
   const { data: cardsData, mutate: mutateCards } = useSWR<CardsResponse>(
-    projectId
-      ? `/api/keyword-workspace/projects/${projectId}/cards${search ? `?search=${encodeURIComponent(search)}` : ""}`
-      : null,
+    projectId ? `/api/keyword-workspace/projects/${projectId}/cards` : null,
     (url: string) => fetchJson<CardsResponse>(url)
   );
 
@@ -104,6 +111,17 @@ export default function KeywordWorkspacePage() {
 
   const cards = cardsData?.items ?? [];
   const keywords = keywordData?.items ?? [];
+  const keywordMapByCluster = useMemo(() => {
+    const map = new Map<string, KeywordRow[]>();
+    keywords.forEach((k) => {
+      k.clusterIds.forEach((cid) => {
+        const list = map.get(cid) ?? [];
+        list.push(k);
+        map.set(cid, list);
+      });
+    });
+    return map;
+  }, [keywords]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -125,40 +143,61 @@ export default function KeywordWorkspacePage() {
     localStorage.setItem(`kw-focus-${projectId}`, JSON.stringify(focusIds));
   }, [focusIds, projectId]);
 
+  const filteredCards = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return cards;
+    return cards.filter((card) => {
+      if (card.label.toLowerCase().includes(term)) return true;
+      const kws = keywordMapByCluster.get(card.id) ?? [];
+      return kws.some((k) => k.kwRaw.toLowerCase().includes(term));
+    });
+  }, [cards, keywordMapByCluster, search]);
+
   const visibleCards = useMemo(() => {
-    if (!focusOnly) return cards;
-    const focusSet = new Set(focusIds);
-    return cards.filter((card) => focusSet.has(card.id));
-  }, [cards, focusIds, focusOnly]);
+    const base = focusOnly ? filteredCards.filter((c) => focusIds.includes(c.id)) : filteredCards;
+    return base;
+  }, [filteredCards, focusIds, focusOnly]);
 
   const clustersForSelect: ClusterOption[] = useMemo(
     () => cards.map((card) => ({ id: card.id, label: card.label })),
     [cards]
   );
 
-  function toggleFocus(clusterId: string) {
-    setFocusIds((prev) => {
+  function openFocusSheet() {
+    setFocusSelection(focusIds);
+    setFocusSearch("");
+    setShowFocusSheet(true);
+  }
+
+  function toggleSelection(clusterId: string) {
+    setFocusSelection((prev) => {
       if (prev.includes(clusterId)) return prev.filter((id) => id !== clusterId);
       return [...prev, clusterId];
     });
   }
 
-  function toggleFocusPick() {
-    if (focusPickMode) {
-      setFocusIds(tempFocusIds);
-      setFocusOnly(true);
-      setFocusPickMode(false);
-      setTempFocusIds([]);
-      return;
-    }
-    setTempFocusIds(focusIds.length ? focusIds : cards.map((c) => c.id));
-    setFocusPickMode(true);
+  const filteredFocusClusters = useMemo(() => {
+    const term = focusSearch.trim().toLowerCase();
+    if (!term) return cards;
+    return cards.filter((card) => {
+      if (card.label.toLowerCase().includes(term)) return true;
+      const kws = keywordMapByCluster.get(card.id) ?? [];
+      return kws.some((k) => k.kwRaw.toLowerCase().includes(term));
+    });
+  }, [cards, focusSearch, keywordMapByCluster]);
+
+  function saveFocusSelection() {
+    setFocusIds(focusSelection);
+    setFocusOnly(true);
+    setShowFocusSheet(false);
   }
 
-  function handlePickToggle(clusterId: string) {
-    setTempFocusIds((prev) => {
-      if (prev.includes(clusterId)) return prev.filter((id) => id !== clusterId);
-      return [...prev, clusterId];
+  function toggleRowExpand(clusterId: string) {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(clusterId)) next.delete(clusterId);
+      else next.add(clusterId);
+      return next;
     });
   }
 
@@ -321,31 +360,23 @@ export default function KeywordWorkspacePage() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <Input placeholder="Cluster suchen" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
-            <Button variant={focusOnly ? "default" : "outline"} onClick={() => setFocusOnly((prev) => !prev)}>
-              {focusOnly ? "Alle anzeigen" : "Nur Fokus"}
-            </Button>
-            <Button variant={focusPickMode ? "default" : "outline"} onClick={toggleFocusPick} className="gap-2">
-              {focusPickMode ? <Check className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              {focusPickMode ? "Fertig" : "Fokus wählen"}
-            </Button>
-            <Badge variant="secondary">Fokus: {focusIds.length}</Badge>
-          </div>
+          <Button variant={focusOnly ? "default" : "outline"} onClick={() => setFocusOnly((prev) => !prev)}>
+            {focusOnly ? "Alle anzeigen" : "Nur Fokus"}
+          </Button>
+          <Button variant="outline" onClick={openFocusSheet} className="gap-2">
+            <Eye className="h-4 w-4" />
+            Fokus bearbeiten
+          </Button>
+          <Badge variant="secondary">Fokus: {focusIds.length}</Badge>
+        </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {visibleCards.map((card) => (
-              <Card
-                key={card.id}
-                className={`cursor-pointer ${
-                  focusPickMode && !tempFocusIds.includes(card.id) ? "border border-dashed border-primary/60" : ""
-                } ${selectedCluster === card.id && !focusPickMode ? "border-primary" : ""}`}
-                onClick={() => {
-                  if (focusPickMode) {
-                    handlePickToggle(card.id);
-                    return;
-                  }
-                  setSelectedCluster(card.id);
-                }}
-              >
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {visibleCards.map((card) => (
+            <Card
+              key={card.id}
+              className={`cursor-pointer ${selectedCluster === card.id ? "border-primary" : ""}`}
+              onClick={() => setSelectedCluster(card.id)}
+            >
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between gap-2">
                     <span className="truncate">{card.label}</span>
@@ -423,6 +454,88 @@ export default function KeywordWorkspacePage() {
           </CardContent>
         </Card>
       </div>
+      <Sheet open={showFocusSheet} onOpenChange={setShowFocusSheet}>
+        <SheetContent side="right" className="sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Fokus bearbeiten</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 space-y-3">
+            <Input
+              placeholder="Cluster oder Keywords suchen"
+              value={focusSearch}
+              onChange={(e) => setFocusSearch(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFocusSelection(filteredFocusClusters.map((c) => c.id))}
+              >
+                Alle wählen
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setFocusSelection([])}>
+                Keine
+              </Button>
+            </div>
+            <div className="space-y-2">
+              <ScrollArea className="h-[60vh] pr-2">
+                <div className="space-y-2">
+                  {filteredFocusClusters.map((card) => {
+                    const expanded = expandedRows.has(card.id);
+                    const clusterKeywords = keywordMapByCluster.get(card.id) ?? [];
+                    return (
+                      <div key={card.id} className="rounded border p-2">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={focusSelection.includes(card.id)}
+                            onCheckedChange={() => toggleSelection(card.id)}
+                          />
+                          <button
+                            type="button"
+                            className="text-muted-foreground"
+                            onClick={() => toggleRowExpand(card.id)}
+                          >
+                            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </button>
+                          <div className="flex-1">
+                            <div className="font-medium">{card.label}</div>
+                            <div className="text-xs text-muted-foreground">
+                              Demand {Math.round(card.totalDemand)} · {card.keywordCount} Keywords
+                            </div>
+                          </div>
+                        </div>
+                        {expanded && (
+                          <div className="mt-2 space-y-1 pl-7 text-xs text-muted-foreground">
+                            {clusterKeywords.length
+                              ? clusterKeywords.map((k) => (
+                                  <div key={k.id} className="flex items-center justify-between gap-2">
+                                    <span className="truncate">{k.kwRaw}</span>
+                                    <span>{Math.round(k.demandMonthly)}</span>
+                                  </div>
+                                ))
+                              : "Keine Keywords"}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {!filteredFocusClusters.length && (
+                    <p className="text-sm text-muted-foreground">Keine Cluster für die Suche gefunden.</p>
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+          </div>
+          <SheetFooter className="mt-4">
+            <div className="flex w-full justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowFocusSheet(false)}>
+                Abbrechen
+              </Button>
+              <Button onClick={saveFocusSelection}>Speichern</Button>
+            </div>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
