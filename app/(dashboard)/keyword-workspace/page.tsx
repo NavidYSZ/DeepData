@@ -255,13 +255,6 @@ export default function KeywordWorkspacePage() {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 rounded-lg border bg-card p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" className="max-w-full truncate">
-            Property: {site}
-          </Badge>
-          <Badge variant="secondary">Zeitraum (Monats-normalisiert)</Badge>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex overflow-hidden rounded-md border border-input">
             <button
               type="button"
@@ -307,7 +300,7 @@ export default function KeywordWorkspacePage() {
             className="gap-2"
           >
             <Upload className="h-4 w-4" />
-            {isUploading ? "Upload..." : "Upload (optional)"}
+            {isUploading ? "Upload..." : "Upload"}
           </Button>
           <input
             ref={fileInputRef}
