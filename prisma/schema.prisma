@@ -21,6 +21,7 @@ model User {
   chatSessions ChatSession[]
   chatMessages ChatMessage[]
   chatFiles   ChatFile[]
+  keywordProjects KeywordProject[]
 }
 
 model GscAccount {
@@ -106,4 +107,148 @@ model ChatFile {
   size       Int
   expiresAt  DateTime
   createdAt  DateTime @default(now())
+}
+
+/// Keyword Workspace models (V1)
+model KeywordProject {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  lang           String   @default("de")
+  country        String   @default("DE")
+  gscSiteUrl     String?
+  gscDefaultDays Int      @default(28)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sources        KeywordSource[]
+  keywords       Keyword[]
+  keywordDemands KeywordDemand[]
+  preclusters    Precluster[]
+  clusters       Cluster[]
+  events         WorkspaceEvent[]
+}
+
+model KeywordSource {
+  id        String   @id @default(cuid())
+  projectId String
+  project   KeywordProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      String   // "gsc" | "upload"
+  name      String
+  metaJson  String?
+  createdAt DateTime @default(now())
+
+  metrics   KeywordSourceMetric[]
+
+  @@index([projectId, type])
+}
+
+model Keyword {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    KeywordProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kwRaw      String
+  kwNorm     String
+  kwSig      String
+  lang       String?
+  country    String?
+  createdAt  DateTime @default(now())
+
+  sourceMetrics     KeywordSourceMetric[]
+  demand            KeywordDemand?
+  preclusterMembers PreclusterMember[]
+  clusterMembers    ClusterMember[]
+
+  @@index([projectId, kwNorm])
+  @@index([projectId, kwSig])
+}
+
+model KeywordSourceMetric {
+  keywordId     String
+  sourceId      String
+  keyword       Keyword       @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  source        KeywordSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  impressions   Int?
+  clicks        Int?
+  position      Float?
+  sistrixVolume Int?
+  cpc           Float?
+  kd            Float?
+  url           String?
+  dateFrom      DateTime?
+  dateTo        DateTime?
+
+  @@id([keywordId, sourceId])
+}
+
+model KeywordDemand {
+  keywordId     String   @id
+  keyword       Keyword  @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  projectId     String
+  project       KeywordProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  demandMonthly Float
+  demandSource  String   // "gsc" | "upload" | "none"
+  computedAt    DateTime @default(now())
+
+  @@index([projectId, demandMonthly])
+}
+
+model Precluster {
+  id           String   @id @default(cuid())
+  projectId    String
+  project      KeywordProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  algoVersion  String
+  label        String
+  totalDemand  Float
+  cohesion     Float
+  createdAt    DateTime @default(now())
+
+  members      PreclusterMember[]
+
+  @@index([projectId, totalDemand])
+}
+
+model PreclusterMember {
+  preclusterId String
+  keywordId    String
+  precluster   Precluster @relation(fields: [preclusterId], references: [id], onDelete: Cascade)
+  keyword      Keyword    @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  score        Float
+
+  @@id([preclusterId, keywordId])
+  @@index([keywordId])
+}
+
+model Cluster {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     KeywordProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  isLocked    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     ClusterMember[]
+}
+
+model ClusterMember {
+  clusterId String
+  keywordId String
+  cluster   Cluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  keyword   Keyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@id([clusterId, keywordId])
+}
+
+model WorkspaceEvent {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    KeywordProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type       String
+  payloadJson String
+  createdAt  DateTime @default(now())
+
+  @@index([projectId, createdAt])
 }

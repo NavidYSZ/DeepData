@@ -15,13 +15,15 @@ const pageTitles: Record<string, string> = {
   "/kannibalisierung": "Kannibalisierung",
   "/seo-bubble": "SEO Bubble",
   "/chat-agent": "Chat Agent",
+  "/keyword-workspace": "Clustering",
   "/settings": "Settings",
   "/dashboard": "Dashboard"
 };
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const pageTitle = pageTitles[pathname] ?? "Dashboard";
+  const pageTitle =
+    pathname.startsWith("/keyword-workspace") ? "Keyword Mapping" : pageTitles[pathname] ?? "Dashboard";
 
   return (
     <SiteProvider>

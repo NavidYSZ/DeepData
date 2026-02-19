@@ -1,7 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutDashboard, TrendingUp, Link2, Database, Sparkles, GitMerge, MessageSquare, RefreshCcw, Settings } from "lucide-react";
+import {
+  LayoutDashboard,
+  TrendingUp,
+  Link2,
+  Database,
+  Sparkles,
+  GitMerge,
+  MessageSquare,
+  RefreshCcw,
+  Settings,
+  Network
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { AccountMenu } from "@/components/dashboard/account-menu";
@@ -38,6 +49,10 @@ const navGroups = [
       { href: "/kannibalisierung", label: "Kannibalisierung", icon: GitMerge },
       { href: "/chat-agent", label: "Chat Agent", icon: MessageSquare }
     ]
+  },
+  {
+    label: "Tools",
+    items: [{ href: "/keyword-workspace", label: "Clustering", icon: Network }]
   }
 ];
 
