@@ -22,6 +22,15 @@ export type PreclusterResult = {
 
 type Vector = Map<string, number>;
 
+function createSeededRng(seed: number): () => number {
+  let state = seed % 2147483647;
+  if (state <= 0) state += 2147483646;
+  return () => {
+    state = (state * 16807) % 2147483647;
+    return (state - 1) / 2147483646;
+  };
+}
+
 function charNgrams(text: string, minN = 3, maxN = 5) {
   const grams: string[] = [];
   const padded = ` ${text} `;
@@ -116,15 +125,17 @@ export function runPrecluster(keywords: KeywordInput[], seed = 42): PreclusterRe
   }
 
   const communities = louvain(graph, {
-    getEdgeWeight: "weight",
+    attributes: { weight: "weight" },
     resolution: 1.0,
-    randomSeed: seed
+    rng: createSeededRng(seed),
+    weighted: true
   });
 
   const clusterMap = new Map<string, string[]>();
   Object.entries(communities).forEach(([node, community]) => {
-    if (!clusterMap.has(community)) clusterMap.set(community, []);
-    clusterMap.get(community)!.push(node);
+    const communityKey = String(community);
+    if (!clusterMap.has(communityKey)) clusterMap.set(communityKey, []);
+    clusterMap.get(communityKey)!.push(node);
   });
 
   const clusters: PreclusterResult["clusters"] = [];

@@ -37,12 +37,14 @@ export async function POST(_req: Request, ctx: { params: { id: string } }) {
     await prisma.clusterMember.deleteMany({ where: { clusterId: { in: payload.prevClusters?.map((c: any) => c.id) ?? [] } } });
     await prisma.cluster.deleteMany({ where: { id: { in: payload.prevClusters?.map((c: any) => c.id) ?? [] } } });
     await prisma.cluster.create({ data: { id: payload.createdClusterId, projectId: project.id, name: payload.targetName ?? "Merge" } });
+    const uniqueKeywordIds = Array.from(
+      new Set<string>(payload.prevMembers.map((m: { keywordId: string }) => m.keywordId))
+    );
     await prisma.clusterMember.createMany({
-      data: Array.from(new Set(payload.prevMembers.map((m: any) => m.keywordId))).map((kid: string) => ({
+      data: uniqueKeywordIds.map((kid) => ({
         clusterId: payload.createdClusterId,
         keywordId: kid
-      })),
-      skipDuplicates: true
+      }))
     });
   }
 

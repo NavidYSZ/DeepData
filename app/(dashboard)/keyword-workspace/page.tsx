@@ -11,11 +11,34 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+type Project = {
+  id: string;
+  name: string;
+  lang: string;
+  country: string;
+  gscSiteUrl?: string | null;
+  gscDefaultDays: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type ProjectsResponse = {
+  items: Project[];
+};
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Request failed: ${res.status}`);
+  }
+  return (await res.json()) as T;
+}
 
 export default function KeywordWorkspaceProjects() {
   const router = useRouter();
-  const { data, mutate } = useSWR("/api/keyword-workspace/projects", fetcher);
+  const { data, mutate } = useSWR<ProjectsResponse>("/api/keyword-workspace/projects", (url: string) =>
+    fetchJson<ProjectsResponse>(url)
+  );
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -25,7 +48,7 @@ export default function KeywordWorkspaceProjects() {
     gscDefaultDays: 28
   });
 
-  const projects = data?.items ?? [];
+  const projects: Project[] = data?.items ?? [];
 
   async function createProject() {
     setCreating(true);
@@ -91,20 +114,20 @@ export default function KeywordWorkspaceProjects() {
       <Separator />
 
       <div className="grid gap-4 md:grid-cols-3">
-        {projects.map((p: any) => (
+        {projects.map((project) => (
           <Card
-            key={p.id}
+            key={project.id}
             className="cursor-pointer transition hover:border-primary"
-            onClick={() => router.push(`/keyword-workspace/${p.id}/cards`)}
+            onClick={() => router.push(`/keyword-workspace/${project.id}/cards`)}
           >
             <CardHeader>
-              <CardTitle>{p.name}</CardTitle>
+              <CardTitle>{project.name}</CardTitle>
               <p className="text-sm text-muted-foreground">
-                {p.lang}-{p.country} · {p.gscSiteUrl || "ohne GSC"}
+                {project.lang}-{project.country} · {project.gscSiteUrl || "ohne GSC"}
               </p>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
-              Erstellt {new Date(p.createdAt).toLocaleDateString()}
+              Erstellt {new Date(project.createdAt).toLocaleDateString()}
             </CardContent>
           </Card>
         ))}

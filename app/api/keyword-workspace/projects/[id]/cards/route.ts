@@ -32,7 +32,7 @@ export async function GET(req: Request, ctx: { params: { id: string } }) {
   const items = await prisma.precluster.findMany({
     where: {
       projectId: project.id,
-      label: search ? { contains: search, mode: "insensitive" } : undefined,
+      label: search ? { contains: search } : undefined,
       totalDemand: minDemand ? { gte: minDemand } : undefined
     },
     orderBy: [

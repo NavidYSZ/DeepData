@@ -10,7 +10,48 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+type DetectedColumns = {
+  keyword: string | null;
+  volume: string | null;
+  impressions?: string | null;
+  clicks?: string | null;
+  position?: string | null;
+  url?: string | null;
+};
+
+type UploadResponse = {
+  importId: string;
+  sourceId: string;
+  detectedColumns: DetectedColumns;
+  previewRows: Array<Record<string, string | number | null>>;
+};
+
+type MappingState = {
+  keywordColumn: string;
+  volumeColumn?: string;
+  impressionsColumn?: string;
+  clicksColumn?: string;
+  positionColumn?: string;
+  urlColumn?: string;
+};
+
+type CardsResponse = {
+  items: Array<{
+    id: string;
+    label: string;
+    totalDemand: number;
+    keywordCount: number;
+  }>;
+  total: number;
+};
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Request failed: ${res.status}`);
+  }
+  return (await res.json()) as T;
+}
 
 export default function SetupPage() {
   const params = useParams<{ projectId: string }>();
@@ -18,10 +59,13 @@ export default function SetupPage() {
   const projectId = params.projectId;
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [detected, setDetected] = useState<any | null>(null);
-  const [mapping, setMapping] = useState<any>({});
+  const [detected, setDetected] = useState<UploadResponse | null>(null);
+  const [mapping, setMapping] = useState<MappingState>({ keywordColumn: "" });
 
-  const { data: cards } = useSWR(`/api/keyword-workspace/projects/${projectId}/cards`, fetcher);
+  const { data: cards } = useSWR<CardsResponse>(
+    `/api/keyword-workspace/projects/${projectId}/cards`,
+    (url: string) => fetchJson<CardsResponse>(url)
+  );
 
   async function handleUpload() {
     if (!file) return;
@@ -35,11 +79,11 @@ export default function SetupPage() {
       toast.error("Upload fehlgeschlagen");
       return;
     }
-    const json = await res.json();
+    const json = (await res.json()) as UploadResponse;
     setDetected({ ...json, importId: json.importId, previewRows: json.previewRows });
     setMapping({
-      keywordColumn: json.detectedColumns.keyword,
-      volumeColumn: json.detectedColumns.volume
+      keywordColumn: json.detectedColumns.keyword ?? "",
+      volumeColumn: json.detectedColumns.volume ?? undefined
     });
   }
 
@@ -106,7 +150,7 @@ export default function SetupPage() {
                   <Label>Keyword</Label>
                   <Select
                     value={mapping.keywordColumn}
-                    onValueChange={(v) => setMapping((m: any) => ({ ...m, keywordColumn: v }))}
+                    onValueChange={(v) => setMapping((prev) => ({ ...prev, keywordColumn: v }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Spalte wählen" />
@@ -124,7 +168,7 @@ export default function SetupPage() {
                   <Label>Volume</Label>
                   <Select
                     value={mapping.volumeColumn}
-                    onValueChange={(v) => setMapping((m: any) => ({ ...m, volumeColumn: v }))}
+                    onValueChange={(v) => setMapping((prev) => ({ ...prev, volumeColumn: v }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Spalte wählen" />
@@ -165,11 +209,11 @@ export default function SetupPage() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-3">
-            {cards?.items?.map((c: any) => (
-              <div key={c.id} className="rounded border p-3">
-                <div className="font-medium">{c.label}</div>
+            {cards?.items?.map((card) => (
+              <div key={card.id} className="rounded border p-3">
+                <div className="font-medium">{card.label}</div>
                 <div className="text-xs text-muted-foreground">
-                  Demand {c.totalDemand} · Keywords {c.keywordCount}
+                  Demand {card.totalDemand} · Keywords {card.keywordCount}
                 </div>
               </div>
             ))}

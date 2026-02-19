@@ -75,8 +75,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
         name: cluster.label,
         members: {
           createMany: {
-            data: cluster.keywordIds.map((kid) => ({ keywordId: kid })),
-            skipDuplicates: true
+            data: cluster.keywordIds.map((kid) => ({ keywordId: kid }))
           }
         }
       }

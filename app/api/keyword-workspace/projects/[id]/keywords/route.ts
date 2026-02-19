@@ -33,7 +33,7 @@ export async function GET(req: Request, ctx: { params: { id: string } }) {
   const skip = Math.max(page - 1, 0) * take;
 
   const where: any = { projectId: project.id };
-  if (q) where.kwRaw = { contains: q, mode: "insensitive" };
+  if (q) where.kwRaw = { contains: q };
   if (clusterId) where.clusterMembers = { some: { clusterId } };
   if (view === "unassigned") where.clusterMembers = { none: {} };
 

@@ -68,14 +68,14 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   if (command.type === "MOVE_KEYWORDS") {
     const targetCluster = await prisma.cluster.findFirst({ where: { id: command.toClusterId, projectId: project.id } });
     if (!targetCluster) return err("CLUSTER_NOT_FOUND", "Target cluster not found", { clusterId: command.toClusterId }, 404);
+    const uniqueKeywordIds = Array.from(new Set(command.keywordIds));
     const prevMembers = await prisma.clusterMember.findMany({
-      where: { keywordId: { in: command.keywordIds } }
+      where: { keywordId: { in: uniqueKeywordIds } }
     });
     eventPayload.prevMembers = prevMembers;
-    await prisma.clusterMember.deleteMany({ where: { keywordId: { in: command.keywordIds } } });
+    await prisma.clusterMember.deleteMany({ where: { keywordId: { in: uniqueKeywordIds } } });
     await prisma.clusterMember.createMany({
-      data: command.keywordIds.map((kid) => ({ clusterId: command.toClusterId, keywordId: kid })),
-      skipDuplicates: true
+      data: uniqueKeywordIds.map((kid) => ({ clusterId: command.toClusterId, keywordId: kid }))
     });
   } else if (command.type === "RENAME_CLUSTER") {
     const cluster = await prisma.cluster.findFirst({ where: { id: command.clusterId, projectId: project.id } });
@@ -98,8 +98,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
       data: Array.from(new Set(members.map((m) => m.keywordId))).map((kid) => ({
         clusterId: targetId,
         keywordId: kid
-      })),
-      skipDuplicates: true
+      }))
     });
     await prisma.clusterMember.deleteMany({ where: { clusterId: { in: command.clusterIds } } });
     await prisma.cluster.deleteMany({ where: { id: { in: command.clusterIds } } });
@@ -115,11 +114,11 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
     for (const group of command.groups) {
       const newId = nanoid();
       await prisma.cluster.create({ data: { id: newId, projectId: project.id, name: group.name } });
+      const uniqueGroupKeywordIds = Array.from(new Set(group.keywordIds));
       await prisma.clusterMember.createMany({
-        data: group.keywordIds.map((kid) => ({ clusterId: newId, keywordId: kid })),
-        skipDuplicates: true
+        data: uniqueGroupKeywordIds.map((kid) => ({ clusterId: newId, keywordId: kid }))
       });
-      created.push({ id: newId, name: group.name, keywordIds: group.keywordIds });
+      created.push({ id: newId, name: group.name, keywordIds: uniqueGroupKeywordIds });
     }
     eventPayload.createdClusters = created;
     await prisma.cluster.delete({ where: { id: cluster.id } });

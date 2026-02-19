@@ -26,7 +26,7 @@ export async function POST(_req: Request, ctx: { params: { id: string } }) {
 
   if (lastEvent.type === "MOVE_KEYWORDS" && payload.prevMembers) {
     await prisma.clusterMember.deleteMany({ where: { keywordId: { in: payload.prevMembers.map((m: any) => m.keywordId) } } });
-    await prisma.clusterMember.createMany({ data: payload.prevMembers, skipDuplicates: true });
+    await prisma.clusterMember.createMany({ data: payload.prevMembers });
   } else if (lastEvent.type === "RENAME_CLUSTER" && payload.prevName && payload.clusterId) {
     await prisma.cluster.update({ where: { id: payload.clusterId }, data: { name: payload.prevName } });
   } else if (lastEvent.type === "MERGE_CLUSTERS" && payload.prevClusters && payload.prevMembers) {
@@ -41,10 +41,9 @@ export async function POST(_req: Request, ctx: { params: { id: string } }) {
         name: c.name,
         description: c.description ?? null,
         isLocked: c.isLocked ?? false
-      })),
-      skipDuplicates: true
+      }))
     });
-    await prisma.clusterMember.createMany({ data: payload.prevMembers, skipDuplicates: true });
+    await prisma.clusterMember.createMany({ data: payload.prevMembers });
   } else if (lastEvent.type === "SPLIT_CLUSTER" && payload.prevCluster && payload.prevMembers) {
     // delete created clusters
     if (payload.createdClusters?.length) {
@@ -60,9 +59,9 @@ export async function POST(_req: Request, ctx: { params: { id: string } }) {
         isLocked: payload.prevCluster.isLocked ?? false
       }
     });
-    await prisma.clusterMember.createMany({ data: payload.prevMembers, skipDuplicates: true });
+    await prisma.clusterMember.createMany({ data: payload.prevMembers });
   } else if (lastEvent.type === "DELETE_KEYWORDS" && payload.deletedKeywords) {
-    await prisma.keyword.createMany({ data: payload.deletedKeywords, skipDuplicates: true });
+    await prisma.keyword.createMany({ data: payload.deletedKeywords });
   }
 
   const undoEvent = await prisma.workspaceEvent.create({
