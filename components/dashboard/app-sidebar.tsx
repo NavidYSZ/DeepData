@@ -65,7 +65,7 @@ export function AppSidebar({ pathname }: { pathname: string }) {
         <Button
           variant="outline"
           size="sm"
-          className="w-full justify-center group-data-[collapsed=true]:h-9 group-data-[collapsed=true]:w-9 group-data-[collapsed=true]:px-0"
+          className="w-full justify-center group-data-[collapsed=true]:hidden"
           onClick={() => {
             window.location.href = "/api/auth/google";
           }}
@@ -89,7 +89,7 @@ export function AppSidebar({ pathname }: { pathname: string }) {
                       <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label}>
                         <Link href={item.href}>
                           <Icon className="h-4 w-4 shrink-0" />
-                          <span className="truncate">{item.label}</span>
+                          <span className="truncate group-data-[collapsed=true]:hidden">{item.label}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -107,14 +107,14 @@ export function AppSidebar({ pathname }: { pathname: string }) {
                     const Icon = item.icon;
                     return (
                       <SidebarMenuItem key={item.href}>
-                        <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label}>
-                          <Link href={item.href}>
-                            <Icon className="h-4 w-4 shrink-0" />
-                            <span className="truncate">{item.label}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
+                      <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label}>
+                        <Link href={item.href}>
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="truncate group-data-[collapsed=true]:hidden">{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
                   })}
                 </SidebarMenu>
               </SidebarGroupContent>
