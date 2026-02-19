@@ -45,10 +45,7 @@ export function AppSidebar({ pathname }: { pathname: string }) {
   return (
     <Sidebar>
       <SidebarHeader>
-        <div className="flex items-center justify-between gap-2">
-          <AccountMenu className="flex-1 group-data-[collapsed=true]:hidden" />
-          <SidebarRail className="hidden md:inline-flex" />
-        </div>
+        <AccountMenu className="group-data-[collapsed=true]:hidden" />
         <PropertyMenu className="group-data-[collapsed=true]:hidden" />
         <Button
           variant="outline"
@@ -61,6 +58,9 @@ export function AppSidebar({ pathname }: { pathname: string }) {
           <RefreshCcw className="h-4 w-4" />
           <span className="group-data-[collapsed=true]:hidden">Zugriff erneuern</span>
         </Button>
+        <div className="flex justify-end">
+          <SidebarRail className="hidden md:inline-flex" />
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <nav className="space-y-4">

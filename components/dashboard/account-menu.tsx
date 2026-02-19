@@ -36,6 +36,11 @@ interface AccountMenuProps {
   className?: string;
 }
 
+function truncateLabel(value: string, maxLength = 28) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 3)}...`;
+}
+
 export function AccountMenu({ className }: AccountMenuProps) {
   const { status } = useSession();
   const { data, mutate } = useSWR<AccountsResponse>(status === "authenticated" ? "/api/accounts" : null, fetcher);
@@ -51,6 +56,8 @@ export function AccountMenu({ className }: AccountMenuProps) {
   }
 
   const current = accounts[0];
+  const currentEmail = current?.email ?? "Account auswählen";
+  const currentEmailShort = truncateLabel(currentEmail);
 
   useEffect(() => {
     if (!selecting) return;
@@ -67,8 +74,8 @@ export function AccountMenu({ className }: AccountMenuProps) {
               <Avatar className="h-6 w-6 shrink-0">
                 <AvatarFallback>G</AvatarFallback>
               </Avatar>
-              <span className="min-w-0 truncate text-left text-sm">
-                {current?.email ?? "Account auswählen"}
+              <span className="min-w-0 truncate text-left text-sm" title={currentEmail}>
+                {currentEmailShort}
               </span>
             </span>
             <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
