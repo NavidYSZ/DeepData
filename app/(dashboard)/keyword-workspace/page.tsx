@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Upload } from "lucide-react";
+import { Upload, Edit3, Eye, EyeOff, Check } from "lucide-react";
 
 type WorkspaceResponse = {
   projectId: string;
@@ -74,12 +74,12 @@ export default function KeywordWorkspacePage() {
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
   const [focusOnly, setFocusOnly] = useState(false);
   const [focusIds, setFocusIds] = useState<string[]>([]);
+  const [focusPickMode, setFocusPickMode] = useState(false);
+  const [tempFocusIds, setTempFocusIds] = useState<string[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isReclustering, setIsReclustering] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [newKeyword, setNewKeyword] = useState("");
-  const [newKeywordDemand, setNewKeywordDemand] = useState<string>("");
-  const [addToClusterId, setAddToClusterId] = useState<string>("");
+  const [showDrawer, setShowDrawer] = useState(false);
 
   const { data: workspace, isLoading: workspaceLoading } = useSWR<WorkspaceResponse>(
     site ? `/api/keyword-workspace/current?siteUrl=${encodeURIComponent(site)}` : null,
@@ -143,6 +143,25 @@ export default function KeywordWorkspacePage() {
     });
   }
 
+  function toggleFocusPick() {
+    if (focusPickMode) {
+      setFocusIds(tempFocusIds);
+      setFocusOnly(true);
+      setFocusPickMode(false);
+      setTempFocusIds([]);
+      return;
+    }
+    setTempFocusIds(focusIds.length ? focusIds : cards.map((c) => c.id));
+    setFocusPickMode(true);
+  }
+
+  function handlePickToggle(clusterId: string) {
+    setTempFocusIds((prev) => {
+      if (prev.includes(clusterId)) return prev.filter((id) => id !== clusterId);
+      return [...prev, clusterId];
+    });
+  }
+
   async function refreshFromGsc() {
     if (!site) return;
     setIsRefreshing(true);
@@ -196,30 +215,6 @@ export default function KeywordWorkspacePage() {
       return;
     }
     toast.success("Upload gespeichert");
-    await Promise.all([mutateCards(), mutateKeywords()]);
-  }
-
-  async function addKeyword() {
-    if (!site || !newKeyword.trim()) return;
-    const demand = newKeywordDemand ? Number(newKeywordDemand) : undefined;
-    const res = await fetch("/api/keyword-workspace/current/keywords", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        siteUrl: site,
-        keyword: newKeyword.trim(),
-        demandMonthly: Number.isFinite(demand) ? demand : undefined,
-        clusterId: addToClusterId || undefined
-      })
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      toast.error(body?.message ?? "Keyword konnte nicht hinzugefügt werden");
-      return;
-    }
-    setNewKeyword("");
-    setNewKeywordDemand("");
-    toast.success("Keyword hinzugefügt");
     await Promise.all([mutateCards(), mutateKeywords()]);
   }
 
@@ -298,6 +293,14 @@ export default function KeywordWorkspacePage() {
             {isReclustering ? "Berechne..." : "Cluster neu berechnen"}
           </Button>
           <Button
+            variant={showDrawer ? "default" : "outline"}
+            onClick={() => setShowDrawer((prev) => !prev)}
+            className="gap-2"
+          >
+            <Edit3 className="h-4 w-4" />
+            Keywords
+          </Button>
+          <Button
             variant="outline"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
@@ -319,44 +322,6 @@ export default function KeywordWorkspacePage() {
           />
         </div>
 
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-[220px] flex-1">
-            <Label>Keyword hinzufügen</Label>
-            <Input
-              value={newKeyword}
-              onChange={(e) => setNewKeyword(e.target.value)}
-              placeholder="neues keyword"
-            />
-          </div>
-          <div className="w-[140px]">
-            <Label>Monatl. Demand</Label>
-            <Input
-              type="number"
-              min={0}
-              value={newKeywordDemand}
-              onChange={(e) => setNewKeywordDemand(e.target.value)}
-              placeholder="optional"
-            />
-          </div>
-          <div className="w-[220px]">
-            <Label>Ziel-Cluster</Label>
-            <Select value={addToClusterId} onValueChange={setAddToClusterId}>
-              <SelectTrigger>
-                <SelectValue placeholder="optional" />
-              </SelectTrigger>
-              <SelectContent>
-                {clustersForSelect.map((cluster) => (
-                  <SelectItem key={cluster.id} value={cluster.id}>
-                    {cluster.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button onClick={addKeyword} disabled={!newKeyword.trim()}>
-            Hinzufügen
-          </Button>
-        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-[1fr_340px]">
@@ -366,6 +331,10 @@ export default function KeywordWorkspacePage() {
             <Button variant={focusOnly ? "default" : "outline"} onClick={() => setFocusOnly((prev) => !prev)}>
               {focusOnly ? "Alle anzeigen" : "Nur Fokus"}
             </Button>
+            <Button variant={focusPickMode ? "default" : "outline"} onClick={toggleFocusPick} className="gap-2">
+              {focusPickMode ? <Check className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {focusPickMode ? "Fertig" : "Fokus wählen"}
+            </Button>
             <Badge variant="secondary">Fokus: {focusIds.length}</Badge>
           </div>
 
@@ -373,8 +342,16 @@ export default function KeywordWorkspacePage() {
             {visibleCards.map((card) => (
               <Card
                 key={card.id}
-                className={`cursor-pointer ${selectedCluster === card.id ? "border-primary" : ""}`}
-                onClick={() => setSelectedCluster(card.id)}
+                className={`cursor-pointer ${
+                  focusPickMode && !tempFocusIds.includes(card.id) ? "border border-dashed border-primary/60" : ""
+                } ${selectedCluster === card.id && !focusPickMode ? "border-primary" : ""}`}
+                onClick={() => {
+                  if (focusPickMode) {
+                    handlePickToggle(card.id);
+                    return;
+                  }
+                  setSelectedCluster(card.id);
+                }}
               >
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between gap-2">
@@ -384,14 +361,6 @@ export default function KeywordWorkspacePage() {
                   <p className="text-sm text-muted-foreground">Demand {Math.round(card.totalDemand)}</p>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Checkbox
-                      checked={focusIds.includes(card.id)}
-                      onCheckedChange={() => toggleFocus(card.id)}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    Fokus
-                  </label>
                   <div className="space-y-1 text-xs text-muted-foreground">
                     {card.topKeywords?.map((keyword) => (
                       <div key={keyword.keywordId} className="truncate">
@@ -412,42 +381,94 @@ export default function KeywordWorkspacePage() {
 
         <Card className="h-[80vh]">
           <CardHeader>
-            <CardTitle>Keyword Drawer</CardTitle>
+            <CardTitle>{showDrawer ? "Keyword Drawer" : "Cluster Details"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Input
-              placeholder="Keywords suchen"
-              value={keywordSearch}
-              onChange={(e) => setKeywordSearch(e.target.value)}
-            />
-            <ScrollArea className="h-[60vh] pr-2">
-              <div className="space-y-3">
-                {keywords.map((keyword) => (
-                  <div key={keyword.id} className="rounded border p-2 text-sm">
-                    <div className="font-medium">{keyword.kwRaw}</div>
-                    <div className="text-xs text-muted-foreground">Demand {Math.round(keyword.demandMonthly)}</div>
-                    <div className="mt-2 space-y-1">
-                      <Label className="text-xs">Verschieben nach</Label>
-                      <Select onValueChange={(value) => moveKeyword(keyword.id, value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Cluster wählen" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {clustersForSelect.map((cluster) => (
-                            <SelectItem key={cluster.id} value={cluster.id}>
-                              {cluster.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+            {showDrawer ? (
+              <>
+                <Input
+                  placeholder="Keywords suchen"
+                  value={keywordSearch}
+                  onChange={(e) => setKeywordSearch(e.target.value)}
+                />
+                <ScrollArea className="h-[60vh] pr-2">
+                  <div className="space-y-3">
+                    {keywords.map((keyword) => (
+                      <div key={keyword.id} className="rounded border p-2 text-sm">
+                        <div className="font-medium">{keyword.kwRaw}</div>
+                        <div className="text-xs text-muted-foreground">Demand {Math.round(keyword.demandMonthly)}</div>
+                        <div className="mt-2 space-y-1">
+                          <Label className="text-xs">Verschieben nach</Label>
+                          <Select onValueChange={(value) => moveKeyword(keyword.id, value)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Cluster wählen" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {clustersForSelect.map((cluster) => (
+                                <SelectItem key={cluster.id} value={cluster.id}>
+                                  {cluster.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ))}
+                    {!keywords.length && <p className="text-xs text-muted-foreground">Noch keine Keywords geladen.</p>}
                   </div>
-                ))}
-                {!keywords.length && <p className="text-xs text-muted-foreground">Noch keine Keywords geladen.</p>}
-              </div>
-            </ScrollArea>
+                </ScrollArea>
+              </>
+            ) : selectedCluster ? (
+              <ClusterInspector
+                clusterId={selectedCluster}
+                clusters={cards}
+                keywords={keywords}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">Cluster wählen, um Details zu sehen.</p>
+            )}
           </CardContent>
         </Card>
+      </div>
+    </div>
+  );
+}
+
+function ClusterInspector({
+  clusterId,
+  clusters,
+  keywords
+}: {
+  clusterId: string;
+  clusters: ClusterCard[];
+  keywords: KeywordRow[];
+}) {
+  const cluster = clusters.find((c) => c.id === clusterId);
+  if (!cluster) {
+    return <p className="text-sm text-muted-foreground">Cluster nicht gefunden.</p>;
+  }
+  const members = keywords.filter((k) => k.clusterIds.includes(clusterId));
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-base font-semibold">{cluster.label}</h3>
+        <p className="text-sm text-muted-foreground">
+          Demand {Math.round(cluster.totalDemand)} · Keywords {cluster.keywordCount} · Cohesion n/a
+        </p>
+      </div>
+      <div className="space-y-2">
+        <p className="text-sm font-medium">Keywords</p>
+        <ScrollArea className="h-[54vh] pr-2">
+          <div className="space-y-1 text-sm text-muted-foreground">
+            {members.map((m) => (
+              <div key={m.id} className="flex items-center justify-between gap-2">
+                <span className="truncate">{m.kwRaw}</span>
+                <span className="text-xs">{Math.round(m.demandMonthly)}</span>
+              </div>
+            ))}
+            {!members.length && <p className="text-xs">Keine Keywords zugewiesen.</p>}
+          </div>
+        </ScrollArea>
       </div>
     </div>
   );
