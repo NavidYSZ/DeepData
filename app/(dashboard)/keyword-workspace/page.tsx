@@ -71,6 +71,25 @@ async function fetchJson<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function fetchAllKeywords(url: string, pageSize = 500): Promise<KeywordsResponse> {
+  let page = 1;
+  const all: KeywordRow[] = [];
+  let total = 0;
+
+  while (true) {
+    const pageUrl = `${url}${url.includes("?") ? "&" : "?"}page=${page}&pageSize=${pageSize}`;
+    const res = await fetchJson<KeywordsResponse>(pageUrl);
+
+    total = res.total;
+    all.push(...res.items);
+
+    if (all.length >= res.total || res.items.length < pageSize) break;
+    page += 1;
+  }
+
+  return { items: all, total };
+}
+
 export default function KeywordWorkspacePage() {
   const { site } = useSite();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -102,11 +121,13 @@ export default function KeywordWorkspacePage() {
     (url: string) => fetchJson<CardsResponse>(url)
   );
 
+  const keywordUrl = projectId
+    ? `/api/keyword-workspace/projects/${projectId}/keywords${keywordSearch ? `?q=${encodeURIComponent(keywordSearch)}` : ""}`
+    : null;
+
   const { data: keywordData, mutate: mutateKeywords } = useSWR<KeywordsResponse>(
-    projectId
-      ? `/api/keyword-workspace/projects/${projectId}/keywords${keywordSearch ? `?q=${encodeURIComponent(keywordSearch)}` : ""}`
-      : null,
-    (url: string) => fetchJson<KeywordsResponse>(url)
+    keywordUrl,
+    (url: string) => fetchAllKeywords(url, 500)
   );
 
   const cards = cardsData?.items ?? [];
@@ -490,19 +511,19 @@ export default function KeywordWorkspacePage() {
                             checked={focusSelection.includes(card.id)}
                             onCheckedChange={() => toggleSelection(card.id)}
                           />
-                          <button
-                            type="button"
-                            className="text-muted-foreground"
-                            onClick={() => toggleRowExpand(card.id)}
-                          >
-                            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          </button>
                           <div className="flex-1">
                             <div className="font-medium">{card.label}</div>
                             <div className="text-xs text-muted-foreground">
                               Demand {Math.round(card.totalDemand)} · {card.keywordCount} Keywords
                             </div>
                           </div>
+                          <button
+                            type="button"
+                            className="ml-auto text-muted-foreground"
+                            onClick={() => toggleRowExpand(card.id)}
+                          >
+                            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </button>
                         </div>
                         {expanded && (
                           <div className="mt-2 space-y-1 pl-7 text-xs text-muted-foreground">
