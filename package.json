@@ -10,7 +10,7 @@
     "prisma:migrate": "prisma migrate dev",
     "db:init": "sqlite3 data/sqlite.db < prisma/manual-init.sql || true",
     "prisma:generate": "prisma generate",
-    "db:prepare": "mkdir -p /app/data && touch /app/data/sqlite.db && prisma migrate deploy",
+    "db:prepare": "mkdir -p /app/data && touch /app/data/sqlite.db && (prisma migrate deploy || (echo 'Migration failed – resetting DB' && rm -f /app/data/sqlite.db && touch /app/data/sqlite.db && prisma migrate deploy))",
     "postinstall": "prisma generate"
   },
   "dependencies": {
