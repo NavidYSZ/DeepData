@@ -87,6 +87,15 @@ type AiAssignResult = {
   raw?: string;
 };
 
+type AiCard = {
+  id: string;
+  label: string;
+  keywordIds: string[];
+  keywordCount: number;
+  totalDemand: number;
+  topKeywords: TopKeyword[];
+};
+
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
@@ -133,8 +142,7 @@ export default function KeywordWorkspacePage() {
   const [isReclustering, setIsReclustering] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
-  const [aiSuggesting, setAiSuggesting] = useState(false);
-  const [aiAssigning, setAiAssigning] = useState(false);
+  const [aiProcessing, setAiProcessing] = useState(false);
   const [aiSuggestResult, setAiSuggestResult] = useState<AiSuggestResult | null>(null);
   const [aiAssignResult, setAiAssignResult] = useState<AiAssignResult | null>(null);
 
@@ -179,6 +187,69 @@ export default function KeywordWorkspacePage() {
     return map;
   }, [keywords]);
 
+  const aiCards: AiCard[] | null = useMemo(() => {
+    if (!aiSuggestResult) return null;
+
+    const clusterMap = new Map<string, { id: string; name: string; keywordIds: Set<string> }>();
+
+    aiSuggestResult.clusters.forEach((c, idx) => {
+      clusterMap.set(c.name, { id: `ai-${idx}-${c.name}`, name: c.name, keywordIds: new Set(c.keywordIds) });
+    });
+
+    if (aiAssignResult) {
+      aiAssignResult.assignments.forEach(({ keywordId, clusterName }) => {
+        const entry =
+          clusterMap.get(clusterName) ??
+          (() => {
+            const created = { id: `ai-extra-${clusterMap.size}-${clusterName}`, name: clusterName, keywordIds: new Set<string>() };
+            clusterMap.set(clusterName, created);
+            return created;
+          })();
+        entry.keywordIds.add(keywordId);
+      });
+
+      aiAssignResult.newClusters.forEach((c, idx) => {
+        clusterMap.set(c.name, {
+          id: `ai-new-${idx}-${c.name}`,
+          name: c.name,
+          keywordIds: new Set(c.keywordIds)
+        });
+      });
+    }
+
+    const cards: AiCard[] = [];
+    clusterMap.forEach((value) => {
+      const members = Array.from(value.keywordIds)
+        .map((id) => keywordById.get(id))
+        .filter(Boolean) as KeywordRow[];
+      const totalDemand = members.reduce((sum, m) => sum + (m.demandMonthly ?? 0), 0);
+      const topKeywords = members
+        .slice()
+        .sort((a, b) => (b.demandMonthly ?? 0) - (a.demandMonthly ?? 0))
+        .slice(0, 5)
+        .map((m) => ({ keywordId: m.id, kwRaw: m.kwRaw, demandMonthly: m.demandMonthly }));
+
+      cards.push({
+        id: value.id,
+        label: value.name,
+        keywordIds: Array.from(value.keywordIds),
+        keywordCount: value.keywordIds.size,
+        totalDemand,
+        topKeywords
+      });
+    });
+
+    return cards.sort((a, b) => b.totalDemand - a.totalDemand);
+  }, [aiSuggestResult, aiAssignResult, keywordById]);
+
+  const showingAi = !!aiCards && aiCards.length > 0;
+
+  useEffect(() => {
+    if (!showingAi || !aiCards?.length) return;
+    const exists = aiCards.some((c) => c.id === selectedCluster);
+    if (!exists) setSelectedCluster(aiCards[0].id);
+  }, [showingAi, aiCards, selectedCluster]);
+
   useEffect(() => {
     if (!projectId) return;
     const raw = localStorage.getItem(`kw-focus-${projectId}`);
@@ -201,18 +272,29 @@ export default function KeywordWorkspacePage() {
 
   const filteredCards = useMemo(() => {
     const term = search.trim().toLowerCase();
+    if (showingAi && aiCards) {
+      if (!term) return aiCards;
+      return aiCards.filter((card) => {
+        if (card.label.toLowerCase().includes(term)) return true;
+        return card.keywordIds
+          .map((id) => keywordById.get(id))
+          .filter(Boolean)
+          .some((k) => k!.kwRaw.toLowerCase().includes(term));
+      });
+    }
     if (!term) return cards;
     return cards.filter((card) => {
       if (card.label.toLowerCase().includes(term)) return true;
       const kws = keywordMapByCluster.get(card.id) ?? [];
       return kws.some((k) => k.kwRaw.toLowerCase().includes(term));
     });
-  }, [cards, keywordMapByCluster, search]);
+  }, [cards, keywordMapByCluster, search, showingAi, aiCards, keywordById]);
 
   const visibleCards = useMemo(() => {
+    if (showingAi && aiCards) return aiCards;
     const base = focusOnly ? filteredCards.filter((c) => focusIds.includes(c.id)) : filteredCards;
     return base;
-  }, [filteredCards, focusIds, focusOnly]);
+  }, [filteredCards, focusIds, focusOnly, showingAi, aiCards]);
 
   const clustersForSelect: ClusterOption[] = useMemo(
     () => cards.map((card) => ({ id: card.id, label: card.label })),
@@ -257,50 +339,35 @@ export default function KeywordWorkspacePage() {
     });
   }
 
-  async function runAiSuggest() {
+  async function runAiFull() {
     if (!projectId) return;
+    setAiProcessing(true);
+    setAiSuggestResult(null);
     setAiAssignResult(null);
-    setAiSuggesting(true);
     try {
-      const res = await fetch(`/api/keyword-workspace/projects/${projectId}/ai/suggest`, { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.message ?? "AI-Vorschlag fehlgeschlagen");
-      }
-      setAiSuggestResult(data as AiSuggestResult);
-      toast.success("AI-Vorschlag erhalten");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "AI-Vorschlag fehlgeschlagen";
-      toast.error(msg);
-    } finally {
-      setAiSuggesting(false);
-    }
-  }
+      const suggestRes = await fetch(`/api/keyword-workspace/projects/${projectId}/ai/suggest`, { method: "POST" });
+      const suggestData = await suggestRes.json().catch(() => ({}));
+      if (!suggestRes.ok) throw new Error(suggestData?.message ?? "AI-Vorschlag fehlgeschlagen");
+      setAiSuggestResult(suggestData as AiSuggestResult);
 
-  async function runAiAssign() {
-    if (!projectId || !aiSuggestResult) {
-      toast.error("Erst AI-Vorschlag laden.");
-      return;
-    }
-    setAiAssigning(true);
-    try {
-      const res = await fetch(`/api/keyword-workspace/projects/${projectId}/ai/assign`, {
+      const assignRes = await fetch(`/api/keyword-workspace/projects/${projectId}/ai/assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          clusters: aiSuggestResult.clusters,
-          leftoverKeywordIds: aiSuggestResult.leftoverKeywordIds
+          clusters: (suggestData as AiSuggestResult).clusters,
+          leftoverKeywordIds: (suggestData as AiSuggestResult).leftoverKeywordIds
         })
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message ?? "AI-Mapping fehlgeschlagen");
-      setAiAssignResult(data as AiAssignResult);
-      toast.success("AI-Mapping fertig");
+      const assignData = await assignRes.json().catch(() => ({}));
+      if (!assignRes.ok) throw new Error(assignData?.message ?? "AI-Mapping fehlgeschlagen");
+      setAiAssignResult(assignData as AiAssignResult);
+
+      toast.success("AI-Clustering abgeschlossen");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "AI-Mapping fehlgeschlagen";
+      const msg = e instanceof Error ? e.message : "AI-Flow fehlgeschlagen";
       toast.error(msg);
     } finally {
-      setAiAssigning(false);
+      setAiProcessing(false);
     }
   }
 
@@ -427,11 +494,8 @@ export default function KeywordWorkspacePage() {
           <Button variant="outline" onClick={rebuildClusters} disabled={isReclustering}>
             {isReclustering ? "Berechne..." : "Cluster neu berechnen"}
           </Button>
-          <Button variant="outline" onClick={runAiSuggest} disabled={aiSuggesting || !projectId}>
-            {aiSuggesting ? "AI..." : "AI Vorschlag"}
-          </Button>
-          <Button variant="outline" onClick={runAiAssign} disabled={aiAssigning || !aiSuggestResult}>
-            {aiAssigning ? "Mappt..." : "Rest mappen"}
+          <Button variant="outline" onClick={runAiFull} disabled={aiProcessing || !projectId}>
+            {aiProcessing ? "AI..." : "AI Clustern"}
           </Button>
           <Button
             variant={showDrawer ? "default" : "outline"}
@@ -486,35 +550,35 @@ export default function KeywordWorkspacePage() {
               className={`cursor-pointer ${selectedCluster === card.id ? "border-primary" : ""}`}
               onClick={() => setSelectedCluster(card.id)}
             >
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between gap-2">
-                    <span className="truncate">{card.label}</span>
-                    <span className="text-xs text-muted-foreground">{card.keywordCount} KW</span>
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">Demand {Math.round(card.totalDemand)}</p>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="space-y-1 text-xs text-muted-foreground">
-                    {card.topKeywords?.map((keyword) => (
-                      <div key={keyword.keywordId} className="truncate">
-                        {keyword.kwRaw} ({Math.round(keyword.demandMonthly)})
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-            {!visibleCards.length && (
-              <p className="text-sm text-muted-foreground">
-                Keine Cluster vorhanden. Lade zuerst GSC-Daten oder optional einen Upload.
-              </p>
-            )}
-          </div>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between gap-2">
+                  <span className="truncate">{card.label}</span>
+                  <span className="text-xs text-muted-foreground">{card.keywordCount} KW</span>
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">Demand {Math.round(card.totalDemand)}</p>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  {card.topKeywords?.map((keyword) => (
+                    <div key={keyword.keywordId} className="truncate">
+                      {keyword.kwRaw} ({Math.round(keyword.demandMonthly)})
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+          {!visibleCards.length && (
+            <p className="text-sm text-muted-foreground">
+              {showingAi ? "Keine AI-Cluster vorhanden." : "Keine Cluster vorhanden. Lade zuerst GSC-Daten oder optional einen Upload."}
+            </p>
+          )}
+        </div>
         </div>
 
         <Card className="h-[80vh]">
           <CardHeader>
-            <CardTitle>{showDrawer ? "Keyword Drawer" : "Cluster Details"}</CardTitle>
+            <CardTitle>{showDrawer ? "Keyword Drawer" : showingAi ? "AI Cluster Details" : "Cluster Details"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {showDrawer ? (
@@ -552,119 +616,17 @@ export default function KeywordWorkspacePage() {
                 </ScrollArea>
               </>
             ) : selectedCluster ? (
-              <ClusterInspector
-                clusterId={selectedCluster}
-                clusters={cards}
-                keywords={keywords}
-              />
+              showingAi && aiCards ? (
+                <AiClusterInspector clusterId={selectedCluster} clusters={aiCards} keywordById={keywordById} />
+              ) : (
+                <ClusterInspector clusterId={selectedCluster} clusters={cards} keywords={keywords} />
+              )
             ) : (
               <p className="text-sm text-muted-foreground">Cluster wählen, um Details zu sehen.</p>
             )}
           </CardContent>
         </Card>
       </div>
-
-      {(aiSuggestResult || aiAssignResult) && (
-        <Card>
-          <CardHeader>
-            <CardTitle>AI-Clustering Vorschläge</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {aiSuggestResult?.model ?? aiAssignResult?.model ?? "Model n/a"} ·{" "}
-              {aiSuggestResult?.durationMs || aiAssignResult?.durationMs
-                ? `${Math.round((aiSuggestResult?.durationMs ?? aiAssignResult?.durationMs ?? 0) / 100) / 10}s`
-                : "Laufzeit n/a"}
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {aiSuggestResult && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm font-medium">
-                  <span>Vorschlag</span>
-                  <span className="text-muted-foreground">
-                    {aiSuggestResult.clusters.length} Cluster · {aiSuggestResult.leftoverKeywordIds.length} Leftover
-                  </span>
-                </div>
-                <ScrollArea className="h-[260px] pr-2">
-                  <div className="space-y-2">
-                    {aiSuggestResult.clusters.map((c, idx) => {
-                      const sample = c.keywordIds.slice(0, 5).map((id) => keywordById.get(id)?.kwRaw ?? id);
-                      return (
-                        <div key={`${c.name}-${idx}`} className="rounded border p-2 text-sm">
-                          <div className="flex items-center justify-between gap-2 font-medium">
-                            <span className="truncate">{c.name}</span>
-                            <span className="text-xs text-muted-foreground">{c.keywordIds.length} KW</span>
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Beispiele: {sample.length ? sample.join(", ") : "keine"}
-                          </div>
-                          {c.note && <div className="mt-1 text-xs">{c.note}</div>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-                {aiSuggestResult.leftoverKeywordIds.length > 0 && (
-                  <div className="text-xs text-muted-foreground">
-                    Leftover ({aiSuggestResult.leftoverKeywordIds.length}):{" "}
-                    {aiSuggestResult.leftoverKeywordIds
-                      .slice(0, 8)
-                      .map((id) => keywordById.get(id)?.kwRaw ?? id)
-                      .join(", ")}
-                    {aiSuggestResult.leftoverKeywordIds.length > 8 && " …"}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {aiAssignResult && (
-              <div className="space-y-2 border-t pt-3">
-                <div className="flex items-center justify-between text-sm font-medium">
-                  <span>Rest gemappt</span>
-                  <span className="text-muted-foreground">
-                    {aiAssignResult.assignments.length} Zuordnungen · {aiAssignResult.newClusters.length} neue Cluster ·{" "}
-                    {aiAssignResult.leftoverKeywordIds.length} übrig
-                  </span>
-                </div>
-                <ScrollArea className="h-[220px] pr-2">
-                  <div className="space-y-2">
-                    {aiAssignResult.assignments.slice(0, 20).map((a, idx) => (
-                      <div key={`${a.keywordId}-${idx}`} className="flex items-center justify-between text-xs rounded border p-2">
-                        <span className="truncate">{keywordById.get(a.keywordId)?.kwRaw ?? a.keywordId}</span>
-                        <span className="text-muted-foreground">{a.clusterName}</span>
-                      </div>
-                    ))}
-                    {aiAssignResult.assignments.length > 20 && (
-                      <div className="text-xs text-muted-foreground">… weitere {aiAssignResult.assignments.length - 20}</div>
-                    )}
-                    {aiAssignResult.newClusters.map((c, idx) => (
-                      <div key={`${c.name}-${idx}`} className="rounded border p-2 text-xs">
-                        <div className="flex items-center justify-between font-medium">
-                          <span>{c.name}</span>
-                          <span className="text-muted-foreground">{c.keywordIds.length} KW</span>
-                        </div>
-                        <div className="text-muted-foreground">
-                          Beispiele: {c.keywordIds.slice(0, 4).map((id) => keywordById.get(id)?.kwRaw ?? id).join(", ")}
-                          {c.keywordIds.length > 4 && " …"}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-                {aiAssignResult.leftoverKeywordIds.length > 0 && (
-                  <div className="text-xs text-muted-foreground">
-                    Nicht zugeordnet ({aiAssignResult.leftoverKeywordIds.length}):{" "}
-                    {aiAssignResult.leftoverKeywordIds
-                      .slice(0, 8)
-                      .map((id) => keywordById.get(id)?.kwRaw ?? id)
-                      .join(", ")}
-                    {aiAssignResult.leftoverKeywordIds.length > 8 && " …"}
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       <Sheet open={showFocusSheet} onOpenChange={setShowFocusSheet}>
         <SheetContent side="right" className="sm:max-w-md">
@@ -772,6 +734,44 @@ function ClusterInspector({
         <h3 className="text-base font-semibold">{cluster.label}</h3>
         <p className="text-sm text-muted-foreground">
           Demand {Math.round(cluster.totalDemand)} · Keywords {cluster.keywordCount} · Cohesion n/a
+        </p>
+      </div>
+      <div className="space-y-2">
+        <p className="text-sm font-medium">Keywords</p>
+        <ScrollArea className="h-[54vh] pr-2">
+          <div className="space-y-1 text-sm text-muted-foreground">
+            {members.map((m) => (
+              <div key={m.id} className="flex items-center justify-between gap-2">
+                <span className="truncate">{m.kwRaw}</span>
+                <span className="text-xs">{Math.round(m.demandMonthly)}</span>
+              </div>
+            ))}
+            {!members.length && <p className="text-xs">Keine Keywords zugewiesen.</p>}
+          </div>
+        </ScrollArea>
+      </div>
+    </div>
+  );
+}
+
+function AiClusterInspector({
+  clusterId,
+  clusters,
+  keywordById
+}: {
+  clusterId: string;
+  clusters: AiCard[];
+  keywordById: Map<string, KeywordRow>;
+}) {
+  const cluster = clusters.find((c) => c.id === clusterId);
+  if (!cluster) return <p className="text-sm text-muted-foreground">AI-Cluster nicht gefunden.</p>;
+  const members = cluster.keywordIds.map((id) => keywordById.get(id)).filter(Boolean) as KeywordRow[];
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-base font-semibold">{cluster.label}</h3>
+        <p className="text-sm text-muted-foreground">
+          Demand {Math.round(cluster.totalDemand)} · Keywords {cluster.keywordCount}
         </p>
       </div>
       <div className="space-y-2">
