@@ -62,6 +62,31 @@ type ClusterOption = {
   label: string;
 };
 
+type AiSuggestedCluster = {
+  name: string;
+  keywordIds: string[];
+  note?: string;
+};
+
+type AiSuggestResult = {
+  clusters: AiSuggestedCluster[];
+  leftoverKeywordIds: string[];
+  rationale?: string;
+  model?: string;
+  durationMs?: number;
+  raw?: string;
+};
+
+type AiAssignResult = {
+  assignments: { keywordId: string; clusterName: string }[];
+  newClusters: { name: string; keywordIds: string[] }[];
+  leftoverKeywordIds: string[];
+  rationale?: string;
+  model?: string;
+  durationMs?: number;
+  raw?: string;
+};
+
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
@@ -108,6 +133,10 @@ export default function KeywordWorkspacePage() {
   const [isReclustering, setIsReclustering] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
+  const [aiSuggesting, setAiSuggesting] = useState(false);
+  const [aiAssigning, setAiAssigning] = useState(false);
+  const [aiSuggestResult, setAiSuggestResult] = useState<AiSuggestResult | null>(null);
+  const [aiAssignResult, setAiAssignResult] = useState<AiAssignResult | null>(null);
 
   const { data: workspace, isLoading: workspaceLoading } = useSWR<WorkspaceResponse>(
     site ? `/api/keyword-workspace/current?siteUrl=${encodeURIComponent(site)}` : null,
@@ -141,6 +170,12 @@ export default function KeywordWorkspacePage() {
         map.set(cid, list);
       });
     });
+    return map;
+  }, [keywords]);
+
+  const keywordById = useMemo(() => {
+    const map = new Map<string, KeywordRow>();
+    keywords.forEach((k) => map.set(k.id, k));
     return map;
   }, [keywords]);
 
@@ -220,6 +255,53 @@ export default function KeywordWorkspacePage() {
       else next.add(clusterId);
       return next;
     });
+  }
+
+  async function runAiSuggest() {
+    if (!projectId) return;
+    setAiAssignResult(null);
+    setAiSuggesting(true);
+    try {
+      const res = await fetch(`/api/keyword-workspace/projects/${projectId}/ai/suggest`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.message ?? "AI-Vorschlag fehlgeschlagen");
+      }
+      setAiSuggestResult(data as AiSuggestResult);
+      toast.success("AI-Vorschlag erhalten");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "AI-Vorschlag fehlgeschlagen";
+      toast.error(msg);
+    } finally {
+      setAiSuggesting(false);
+    }
+  }
+
+  async function runAiAssign() {
+    if (!projectId || !aiSuggestResult) {
+      toast.error("Erst AI-Vorschlag laden.");
+      return;
+    }
+    setAiAssigning(true);
+    try {
+      const res = await fetch(`/api/keyword-workspace/projects/${projectId}/ai/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clusters: aiSuggestResult.clusters,
+          leftoverKeywordIds: aiSuggestResult.leftoverKeywordIds
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message ?? "AI-Mapping fehlgeschlagen");
+      setAiAssignResult(data as AiAssignResult);
+      toast.success("AI-Mapping fertig");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "AI-Mapping fehlgeschlagen";
+      toast.error(msg);
+    } finally {
+      setAiAssigning(false);
+    }
   }
 
   async function refreshFromGsc() {
@@ -344,6 +426,12 @@ export default function KeywordWorkspacePage() {
           </Button>
           <Button variant="outline" onClick={rebuildClusters} disabled={isReclustering}>
             {isReclustering ? "Berechne..." : "Cluster neu berechnen"}
+          </Button>
+          <Button variant="outline" onClick={runAiSuggest} disabled={aiSuggesting || !projectId}>
+            {aiSuggesting ? "AI..." : "AI Vorschlag"}
+          </Button>
+          <Button variant="outline" onClick={runAiAssign} disabled={aiAssigning || !aiSuggestResult}>
+            {aiAssigning ? "Mappt..." : "Rest mappen"}
           </Button>
           <Button
             variant={showDrawer ? "default" : "outline"}
@@ -475,6 +563,109 @@ export default function KeywordWorkspacePage() {
           </CardContent>
         </Card>
       </div>
+
+      {(aiSuggestResult || aiAssignResult) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>AI-Clustering Vorschläge</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {aiSuggestResult?.model ?? aiAssignResult?.model ?? "Model n/a"} ·{" "}
+              {aiSuggestResult?.durationMs || aiAssignResult?.durationMs
+                ? `${Math.round((aiSuggestResult?.durationMs ?? aiAssignResult?.durationMs ?? 0) / 100) / 10}s`
+                : "Laufzeit n/a"}
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {aiSuggestResult && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm font-medium">
+                  <span>Vorschlag</span>
+                  <span className="text-muted-foreground">
+                    {aiSuggestResult.clusters.length} Cluster · {aiSuggestResult.leftoverKeywordIds.length} Leftover
+                  </span>
+                </div>
+                <ScrollArea className="h-[260px] pr-2">
+                  <div className="space-y-2">
+                    {aiSuggestResult.clusters.map((c, idx) => {
+                      const sample = c.keywordIds.slice(0, 5).map((id) => keywordById.get(id)?.kwRaw ?? id);
+                      return (
+                        <div key={`${c.name}-${idx}`} className="rounded border p-2 text-sm">
+                          <div className="flex items-center justify-between gap-2 font-medium">
+                            <span className="truncate">{c.name}</span>
+                            <span className="text-xs text-muted-foreground">{c.keywordIds.length} KW</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Beispiele: {sample.length ? sample.join(", ") : "keine"}
+                          </div>
+                          {c.note && <div className="mt-1 text-xs">{c.note}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+                {aiSuggestResult.leftoverKeywordIds.length > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    Leftover ({aiSuggestResult.leftoverKeywordIds.length}):{" "}
+                    {aiSuggestResult.leftoverKeywordIds
+                      .slice(0, 8)
+                      .map((id) => keywordById.get(id)?.kwRaw ?? id)
+                      .join(", ")}
+                    {aiSuggestResult.leftoverKeywordIds.length > 8 && " …"}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {aiAssignResult && (
+              <div className="space-y-2 border-t pt-3">
+                <div className="flex items-center justify-between text-sm font-medium">
+                  <span>Rest gemappt</span>
+                  <span className="text-muted-foreground">
+                    {aiAssignResult.assignments.length} Zuordnungen · {aiAssignResult.newClusters.length} neue Cluster ·{" "}
+                    {aiAssignResult.leftoverKeywordIds.length} übrig
+                  </span>
+                </div>
+                <ScrollArea className="h-[220px] pr-2">
+                  <div className="space-y-2">
+                    {aiAssignResult.assignments.slice(0, 20).map((a, idx) => (
+                      <div key={`${a.keywordId}-${idx}`} className="flex items-center justify-between text-xs rounded border p-2">
+                        <span className="truncate">{keywordById.get(a.keywordId)?.kwRaw ?? a.keywordId}</span>
+                        <span className="text-muted-foreground">{a.clusterName}</span>
+                      </div>
+                    ))}
+                    {aiAssignResult.assignments.length > 20 && (
+                      <div className="text-xs text-muted-foreground">… weitere {aiAssignResult.assignments.length - 20}</div>
+                    )}
+                    {aiAssignResult.newClusters.map((c, idx) => (
+                      <div key={`${c.name}-${idx}`} className="rounded border p-2 text-xs">
+                        <div className="flex items-center justify-between font-medium">
+                          <span>{c.name}</span>
+                          <span className="text-muted-foreground">{c.keywordIds.length} KW</span>
+                        </div>
+                        <div className="text-muted-foreground">
+                          Beispiele: {c.keywordIds.slice(0, 4).map((id) => keywordById.get(id)?.kwRaw ?? id).join(", ")}
+                          {c.keywordIds.length > 4 && " …"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+                {aiAssignResult.leftoverKeywordIds.length > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    Nicht zugeordnet ({aiAssignResult.leftoverKeywordIds.length}):{" "}
+                    {aiAssignResult.leftoverKeywordIds
+                      .slice(0, 8)
+                      .map((id) => keywordById.get(id)?.kwRaw ?? id)
+                      .join(", ")}
+                    {aiAssignResult.leftoverKeywordIds.length > 8 && " …"}
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Sheet open={showFocusSheet} onOpenChange={setShowFocusSheet}>
         <SheetContent side="right" className="sm:max-w-md">
           <SheetHeader>
