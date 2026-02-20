@@ -34,6 +34,7 @@ const fetcher = async (url: string) => {
 
 interface AccountMenuProps {
   className?: string;
+  compact?: boolean;
 }
 
 function truncateLabel(value: string, maxLength = 28) {
@@ -41,7 +42,7 @@ function truncateLabel(value: string, maxLength = 28) {
   return `${value.slice(0, maxLength - 3)}...`;
 }
 
-export function AccountMenu({ className }: AccountMenuProps) {
+export function AccountMenu({ className, compact = false }: AccountMenuProps) {
   const { status } = useSession();
   const { data, mutate } = useSWR<AccountsResponse>(status === "authenticated" ? "/api/accounts" : null, fetcher);
   const [selecting, setSelecting] = useState<string | null>(null);
@@ -69,7 +70,13 @@ export function AccountMenu({ className }: AccountMenuProps) {
     <div className={cn(className)}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="w-full min-w-0 justify-between overflow-hidden">
+          <Button
+            variant="outline"
+            className={cn(
+              "min-w-0 justify-between overflow-hidden",
+              compact ? "h-9 w-[220px] max-w-[70vw]" : "w-full"
+            )}
+          >
             <span className="flex min-w-0 items-center gap-2">
               <Avatar className="h-6 w-6 shrink-0">
                 <AvatarFallback>G</AvatarFallback>

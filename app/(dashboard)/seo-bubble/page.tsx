@@ -368,7 +368,7 @@ export default function SeoBubblePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="SEO Bubble"
+        title="Position vs CTR"
         description="CTR vs. Position als Bubble-Chart, inkl. Quadranten-Analyse."
       />
 
@@ -477,7 +477,7 @@ export default function SeoBubblePage() {
       </FilterBar>
 
       {fullscreen && (
-        <FullscreenOverlay title="SEO Bubble: Position vs CTR" onClose={() => setFullscreen(false)}>
+        <FullscreenOverlay title="Position vs CTR" onClose={() => setFullscreen(false)}>
           {renderChart("h-[75vh] min-h-[500px]")}
         </FullscreenOverlay>
       )}
@@ -499,7 +499,7 @@ export default function SeoBubblePage() {
 
       <Card>
         <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <CardTitle>SEO Bubble: Position vs CTR</CardTitle>
+          <CardTitle>Position vs CTR</CardTitle>
           <div className="flex items-center gap-2 flex-wrap">
             {[
               { key: "all", label: "Alle" },

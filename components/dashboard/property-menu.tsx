@@ -31,7 +31,13 @@ const fetcher = async (url: string) => {
   return json as SitesResponse;
 };
 
-export function PropertyMenu({ className }: { className?: string } = {}) {
+export function PropertyMenu({
+  className,
+  variant = "stacked"
+}: {
+  className?: string;
+  variant?: "stacked" | "inline";
+} = {}) {
   const { site, setSite } = useSite();
   const { data, error, isLoading } = useSWR<SitesResponse>("/api/gsc/sites", fetcher);
 
@@ -52,8 +58,12 @@ export function PropertyMenu({ className }: { className?: string } = {}) {
   const scopeError = (error as any)?.code === "insufficient_scope" || (error as any)?.status === 403;
 
   return (
-    <div className={cn("space-y-1", className)}>
-      <p className="text-xs font-semibold text-muted-foreground">Property</p>
+    <div className={cn(variant === "inline" ? "space-y-0" : "space-y-1", className)}>
+      {variant === "stacked" ? (
+        <p className="text-xs font-semibold text-muted-foreground">Property</p>
+      ) : (
+        <p className="sr-only">Property</p>
+      )}
       {isLoading ? (
         <Skeleton className="h-9 w-full" />
       ) : error ? (
@@ -73,7 +83,7 @@ export function PropertyMenu({ className }: { className?: string } = {}) {
         </div>
       ) : (
         <Select value={site ?? ""} onValueChange={(val) => setSite(val || null)}>
-          <SelectTrigger>
+          <SelectTrigger className={cn(variant === "inline" ? "h-9 w-full md:max-w-[480px]" : "")}>
             <SelectValue placeholder="Property wählen" />
           </SelectTrigger>
           <SelectContent>

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import * as Collapsible from "@radix-ui/react-collapsible";
-import { PanelLeft, PanelRight } from "lucide-react";
+import { Menu, PanelLeft, PanelRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -106,21 +106,25 @@ SidebarInset.displayName = "SidebarInset";
 
 const SidebarTrigger = React.forwardRef<HTMLButtonElement, React.ComponentPropsWithoutRef<typeof Button>>(
   ({ className, onClick, ...props }, ref) => {
-    const { setOpen } = useSidebar();
+    const { open, setOpen, isMobile, toggleCollapsed } = useSidebar();
     return (
       <Button
         ref={ref}
         variant="ghost"
         size="icon"
-        className={cn("md:hidden", className)}
+        className={cn(className)}
         onClick={(event) => {
           onClick?.(event);
-          setOpen(true);
+          if (isMobile) {
+            setOpen(!open);
+            return;
+          }
+          toggleCollapsed();
         }}
         {...props}
       >
-        <PanelLeft className="h-5 w-5" />
-        <span className="sr-only">Sidebar öffnen</span>
+        <Menu className="h-5 w-5" />
+        <span className="sr-only">Navigation umschalten</span>
       </Button>
     );
   }

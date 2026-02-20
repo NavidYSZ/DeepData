@@ -9,14 +9,10 @@ import {
   Sparkles,
   GitMerge,
   MessageSquare,
-  RefreshCcw,
   Settings,
   Network
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { AccountMenu } from "@/components/dashboard/account-menu";
-import { PropertyMenu } from "@/components/dashboard/property-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -24,11 +20,9 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarRail
+  SidebarMenuItem
 } from "@/components/ui/sidebar";
 
 const primaryItems = [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }];
@@ -45,7 +39,7 @@ const navGroups = [
   {
     label: "Insights",
     items: [
-      { href: "/seo-bubble", label: "SEO Bubble", icon: Sparkles },
+      { href: "/seo-bubble", label: "Position vs CTR", icon: Sparkles },
       { href: "/kannibalisierung", label: "Kannibalisierung", icon: GitMerge },
       { href: "/chat-agent", label: "Chat Agent", icon: MessageSquare }
     ]
@@ -59,24 +53,6 @@ const navGroups = [
 export function AppSidebar({ pathname }: { pathname: string }) {
   return (
     <Sidebar>
-      <SidebarHeader>
-        <AccountMenu className="group-data-[collapsed=true]:hidden" />
-        <PropertyMenu className="group-data-[collapsed=true]:hidden" />
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full justify-center group-data-[collapsed=true]:hidden"
-          onClick={() => {
-            window.location.href = "/api/auth/google";
-          }}
-        >
-          <RefreshCcw className="h-4 w-4" />
-          <span className="group-data-[collapsed=true]:hidden">Zugriff erneuern</span>
-        </Button>
-        <div className="flex justify-end">
-          <SidebarRail className="hidden md:inline-flex" />
-        </div>
-      </SidebarHeader>
       <SidebarContent>
         <nav className="space-y-4">
           <SidebarGroup>
@@ -107,14 +83,14 @@ export function AppSidebar({ pathname }: { pathname: string }) {
                     const Icon = item.icon;
                     return (
                       <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label}>
-                        <Link href={item.href}>
-                          <Icon className="h-4 w-4 shrink-0" />
-                          <span className="truncate group-data-[collapsed=true]:hidden">{item.label}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
+                        <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label}>
+                          <Link href={item.href}>
+                            <Icon className="h-4 w-4 shrink-0" />
+                            <span className="truncate group-data-[collapsed=true]:hidden">{item.label}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
                   })}
                 </SidebarMenu>
               </SidebarGroupContent>

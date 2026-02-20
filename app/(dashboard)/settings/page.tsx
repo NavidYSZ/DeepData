@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
+import { signOut } from "next-auth/react";
 
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PageHeader, SectionCard } from "@/components/dashboard/page-shell";
+import { Button } from "@/components/ui/button";
 import {
   DEFAULT_CHART_LINE_WIDTH,
   clampChartLineWidth,
@@ -85,6 +87,20 @@ export default function SettingsPage() {
           />
           <p className="text-xs text-muted-foreground">
             Wird lokal im Browser gespeichert.
+          </p>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Session" description="Account und Sitzung verwalten.">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => signOut({ callbackUrl: "/" })}
+          >
+            Logout
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Logout wurde aus dem globalen Header hierhin verschoben.
           </p>
         </div>
       </SectionCard>

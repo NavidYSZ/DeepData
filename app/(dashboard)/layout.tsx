@@ -13,7 +13,7 @@ const pageTitles: Record<string, string> = {
   "/url-tracker": "by Site",
   "/data-explorer": "Data Explorer",
   "/kannibalisierung": "Kannibalisierung",
-  "/seo-bubble": "SEO Bubble",
+  "/seo-bubble": "Position vs CTR",
   "/chat-agent": "Chat Agent",
   "/keyword-workspace": "Clustering",
   "/settings": "Settings",
