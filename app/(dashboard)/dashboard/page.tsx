@@ -13,10 +13,10 @@ import {
 } from "recharts";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSite } from "@/components/dashboard/site-context";
-import { SectionCard } from "@/components/dashboard/page-shell";
+import { PageHeader, SectionCard } from "@/components/dashboard/page-shell";
 import { ErrorState } from "@/components/dashboard/states";
 import { rangeToIso, getLastNDaysRange } from "@/lib/date-range";
 import { cn } from "@/lib/utils";
@@ -71,24 +71,24 @@ const METRIC_META: Record<
   clicks: {
     label: "Klicks insgesamt",
     color: "#4285F4",
-    activeClass: "border-[#4285F4] bg-[#4285F4] text-white",
-    inactiveClass: "border-border bg-card text-foreground",
+    activeClass: "border-[#4285F4]/40 bg-[#4285F4]/10 text-foreground",
+    inactiveClass: "border-border bg-background text-foreground hover:bg-muted/30",
     valueFormatter: (value) => Math.round(value).toLocaleString("de-DE"),
     chartFormatter: (value) => Math.round(value).toLocaleString("de-DE")
   },
   impressions: {
     label: "Impressionen insgesamt",
     color: "#673AB7",
-    activeClass: "border-[#673AB7] bg-[#673AB7] text-white",
-    inactiveClass: "border-border bg-card text-foreground",
+    activeClass: "border-[#673AB7]/40 bg-[#673AB7]/10 text-foreground",
+    inactiveClass: "border-border bg-background text-foreground hover:bg-muted/30",
     valueFormatter: (value) => Math.round(value).toLocaleString("de-DE"),
     chartFormatter: (value) => Math.round(value).toLocaleString("de-DE")
   },
   ctr: {
     label: "Durchschnittliche CTR",
     color: "#0F9D58",
-    activeClass: "border-[#0F9D58] bg-[#0F9D58] text-white",
-    inactiveClass: "border-border bg-card text-foreground",
+    activeClass: "border-[#0F9D58]/40 bg-[#0F9D58]/10 text-foreground",
+    inactiveClass: "border-border bg-background text-foreground hover:bg-muted/30",
     valueFormatter: (value) => `${(value * 100).toFixed(1)} %`,
     chartFormatter: (value) => `${(value * 100).toFixed(2)}%`
   }
@@ -268,34 +268,39 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Leistung</h1>
-        <p className="text-sm text-muted-foreground">Google Search Console Performance</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Leistung"
+        description="Google Search Console Performance"
+      />
 
-      <div className="inline-flex overflow-hidden rounded-md border border-input">
-        {PRESETS.map((preset, idx) => (
-          <button
-            key={preset.days}
-            type="button"
-            onClick={() => setTimePreset(preset.days)}
-            className={cn(
-              "px-3 py-1.5 text-xs font-medium transition-colors",
-              idx > 0 && "border-l border-input",
-              timePreset === preset.days
-                ? "bg-primary text-primary-foreground"
-                : "bg-card hover:bg-accent"
-            )}
-          >
-            {preset.label}
-          </button>
-        ))}
-      </div>
+      <SectionCard contentClassName="py-3">
+        <div className="inline-flex overflow-hidden rounded-md border border-input">
+          {PRESETS.map((preset, idx) => (
+            <button
+              key={preset.days}
+              type="button"
+              onClick={() => setTimePreset(preset.days)}
+              className={cn(
+                "px-3 py-1.5 text-xs font-medium transition-colors",
+                idx > 0 && "border-l border-input",
+                timePreset === preset.days
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-card hover:bg-accent"
+              )}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </SectionCard>
 
       <Card>
-        <CardContent className="space-y-4 p-0">
-          <div className="grid gap-0 border-b md:grid-cols-3">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Performance</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-0">
+          <div className="grid gap-3 md:grid-cols-3">
             {METRIC_ORDER.map((metric) => {
               const meta = METRIC_META[metric];
               const active = metricVisibility[metric];
@@ -307,24 +312,24 @@ export default function DashboardPage() {
                   aria-pressed={active}
                   onClick={() => toggleMetric(metric)}
                   className={cn(
-                    "w-full border-r p-4 text-left transition-colors last:border-r-0",
+                    "w-full rounded-lg border p-4 text-left transition-colors",
                     active ? meta.activeClass : meta.inactiveClass
                   )}
                 >
-                  <div className="flex items-center gap-2 text-xs">
+                  <div className="flex items-center gap-2 text-xs font-medium">
                     <span
                       className={cn(
-                        "inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm border",
+                        "inline-flex h-4 w-4 items-center justify-center rounded border",
                         active
-                          ? "border-white/70 bg-white/20 text-white"
+                          ? "border-current/40 text-current"
                           : "border-muted-foreground/40 text-transparent"
                       )}
                     >
                       <Check className="h-3 w-3" />
                     </span>
-                    <span className={cn(active ? "text-white/90" : "text-muted-foreground")}>{meta.label}</span>
+                    <span className={cn(active ? "text-foreground" : "text-muted-foreground")}>{meta.label}</span>
                   </div>
-                  <div className="mt-2 text-4xl leading-none">
+                  <div className="mt-2 text-3xl font-semibold leading-none tracking-tight">
                     {meta.valueFormatter(value)}
                   </div>
                 </button>
@@ -332,9 +337,9 @@ export default function DashboardPage() {
             })}
           </div>
 
-          <div className="h-[360px] px-3 pb-3 md:px-4 md:pb-4">
+          <div className="h-[360px] rounded-lg border bg-background px-3 pb-3 pt-2 md:px-4 md:pb-4">
             {loading ? (
-              <Skeleton className="h-full w-full" />
+              <Skeleton className="h-full w-full rounded-md" />
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={series} margin={{ top: 20, right: 24, left: 8, bottom: 6 }}>

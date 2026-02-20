@@ -15,6 +15,7 @@ import {
 
 import {
   Sidebar,
+  SidebarHeader,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
@@ -22,8 +23,10 @@ import {
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
-  SidebarMenuItem
+  SidebarMenuItem,
+  SidebarTrigger
 } from "@/components/ui/sidebar";
+import { PropertyMenu } from "@/components/dashboard/property-menu";
 
 const primaryItems = [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }];
 
@@ -53,6 +56,19 @@ const navGroups = [
 export function AppSidebar({ pathname }: { pathname: string }) {
   return (
     <Sidebar>
+      <SidebarHeader className="gap-3">
+        <div className="flex w-full items-center gap-2">
+          <SidebarTrigger className="h-8 w-8 shrink-0" />
+          <span className="truncate text-sm font-semibold tracking-tight group-data-[collapsed=true]:hidden">
+            DeepData
+          </span>
+        </div>
+        <PropertyMenu
+          variant="inline"
+          shape="gsc-pill"
+          className="group-data-[collapsed=true]:hidden"
+        />
+      </SidebarHeader>
       <SidebarContent>
         <nav className="space-y-4">
           <SidebarGroup>

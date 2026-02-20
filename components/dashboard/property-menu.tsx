@@ -33,10 +33,12 @@ const fetcher = async (url: string) => {
 
 export function PropertyMenu({
   className,
-  variant = "stacked"
+  variant = "stacked",
+  shape = "default"
 }: {
   className?: string;
   variant?: "stacked" | "inline";
+  shape?: "default" | "gsc-pill";
 } = {}) {
   const { site, setSite } = useSite();
   const { data, error, isLoading } = useSWR<SitesResponse>("/api/gsc/sites", fetcher);
@@ -56,6 +58,12 @@ export function PropertyMenu({
   const options = (data?.sites || []).map((s) => ({ value: s.siteUrl, label: s.siteUrl }));
 
   const scopeError = (error as any)?.code === "insufficient_scope" || (error as any)?.status === 403;
+
+  const triggerClassName = cn(
+    variant === "inline" ? "h-9 w-full" : "",
+    shape === "gsc-pill" ? "h-10 rounded-full border-input bg-background px-4 text-sm" : "",
+    variant === "inline" && shape !== "gsc-pill" ? "md:max-w-[480px]" : ""
+  );
 
   return (
     <div className={cn(variant === "inline" ? "space-y-0" : "space-y-1", className)}>
@@ -83,7 +91,7 @@ export function PropertyMenu({
         </div>
       ) : (
         <Select value={site ?? ""} onValueChange={(val) => setSite(val || null)}>
-          <SelectTrigger className={cn(variant === "inline" ? "h-9 w-full md:max-w-[480px]" : "")}>
+          <SelectTrigger className={triggerClassName}>
             <SelectValue placeholder="Property wählen" />
           </SelectTrigger>
           <SelectContent>
