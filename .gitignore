@@ -11,5 +11,4 @@ prisma/data/sqlite.db-journal
 **/.DS_Store
 data/agent-files
 pnpm-lock.yaml
-package-lock.json
 yarn.lock
