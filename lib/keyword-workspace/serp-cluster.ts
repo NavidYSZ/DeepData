@@ -1,7 +1,6 @@
 import Graph from "graphology";
 import louvain from "graphology-communities-louvain";
 import { nanoid } from "nanoid";
-import pLimit from "p-limit";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import { prisma } from "@/lib/db";
@@ -37,6 +36,21 @@ type ParentJson = {
 
 const ZYTE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_CONCURRENCY = 5;
+
+function createLimiter(limit: number) {
+  let active = 0;
+  const queue: (() => void)[] = [];
+  return async function <T>(task: () => Promise<T>): Promise<T> {
+    if (active >= limit) await new Promise<void>((resolve) => queue.push(resolve));
+    active += 1;
+    try {
+      return await task();
+    } finally {
+      active -= 1;
+      queue.shift()?.();
+    }
+  };
+}
 
 function normalizeSerpUrl(raw: string): NormalizedUrl | null {
   try {
@@ -270,7 +284,7 @@ export async function runSerpClustering(params: {
   let zyteCached = 0;
 
   try {
-    const limit = pLimit(MAX_CONCURRENCY);
+    const limit = createLimiter(MAX_CONCURRENCY);
     const urlHosts: Record<string, Set<string>> = {};
 
     const tasks = keywords.map((kw) =>
