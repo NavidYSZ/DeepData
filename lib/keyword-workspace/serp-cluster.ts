@@ -423,6 +423,8 @@ export async function runSerpClustering(params: {
         }
       });
     });
+
+    return { runId, counts: { zyteRequested, zyteSucceeded, zyteCached }, parents, subclusters };
   } catch (e) {
     await prisma.serpClusterRun.update({
       where: { id: runId },
@@ -430,8 +432,6 @@ export async function runSerpClustering(params: {
     });
     throw e;
   }
-
-  return { runId, counts: { zyteRequested, zyteSucceeded, zyteCached }, parents, subclusters };
 }
 
 export async function getLatestSerpClusters(projectId: string, minDemand = 5) {
