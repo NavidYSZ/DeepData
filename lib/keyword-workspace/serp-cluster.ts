@@ -17,6 +17,18 @@ type KeywordLite = {
   demandMonthly: number;
 };
 
+type ClusteredSubcluster = {
+  id: string;
+  label: string;
+  keywordIds: string[];
+  members: KeywordLite[];
+  totalDemand: number;
+  keywordCount: number;
+  topDomains: string[];
+  topUrls: string[];
+  overlapScore: number;
+};
+
 type NormalizedUrl = {
   url: string;
   host: string;
@@ -43,6 +55,7 @@ type ParentJson = {
 const ZYTE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_CONCURRENCY = 5;
 const GSC_DAYS = 180;
+const DEFAULT_MODEL = "gpt-4o";
 
 function createLimiter(limit: number) {
   let active = 0;
@@ -71,6 +84,16 @@ function normalizeSerpUrl(raw: string): NormalizedUrl | null {
   } catch {
     return null;
   }
+}
+
+function topFromCounts(map: Map<string, number>, limit = 5) {
+  return Array.from(map.entries())
+    .sort((a, b) => {
+      if (b[1] === a[1]) return a[0].localeCompare(b[0]);
+      return b[1] - a[1];
+    })
+    .slice(0, limit)
+    .map(([key]) => key);
 }
 
 function jaccard(a: Set<string>, b: Set<string>) {
@@ -171,7 +194,12 @@ function buildOverlapGraph(keywords: KeywordLite[], urlHosts: Record<string, Set
   return g;
 }
 
-function clusterGraph(graph: Graph, keywords: KeywordLite[], urlHosts: Record<string, Set<string>>) {
+function clusterGraph(
+  graph: Graph,
+  keywords: KeywordLite[],
+  urlHosts: Record<string, Set<string>>,
+  keywordUrls: Record<string, Set<string>>
+) {
   const communities = louvain(graph, {
     attributes: { weight: "weight" },
     resolution: 1.0,
@@ -210,37 +238,51 @@ function clusterGraph(graph: Graph, keywords: KeywordLite[], urlHosts: Record<st
 
     // top domains
     const domainCounts = new Map<string, number>();
+    const urlCounts = new Map<string, number>();
     memberIds.forEach((id) => {
-      (urlHosts[id] ?? []).forEach((d) => domainCounts.set(d, (domainCounts.get(d) ?? 0) + 1));
+      urlHosts[id]?.forEach((d) => domainCounts.set(d, (domainCounts.get(d) ?? 0) + 1));
+      keywordUrls[id]?.forEach((u) => urlCounts.set(u, (urlCounts.get(u) ?? 0) + 1));
     });
-    const topDomains = Array.from(domainCounts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([host]) => host);
+
+    let pairCount = 0;
+    let overlapSum = 0;
+    for (let i = 0; i < memberIds.length; i++) {
+      for (let j = i + 1; j < memberIds.length; j++) {
+        const a = urlHosts[memberIds[i]] ?? new Set<string>();
+        const b = urlHosts[memberIds[j]] ?? new Set<string>();
+        overlapSum += jaccard(a, b);
+        pairCount += 1;
+      }
+    }
 
     return {
       id: communityId,
       label: labelKw.kwRaw,
       keywordIds: memberIds,
+      members,
       totalDemand,
       keywordCount: memberIds.length,
-      topDomains
-    };
+      topDomains: topFromCounts(domainCounts),
+      topUrls: topFromCounts(urlCounts, 10),
+      overlapScore: memberIds.length > 1 ? overlapSum / pairCount : 1
+    } satisfies ClusteredSubcluster;
   });
 }
 
-async function mapParentsWithLlm(subclusters: ReturnType<typeof clusterGraph>) {
+function fallbackParents(subclusters: ClusteredSubcluster[], reason: string) {
+  return subclusters.map((s) => ({
+    name: s.topDomains?.[0] ?? s.label,
+    subclusterIds: [s.id],
+    rationale: reason
+  }));
+}
+
+async function mapParentsWithLlm(subclusters: ClusteredSubcluster[]) {
   if (!process.env.OPENAI_API_KEY) {
-    // fallback: each subcluster becomes its own parent
-    return subclusters.map((s) => ({
-      name: s.label,
-      subclusterIds: [s.id],
-      rationale: "fallback_no_llm"
-    }));
+    return fallbackParents(subclusters, "fallback_no_llm");
   }
 
   const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const model = "gpt-4o";
   const results: ParentJson["parents"] = [];
   const chunkSize = 30;
 
@@ -250,33 +292,41 @@ async function mapParentsWithLlm(subclusters: ReturnType<typeof clusterGraph>) {
       id: c.id,
       name: c.label,
       topDomains: c.topDomains,
+      topKeywords: c.members
+        .slice()
+        .sort((a, b) => (b.demandMonthly ?? 0) - (a.demandMonthly ?? 0))
+        .slice(0, 5)
+        .map((k) => k.kwRaw),
       keywordCount: c.keywordCount,
       totalDemand: Math.round(c.totalDemand)
     }));
 
     const system =
       "You group related keyword subclusters into parent clusters. Return STRICT JSON {\"parents\":[{\"name\":\"\",\"subclusterIds\":[],\"rationale\":\"optional\"}]}. " +
-      "Use only provided subclusterIds. Prefer concise, general names. Combine clearly overlapping topics; otherwise keep separate.";
+      "Use only provided subclusterIds. Prefer concise, general names. Combine clearly overlapping topics; otherwise keep separate. Respond with compact parent names.";
     const user = `Subclusters:\n${JSON.stringify(payload, null, 2)}`;
 
-    const res = await generateText({
-      model: openai(model),
-      temperature: 0.2,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user }
-      ]
-    });
-    let parsed: ParentJson;
     try {
+      const res = await generateText({
+        model: openai(DEFAULT_MODEL),
+        temperature: 0.2,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user }
+        ]
+      });
       const start = res.text.indexOf("{");
       const end = res.text.lastIndexOf("}");
-      parsed = JSON.parse(res.text.slice(start, end + 1)) as ParentJson;
+      const parsed = JSON.parse(res.text.slice(start, end + 1)) as ParentJson;
+      if (parsed?.parents) results.push(...parsed.parents);
     } catch (e) {
-      throw new Error(`LLM parse failed: ${String(e)} text=${res.text}`);
+      console.warn("LLM parent mapping fallback", e);
+      return fallbackParents(subclusters, "llm_parse_fallback");
     }
-    if (parsed?.parents) results.push(...parsed.parents);
   }
+
+  if (!results.length) return fallbackParents(subclusters, "llm_empty");
+
   // merge duplicates by name
   const merged = new Map<string, { name: string; subclusterIds: Set<string>; rationale?: string }>();
   results.forEach((p) => {
@@ -318,8 +368,10 @@ export async function runSerpClustering(params: {
   let zyteRequested = 0;
   let zyteSucceeded = 0;
   let zyteCached = 0;
+  let promptModel: string | null = process.env.OPENAI_API_KEY ? DEFAULT_MODEL : null;
 
   try {
+    await updateStatus("running");
     // ── Phase 1: Auto-import GSC data if needed ──
     const kwCount = await prisma.keyword.count({
       where: { projectId, demand: { demandMonthly: { gte: minDemand } } }
@@ -374,6 +426,7 @@ export async function runSerpClustering(params: {
     // ── Phase 3: Fetch SERPs ──
     const limit = createLimiter(MAX_CONCURRENCY);
     const urlHosts: Record<string, Set<string>> = {};
+    const keywordUrls: Record<string, Set<string>> = {};
 
     const tasks = keywords.map((kw) =>
       limit(async () => {
@@ -384,18 +437,23 @@ export async function runSerpClustering(params: {
         const fresh = existing && Date.now() - existing.fetchedAt.getTime() < ZYTE_TTL_MS;
         if (fresh && !forceRefetch) {
           zyteCached += 1;
-          const urls: string[] = existing.topUrlsJson ? (JSON.parse(existing.topUrlsJson) as SerpTopUrl[]).map((u) => u.url) : [];
-          urlHosts[kw.id] = new Set(urls.map((u) => normalizeSerpUrl(u)?.host).filter(Boolean) as string[]);
+          const urls: SerpTopUrl[] = existing.topUrlsJson ? (JSON.parse(existing.topUrlsJson) as SerpTopUrl[]) : [];
+          const normalized = urls
+            .map((u) => normalizeSerpUrl(u.url))
+            .filter(Boolean) as NormalizedUrl[];
+          urlHosts[kw.id] = new Set(normalized.map((u) => u.host));
+          keywordUrls[kw.id] = new Set(normalized.map((u) => u.url));
           return;
         }
         zyteRequested += 1;
         const res = await fetchZyteSerp(kw.kwRaw);
         if (!res.error && res.urls.length) zyteSucceeded += 1;
-        const normUrls = res.urls
+        const normalized = res.urls
           .map((u) => normalizeSerpUrl(u.url))
-          .filter(Boolean)
-          .map((u) => u!.url);
-        urlHosts[kw.id] = new Set(normUrls.map((u) => normalizeSerpUrl(u)?.host).filter(Boolean) as string[]);
+          .filter(Boolean) as NormalizedUrl[];
+
+        urlHosts[kw.id] = new Set(normalized.map((u) => u.host));
+        keywordUrls[kw.id] = new Set(normalized.map((u) => u.url));
         await prisma.serpSnapshot.create({
           data: {
             id: nanoid(),
@@ -406,7 +464,9 @@ export async function runSerpClustering(params: {
             httpStatus: res.status,
             durationMs: res.durationMs,
             topUrlsJson: JSON.stringify(
-              res.urls.map((u) => ({ ...u, url: normalizeSerpUrl(u.url)?.url ?? u.url })).slice(0, 20)
+              res.urls
+                .map((u) => ({ ...u, url: normalizeSerpUrl(u.url)?.url ?? u.url }))
+                .slice(0, 20)
             ),
             rawJson: res.raw ? JSON.stringify(res.raw).slice(0, 9000) : null,
             hash: null,
@@ -426,23 +486,18 @@ export async function runSerpClustering(params: {
     // ── Phase 4: Build graph + cluster ──
     await updateStatus("clustering", { zyteRequested, zyteSucceeded, zyteCached });
 
-    const graph = buildOverlapGraph(
-      usableKeywords.map((k) => ({ id: k.id, kwRaw: k.kwRaw, demandMonthly: k.demand?.demandMonthly ?? 0 })),
-      urlHosts,
-      overlapThreshold
-    );
+    const keywordLite = usableKeywords.map((k) => ({ id: k.id, kwRaw: k.kwRaw, demandMonthly: k.demand?.demandMonthly ?? 0 }));
 
-    const clustered = clusterGraph(
-      graph,
-      usableKeywords.map((k) => ({ id: k.id, kwRaw: k.kwRaw, demandMonthly: k.demand?.demandMonthly ?? 0 })),
-      urlHosts
-    );
+    const graph = buildOverlapGraph(keywordLite, urlHosts, overlapThreshold);
 
-    const subclusters = clustered.map((s) => ({ ...s, id: nanoid() }));
+    const clustered = clusterGraph(graph, keywordLite, urlHosts, keywordUrls);
+
+    const subclusters: ClusteredSubcluster[] = clustered.map((s) => ({ ...s, id: nanoid() }));
 
     // ── Phase 5: Map parents with LLM ──
     await updateStatus("mapping_parents");
     const parents = await mapParentsWithLlm(subclusters);
+    promptModel = process.env.OPENAI_API_KEY ? DEFAULT_MODEL : null;
 
     // ── Phase 6: Persist results ──
     await prisma.$transaction(async (tx) => {
@@ -460,7 +515,9 @@ export async function runSerpClustering(params: {
             name: sub.label,
             totalDemand: sub.totalDemand,
             keywordCount: sub.keywordCount,
+            overlapScore: sub.overlapScore || null,
             topDomainsJson: JSON.stringify(sub.topDomains),
+            topUrlsJson: JSON.stringify(sub.topUrls),
             members: {
               createMany: {
                 data: sub.keywordIds.map((kid) => ({ keywordId: kid }))
@@ -510,7 +567,8 @@ export async function runSerpClustering(params: {
           finishedAt: new Date(),
           zyteRequested,
           zyteSucceeded,
-          zyteCached
+          zyteCached,
+          promptModel
         }
       });
     });
@@ -519,7 +577,7 @@ export async function runSerpClustering(params: {
   } catch (e) {
     await prisma.serpClusterRun.update({
       where: { id: runId },
-      data: { status: "failed", finishedAt: new Date(), error: e instanceof Error ? e.message : String(e), zyteRequested, zyteSucceeded, zyteCached }
+      data: { status: "failed", finishedAt: new Date(), error: e instanceof Error ? e.message : String(e), zyteRequested, zyteSucceeded, zyteCached, promptModel }
     }).catch(() => {});
     throw e;
   }
@@ -571,7 +629,9 @@ export async function getLatestSerpClusters(projectId: string, minDemand = 5) {
           name: s.name,
           totalDemand: s.totalDemand,
           keywordCount: s.keywordCount,
+          topDomains: s.topDomainsJson ? (JSON.parse(s.topDomainsJson) as string[]) : [],
           topUrls: s.topUrlsJson ? (JSON.parse(s.topUrlsJson) as string[]) : [],
+          overlapScore: s.overlapScore ?? null,
           keywordIds: members.map((m) => m.id),
           keywords: members
         };

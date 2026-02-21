@@ -5,6 +5,7 @@ import useSWR from "swr";
 import ReactFlow, { Background, Controls, Edge, Node, NodeProps } from "reactflow";
 import "reactflow/dist/style.css";
 import { Loader2, Play, RefreshCw } from "lucide-react";
+import dagre from "dagre";
 import { useSite } from "@/components/dashboard/site-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,9 @@ type SerpSubcluster = {
   keywordCount: number;
   keywordIds: string[];
   keywords: SerpKeyword[];
+  topDomains?: string[];
+  topUrls?: string[];
+  overlapScore?: number | null;
 };
 type SerpParent = {
   id: string;
@@ -56,14 +60,16 @@ async function fetchJson<T>(url: string): Promise<T> {
 function ParentNode({ data, selected }: NodeProps & { selected?: boolean }) {
   return (
     <div
-      className={`rounded-lg border bg-card px-3 py-2 shadow-sm w-52 ${selected ? "border-primary ring-2 ring-primary/30" : ""}`}
+      className={`rounded-lg border bg-card px-3 py-2 shadow-sm w-56 transition-all duration-200 ${
+        selected ? "border-primary ring-2 ring-primary/30 scale-[1.02]" : ""
+      }`}
     >
       <div className="text-sm font-semibold truncate">{data.name}</div>
       <div className="text-xs text-muted-foreground">Demand {Math.round(data.totalDemand)}</div>
       <div className="text-xs text-muted-foreground">Keywords {data.keywordCount}</div>
       {data.topDomains?.length ? (
         <div className="mt-1 flex flex-wrap gap-1">
-          {data.topDomains.slice(0, 3).map((d: string) => (
+          {data.topDomains.slice(0, 4).map((d: string) => (
             <Badge key={d} variant="secondary" className="text-[10px]">
               {d}
             </Badge>
@@ -76,11 +82,14 @@ function ParentNode({ data, selected }: NodeProps & { selected?: boolean }) {
 
 function SubclusterNode({ data }: NodeProps) {
   return (
-    <div className="rounded-lg border bg-accent px-3 py-2 shadow-sm w-60">
+    <div className="rounded-lg border bg-accent px-3 py-2 shadow-sm w-64 transition-all duration-200 hover:-translate-y-1">
       <div className="text-sm font-semibold truncate">{data.name}</div>
       <div className="text-xs text-muted-foreground">
         Demand {Math.round(data.totalDemand)} · {data.keywordCount} KW
       </div>
+      {typeof data.overlapScore === "number" ? (
+        <div className="text-[11px] text-muted-foreground">Avg Overlap {(data.overlapScore * 100).toFixed(0)}%</div>
+      ) : null}
       <div className="mt-1 text-xs text-muted-foreground space-y-0.5">
         {data.keywords?.slice(0, 3).map((k: SerpKeyword) => (
           <div key={k.id} className="flex justify-between gap-1">
@@ -89,6 +98,15 @@ function SubclusterNode({ data }: NodeProps) {
           </div>
         ))}
       </div>
+      {data.topDomains?.length ? (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {data.topDomains.slice(0, 3).map((d: string) => (
+            <Badge key={d} variant="outline" className="text-[10px]">
+              {d}
+            </Badge>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -97,6 +115,70 @@ const nodeTypes = {
   parentNode: ParentNode,
   subNode: SubclusterNode
 };
+
+const PARENT_WIDTH = 224;
+const PARENT_HEIGHT = 110;
+const SUB_WIDTH = 260;
+const SUB_HEIGHT = 150;
+
+function layoutFlow(parents: SerpParent[], selectedParent: string | null) {
+  const g = new dagre.graphlib.Graph();
+  g.setDefaultEdgeLabel(() => ({}));
+  g.setGraph({ rankdir: "LR", nodesep: 80, ranksep: 140 });
+
+  parents.forEach((p) => g.setNode(`parent-${p.id}`, { width: PARENT_WIDTH, height: PARENT_HEIGHT }));
+  // chain parents lightly so dagre keeps spacing even without edges
+  for (let i = 0; i < parents.length - 1; i++) {
+    g.setEdge(`parent-${parents[i].id}`, `parent-${parents[i + 1].id}`, { weight: 0.0001 });
+  }
+
+  const edges: Edge[] = [];
+  const nodes: Node[] = parents.map((p) => ({
+    id: `parent-${p.id}`,
+    type: "parentNode",
+    data: { ...p },
+    position: { x: 0, y: 0 },
+    selectable: true
+  }));
+
+  if (selectedParent) {
+    const parent = parents.find((p) => p.id === selectedParent);
+    parent?.subclusters.forEach((s) => {
+      const subId = `sub-${s.id}`;
+      g.setNode(subId, { width: SUB_WIDTH, height: SUB_HEIGHT });
+      g.setEdge(`parent-${selectedParent}`, subId);
+    });
+  }
+
+  dagre.layout(g);
+
+  nodes.forEach((n) => {
+    const pos = g.node(n.id);
+    n.position = { x: pos.x - (PARENT_WIDTH / 2), y: pos.y - (PARENT_HEIGHT / 2) };
+  });
+
+  if (selectedParent) {
+    const parent = parents.find((p) => p.id === selectedParent);
+    parent?.subclusters.forEach((s) => {
+      const subId = `sub-${s.id}`;
+      const pos = g.node(subId);
+      nodes.push({
+        id: subId,
+        type: "subNode",
+        data: { ...s },
+        position: { x: pos.x - (SUB_WIDTH / 2), y: pos.y - (SUB_HEIGHT / 2) }
+      });
+      edges.push({
+        id: `e-${parent.id}-${s.id}`,
+        source: `parent-${parent.id}`,
+        target: subId,
+        animated: true
+      });
+    });
+  }
+
+  return { nodes, edges };
+}
 
 export default function KeywordWorkspacePage() {
   const { site } = useSite();
@@ -180,35 +262,7 @@ export default function KeywordWorkspacePage() {
 
   const flowData = useMemo(() => {
     const parents = serpData?.parents ?? [];
-    const nodes: Node[] = [];
-    const edges: Edge[] = [];
-
-    parents.forEach((p, idx) => {
-      nodes.push({
-        id: `parent-${p.id}`,
-        type: "parentNode",
-        position: { x: idx * 260, y: 0 },
-        data: { ...p },
-        selectable: true
-      });
-      if (selectedParent === p.id) {
-        p.subclusters.forEach((s, sIdx) => {
-          nodes.push({
-            id: `sub-${s.id}`,
-            type: "subNode",
-            position: { x: sIdx * 240, y: 220 },
-            data: { ...s }
-          });
-          edges.push({
-            id: `e-${p.id}-${s.id}`,
-            source: `parent-${p.id}`,
-            target: `sub-${s.id}`,
-            animated: true
-          });
-        });
-      }
-    });
-    return { nodes, edges };
+    return layoutFlow(parents, selectedParent);
   }, [serpData, selectedParent]);
 
   const selectedParentData = useMemo(
@@ -233,35 +287,118 @@ export default function KeywordWorkspacePage() {
         <div className="flex items-center gap-2">
           <Input
             type="number"
-            className="w-28"
+            className="w-24"
             value={minDemandInput}
             onChange={(e) => setMinDemandInput(e.target.value)}
             placeholder="Min Impr."
           />
-          <span className="text-xs text-muted-foreground">Min Impressions/Monat</span>
+          <span className="text-xs text-muted-foreground">Min Impressions</span>
         </div>
         <Button onClick={triggerRun} disabled={isRunning || !projectId} className="gap-2">
           <Play className="h-4 w-4" />
-          {isRunning ? "L\u00e4uft..." : "SERP clustern"}
+          {isRunning ? "Läuft..." : "SERP clustern"}
         </Button>
-        <Button variant="outline" onClick={() => Promise.all([mutateSerp(), mutateStatus()])} className="gap-2">
+        <Button
+          variant="outline"
+          onClick={() => Promise.all([mutateSerp(), mutateStatus()])}
+          disabled={isRunning}
+          className="gap-2"
+        >
           <RefreshCw className="h-4 w-4" />
           Refresh
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
-        <Card className="h-[75vh]">
+      <div className="grid gap-4 md:grid-cols-[320px_1fr]">
+        <Card className="h-[78vh]">
           <CardHeader>
-            <CardTitle>Clustering Graph</CardTitle>
+            <CardTitle>Sidebar</CardTitle>
           </CardHeader>
-          <CardContent className="h-[65vh]">
+          <CardContent className="space-y-3 h-[70vh]">
+            {selectedParentData ? (
+              <>
+                <div>
+                  <div className="text-base font-semibold">{selectedParentData.name}</div>
+                  <div className="text-sm text-muted-foreground">
+                    Demand {Math.round(selectedParentData.totalDemand)} · Keywords {selectedParentData.keywordCount}
+                  </div>
+                  {selectedParentData.topDomains?.length ? (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {selectedParentData.topDomains.map((d) => (
+                        <Badge key={d} variant="secondary" className="text-[10px]">
+                          {d}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {selectedParentData.subclusters.length} Subcluster · Ø Overlap{" "}
+                    {selectedParentData.subclusters.length
+                      ? Math.round(
+                          (selectedParentData.subclusters.reduce((s, c) => s + (c.overlapScore ?? 0), 0) /
+                            selectedParentData.subclusters.length) *
+                            100
+                        )
+                      : 0}
+                    %
+                  </div>
+                </div>
+                <ScrollArea className="h-[60vh] pr-2">
+                  <div className="space-y-3">
+                    {selectedParentData.subclusters.map((s) => (
+                      <div key={s.id} className="rounded border p-2 bg-muted/40">
+                        <div className="flex items-center justify-between">
+                          <div className="font-semibold text-sm">{s.name}</div>
+                          <span className="text-[11px] text-muted-foreground">
+                            {Math.round(s.totalDemand)} · {s.keywordCount} KW
+                          </span>
+                        </div>
+                        {s.topDomains?.length ? (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {s.topDomains.slice(0, 3).map((d) => (
+                              <Badge key={d} variant="outline" className="text-[10px]">
+                                {d}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : null}
+                        <div className="space-y-1 text-xs text-muted-foreground mt-2">
+                          {s.keywords.map((k) => (
+                            <div key={k.id} className="flex justify-between gap-2">
+                              <span className="truncate">{k.kwRaw}</span>
+                              <span>{Math.round(k.demandMonthly)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {isRunning ? "Warte auf Ergebnisse..." : "Wähle einen Parent-Cluster."}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="h-[78vh]">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Clustering Graph</CardTitle>
+            {serpData?.generatedAt ? (
+              <span className="text-xs text-muted-foreground">
+                Stand {new Date(serpData.generatedAt).toLocaleString()}
+              </span>
+            ) : null}
+          </CardHeader>
+          <CardContent className="h-[68vh]">
             {isRunning ? (
               <div className="h-full flex flex-col items-center justify-center gap-4">
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
                 <div className="text-center space-y-1">
                   <p className="text-sm font-medium">
-                    {STATUS_LABELS[statusData?.status] ?? "Clustering l\u00e4uft..."}
+                    {STATUS_LABELS[statusData?.status] ?? "Clustering läuft..."}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Bitte warte, das kann je nach Keyword-Anzahl einige Minuten dauern.
@@ -299,57 +436,6 @@ export default function KeywordWorkspacePage() {
                   </>
                 )}
               </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="h-[75vh]">
-          <CardHeader>
-            <CardTitle>Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {selectedParentData ? (
-              <>
-                <div>
-                  <div className="text-base font-semibold">{selectedParentData.name}</div>
-                  <div className="text-sm text-muted-foreground">
-                    Demand {Math.round(selectedParentData.totalDemand)} · Keywords {selectedParentData.keywordCount}
-                  </div>
-                  {selectedParentData.topDomains?.length ? (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {selectedParentData.topDomains.map((d) => (
-                        <Badge key={d} variant="secondary" className="text-[10px]">
-                          {d}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                <ScrollArea className="h-[55vh] pr-2">
-                  <div className="space-y-3">
-                    {selectedParentData.subclusters.map((s) => (
-                      <div key={s.id} className="rounded border p-2">
-                        <div className="font-semibold text-sm">{s.name}</div>
-                        <div className="text-xs text-muted-foreground mb-2">
-                          Demand {Math.round(s.totalDemand)} · {s.keywordCount} Keywords
-                        </div>
-                        <div className="space-y-1 text-xs text-muted-foreground">
-                          {s.keywords.map((k) => (
-                            <div key={k.id} className="flex justify-between gap-2">
-                              <span className="truncate">{k.kwRaw}</span>
-                              <span>{Math.round(k.demandMonthly)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {isRunning ? "Warte auf Ergebnisse..." : "W\u00e4hle einen Parent-Cluster."}
-              </p>
             )}
           </CardContent>
         </Card>
