@@ -6,6 +6,7 @@ import ReactFlow, { Background, Controls, Edge, Node, NodeProps, ReactFlowInstan
 import "reactflow/dist/style.css";
 import { Loader2, Play, RefreshCw } from "lucide-react";
 import dagre from "dagre";
+import { AnimatePresence, motion } from "framer-motion";
 import { useSite } from "@/components/dashboard/site-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,20 +65,6 @@ async function fetchJson<T>(url: string): Promise<T> {
   return json;
 }
 
-function ParentNode({ data, selected }: NodeProps & { selected?: boolean }) {
-  return (
-    <div
-      className={`rounded-lg border bg-card px-3 py-2 shadow-sm w-56 transition-all duration-200 ${
-        selected ? "border-primary ring-2 ring-primary/30 scale-[1.02]" : ""
-      }`}
-    >
-      <div className="text-sm font-semibold truncate">{data.name}</div>
-      <div className="text-xs text-muted-foreground">Demand {Math.round(data.totalDemand)}</div>
-      <div className="text-xs text-muted-foreground">Keywords {data.keywordCount}</div>
-    </div>
-  );
-}
-
 function SubclusterNode({ data }: NodeProps) {
   return (
     <div className="rounded-lg border bg-accent px-3 py-2 shadow-sm w-64 transition-all duration-200 hover:-translate-y-1">
@@ -101,72 +88,34 @@ function SubclusterNode({ data }: NodeProps) {
 }
 
 const nodeTypes = {
-  parentNode: ParentNode,
   subNode: SubclusterNode
 };
 
-const PARENT_WIDTH = 224;
-const PARENT_HEIGHT = 110;
 const SUB_WIDTH = 260;
 const SUB_HEIGHT = 150;
 
-function layoutFlow(parents: SerpParent[], selectedParent: string | null) {
+function buildSubclusterFlow(parent: SerpParent | null) {
+  if (!parent) return { nodes: [] as Node[], edges: [] as Edge[] };
+
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "LR", nodesep: 80, ranksep: 140 });
+  g.setGraph({ rankdir: "LR", nodesep: 60, ranksep: 80 });
 
-  parents.forEach((p) => g.setNode(`parent-${p.id}`, { width: PARENT_WIDTH, height: PARENT_HEIGHT }));
-  // chain parents lightly so dagre keeps spacing even without edges
-  for (let i = 0; i < parents.length - 1; i++) {
-    g.setEdge(`parent-${parents[i].id}`, `parent-${parents[i + 1].id}`, { weight: 0.0001 });
-  }
-
-  const edges: Edge[] = [];
-  const nodes: Node[] = parents.map((p) => ({
-    id: `parent-${p.id}`,
-    type: "parentNode",
-    data: { ...p },
-    position: { x: 0, y: 0 },
-    selectable: true
-  }));
-
-  if (selectedParent) {
-    const parent = parents.find((p) => p.id === selectedParent);
-    parent?.subclusters.forEach((s) => {
-      const subId = `sub-${s.id}`;
-      g.setNode(subId, { width: SUB_WIDTH, height: SUB_HEIGHT });
-      g.setEdge(`parent-${selectedParent}`, subId);
-    });
-  }
+  parent.subclusters.forEach((s) => g.setNode(`sub-${s.id}`, { width: SUB_WIDTH, height: SUB_HEIGHT }));
 
   dagre.layout(g);
 
-  nodes.forEach((n) => {
-    const pos = g.node(n.id);
-    n.position = { x: pos.x - (PARENT_WIDTH / 2), y: pos.y - (PARENT_HEIGHT / 2) };
+  const nodes: Node[] = parent.subclusters.map((s) => {
+    const pos = g.node(`sub-${s.id}`);
+    return {
+      id: `sub-${s.id}`,
+      type: "subNode",
+      data: { ...s },
+      position: { x: pos?.x - SUB_WIDTH / 2 || 0, y: pos?.y - SUB_HEIGHT / 2 || 0 }
+    };
   });
 
-  if (selectedParent) {
-    const parent = parents.find((p) => p.id === selectedParent);
-    parent?.subclusters.forEach((s) => {
-      const subId = `sub-${s.id}`;
-      const pos = g.node(subId);
-      nodes.push({
-        id: subId,
-        type: "subNode",
-        data: { ...s },
-        position: { x: pos.x - (SUB_WIDTH / 2), y: pos.y - (SUB_HEIGHT / 2) }
-      });
-      edges.push({
-        id: `e-${parent.id}-${s.id}`,
-        source: `parent-${parent.id}`,
-        target: subId,
-        animated: true
-      });
-    });
-  }
-
-  return { nodes, edges };
+  return { nodes, edges: [] as Edge[] };
 }
 
 export default function KeywordWorkspacePage() {
@@ -180,8 +129,8 @@ export default function KeywordWorkspacePage() {
   const [minDemand, setMinDemand] = useState(5);
   const [minDemandInput, setMinDemandInput] = useState("5");
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"overview" | "focus">("overview");
   const [pollInterval, setPollInterval] = useState(0);
-  const [showSidebar, setShowSidebar] = useState(false);
   const wasRunningRef = useRef(false);
   const flowRef = useRef<ReactFlowInstance | null>(null);
   const lastFitKeyRef = useRef<string>("");
@@ -295,34 +244,156 @@ export default function KeywordWorkspacePage() {
     }
   }
 
-  const flowData = useMemo(() => {
-    const parents = serpData?.parents ?? [];
-    return layoutFlow(parents, selectedParent);
-  }, [serpData, selectedParent]);
+  const parents = serpData?.parents ?? [];
+  const selectedParentData = parents.find((p) => p.id === selectedParent) ?? null;
+
+  const subFlow = useMemo(() => buildSubclusterFlow(selectedParentData), [selectedParentData]);
 
   useEffect(() => {
     if (!flowRef.current) return;
     if (!serpData?.runId) return;
-    const fitKey = `${serpData.runId}:${selectedParent ?? "none"}:${flowData.nodes.length}`;
+    if (!subFlow.nodes.length) return;
+    const fitKey = `${serpData.runId}:${selectedParent ?? "none"}:${subFlow.nodes.length}`;
     if (lastFitKeyRef.current === fitKey) return;
     lastFitKeyRef.current = fitKey;
     requestAnimationFrame(() => {
       flowRef.current?.fitView({ padding: 0.2, duration: 300 });
     });
-  }, [serpData?.runId, selectedParent, flowData.nodes.length]);
+  }, [serpData?.runId, selectedParent, subFlow.nodes.length]);
 
-  const selectedParentData = useMemo(
-    () => serpData?.parents.find((p) => p.id === selectedParent) ?? null,
-    [serpData, selectedParent]
+  const keywordsFlat = useMemo(() => {
+    if (!selectedParentData) return [];
+    const all = selectedParentData.subclusters.flatMap((s) => s.keywords);
+    return all.sort((a, b) => (b.demandMonthly ?? 0) - (a.demandMonthly ?? 0)).slice(0, 50);
+  }, [selectedParentData]);
+
+  const restParents = useMemo(() => parents.filter((p) => p.id !== selectedParent), [parents, selectedParent]);
+
+  const overviewCards = (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+      <AnimatePresence>
+        {parents.map((p) => (
+          <motion.div
+            key={p.id}
+            layoutId={`parent-${p.id}`}
+            layout
+            className="rounded-lg border bg-card p-3 shadow-sm cursor-pointer hover:shadow-md transition"
+            whileHover={{ scale: 1.02 }}
+            onClick={() => {
+              setSelectedParent(p.id);
+              setViewMode("focus");
+            }}
+          >
+            <div className="text-sm font-semibold truncate">{p.name}</div>
+            <div className="text-xs text-muted-foreground">Demand {Math.round(p.totalDemand)}</div>
+            <div className="text-xs text-muted-foreground">Keywords {p.keywordCount}</div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+
+  const stackBlock = (
+    <AnimatePresence>
+      {viewMode === "focus" && restParents.length ? (
+        <motion.div
+          className="absolute top-4 right-4 z-20 cursor-pointer select-none"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          onClick={() => {
+            setViewMode("overview");
+            setSelectedParent(null);
+          }}
+        >
+          <div className="text-[11px] text-muted-foreground text-right mb-1">Alle Parent-Cluster</div>
+          <div className="relative w-44 h-16">
+            {restParents.slice(0, 3).map((p, idx) => (
+              <motion.div
+                key={p.id}
+                layoutId={`parent-${p.id}`}
+                className="absolute inset-0 rounded-lg border bg-card p-2 shadow-md"
+                style={{ top: idx * 6, right: idx * 10, scale: 0.6 }}
+                whileHover={{ scale: 0.63 }}
+              >
+                <div className="text-xs font-semibold truncate">{p.name}</div>
+                <div className="text-[11px] text-muted-foreground">KW {p.keywordCount}</div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
+
+  const focusPanel = selectedParentData ? (
+    <motion.div
+      layoutId={`parent-${selectedParentData.id}`}
+      className="absolute z-10 rounded-lg border bg-card shadow-2xl p-4 overflow-auto"
+      style={{ top: "10vh", left: "4vw", width: "38vw", maxHeight: "78vh" }}
+      transition={{ duration: 0.35, ease: "easeInOut" }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-lg font-semibold leading-tight">{selectedParentData.name}</div>
+          <div className="text-sm text-muted-foreground">
+            Demand {Math.round(selectedParentData.totalDemand)} · Keywords {selectedParentData.keywordCount}
+          </div>
+        </div>
+        <Button size="sm" variant="ghost" onClick={() => setViewMode("overview")}>
+          Zurück
+        </Button>
+      </div>
+      <div className="mt-3 text-xs text-muted-foreground">
+        {selectedParentData.subclusters.length} Subcluster
+      </div>
+      <div className="mt-3 space-y-1">
+        <div className="text-sm font-medium">Keywords (Top 50)</div>
+        <ScrollArea className="h-[320px] rounded border">
+          <div className="p-3 space-y-1 text-sm text-muted-foreground">
+            {keywordsFlat.map((k) => (
+              <div key={k.id} className="flex justify-between gap-2">
+                <span className="truncate">{k.kwRaw}</span>
+                <span>{Math.round(k.demandMonthly)}</span>
+              </div>
+            ))}
+            {selectedParentData.keywordCount > keywordsFlat.length ? (
+              <div className="text-xs text-muted-foreground mt-2">
+                +{selectedParentData.keywordCount - keywordsFlat.length} weitere
+              </div>
+            ) : null}
+          </div>
+        </ScrollArea>
+      </div>
+    </motion.div>
+  ) : null;
+
+  const focusSubclusters = (
+    <div className="w-full h-full">
+      <ReactFlow
+        nodes={subFlow.nodes}
+        edges={subFlow.edges}
+        nodeTypes={nodeTypes}
+        onInit={(instance) => {
+          flowRef.current = instance;
+        }}
+        className="h-full"
+        panOnDrag
+        zoomOnScroll
+      >
+        <Background gap={16} />
+        <Controls />
+      </ReactFlow>
+    </div>
   );
 
   if (!site) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Keine Property ausgew\u00e4hlt</CardTitle>
+          <CardTitle>Keine Property ausgewählt</CardTitle>
         </CardHeader>
-        <CardContent>W\u00e4hle oben links eine Property aus, um den Workspace zu laden.</CardContent>
+        <CardContent>Wähle oben links eine Property aus, um den Workspace zu laden.</CardContent>
       </Card>
     );
   }
@@ -355,9 +426,9 @@ export default function KeywordWorkspacePage() {
         </Button>
       </div>
 
-      <Card className="h-[78vh]">
+      <Card className="h-[78vh] overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Clustering Graph</CardTitle>
+          <CardTitle>Parent Cluster</CardTitle>
           {serpData?.generatedAt ? (
             <span className="text-xs text-muted-foreground">Stand {new Date(serpData.generatedAt).toLocaleString()}</span>
           ) : null}
@@ -371,128 +442,28 @@ export default function KeywordWorkspacePage() {
                 <p className="text-xs text-muted-foreground">Bitte warte, das kann je nach Keyword-Anzahl einige Minuten dauern.</p>
               </div>
             </div>
-          ) : serpData?.parents?.length ? (
-            <>
-              <ReactFlow
-                nodes={flowData.nodes}
-                edges={flowData.edges}
-                nodeTypes={nodeTypes}
-                onInit={(instance) => {
-                  flowRef.current = instance;
-                }}
-                onNodeClick={(_, node) => {
-                  if (node.id.startsWith("parent-")) setSelectedParent(node.id.replace("parent-", ""));
-                }}
-                className="h-full"
-              >
-                <Background gap={16} />
-                <Controls />
-              </ReactFlow>
-              <Button
-                size="icon"
-                className="absolute bottom-4 right-4 h-12 w-12 rounded-full shadow-lg"
-                onClick={() => setShowSidebar((p) => !p)}
-                variant="secondary"
-              >
-                <span className="sr-only">Details öffnen</span>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 6h16M4 12h16M4 18h10" />
-                </svg>
-              </Button>
-              {showSidebar && (
-                <div className="absolute inset-y-4 right-4 w-[340px] max-w-[90vw] rounded-lg border bg-card shadow-2xl backdrop-blur-md overflow-hidden z-10 animate-in slide-in-from-right">
-                  <div className="flex items-center justify-between border-b px-4 py-3">
-                    <div>
-                      <div className="text-base font-semibold">{selectedParentData?.name ?? "Details"}</div>
-                      {selectedParentData ? (
-                        <div className="text-xs text-muted-foreground">
-                          Demand {Math.round(selectedParentData.totalDemand)} · Keywords {selectedParentData.keywordCount}
-                        </div>
-                      ) : null}
-                    </div>
-                    <Button size="icon" variant="ghost" onClick={() => setShowSidebar(false)}>
-                      ✕
-                    </Button>
-                  </div>
-                  <div className="px-4 py-3 text-xs text-muted-foreground">
-                    {selectedParentData?.topDomains?.length ? (
-                      <div className="flex flex-wrap gap-1">
-                        {selectedParentData.topDomains.map((d) => (
-                          <Badge key={d} variant="secondary" className="text-[10px]">
-                            {d}
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : null}
-                    {selectedParentData ? (
-                      <div className="mt-1">
-                        {selectedParentData.subclusters.length} Subcluster · Ø Overlap{" "}
-                        {selectedParentData.subclusters.length
-                          ? Math.round(
-                              (selectedParentData.subclusters.reduce((s, c) => s + (c.overlapScore ?? 0), 0) /
-                                selectedParentData.subclusters.length) *
-                                100
-                            )
-                          : 0}
-                        %
-                      </div>
-                    ) : null}
-                  </div>
-                  <ScrollArea className="h-[55vh] px-4 pb-4">
-                    <div className="space-y-3">
-                      {selectedParentData ? (
-                        selectedParentData.subclusters.map((s) => (
-                          <div key={s.id} className="rounded border p-2 bg-muted/40">
-                            <div className="flex items-center justify-between">
-                              <div className="font-semibold text-sm">{s.name}</div>
-                              <span className="text-[11px] text-muted-foreground">
-                                {Math.round(s.totalDemand)} · {s.keywordCount} KW
-                              </span>
-                            </div>
-                            {s.topDomains?.length ? (
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {s.topDomains.slice(0, 3).map((d) => (
-                                  <Badge key={d} variant="outline" className="text-[10px]">
-                                    {d}
-                                  </Badge>
-                                ))}
-                              </div>
-                            ) : null}
-                            <div className="space-y-1 text-xs text-muted-foreground mt-2">
-                              {s.keywords.map((k) => (
-                                <div key={k.id} className="flex justify-between gap-2">
-                                  <span className="truncate">{k.kwRaw}</span>
-                                  <span>{Math.round(k.demandMonthly)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-muted-foreground">Wähle einen Parent-Cluster.</p>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </div>
-              )}
-            </>
-          ) : (
+          ) : parents.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
-              {statusData?.status === "failed" ? (
-                <>
-                  <p>Letztes Clustering fehlgeschlagen: {statusData.error}</p>
-                  <Button size="sm" onClick={triggerRun} disabled={!projectId}>
-                    Erneut versuchen
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <p>Noch kein SERP-Clustering gelaufen.</p>
-                  <Button size="sm" onClick={triggerRun} disabled={!projectId}>
-                    Jetzt starten
-                  </Button>
-                </>
-              )}
+              <p>Noch kein SERP-Clustering gelaufen.</p>
+              <Button size="sm" onClick={triggerRun} disabled={!projectId}>
+                Jetzt starten
+              </Button>
+            </div>
+          ) : viewMode === "overview" ? (
+            <div className="h-full overflow-auto pb-4">{overviewCards}</div>
+          ) : (
+            <div className="h-full relative">
+              {stackBlock}
+              <AnimatePresence>{focusPanel}</AnimatePresence>
+              <div className="absolute inset-0 pl-[44vw]">
+                {subFlow.nodes.length ? (
+                  focusSubclusters
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                    Keine Subcluster gefunden.
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </CardContent>

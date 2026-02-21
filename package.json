@@ -41,6 +41,7 @@
     "csv-stringify": "^6.5.0",
     "dagre": "^0.8.5",
     "date-fns": "^3.6.0",
+    "framer-motion": "^12.34.3",
     "graphology": "^0.25.4",
     "graphology-communities-louvain": "^1.4.2",
     "iconv-lite": "^0.6.3",
