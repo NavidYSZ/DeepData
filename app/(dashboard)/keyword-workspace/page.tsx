@@ -41,6 +41,7 @@ type SerpResponse = {
 };
 
 const ACTIVE_STATUSES = ["pending", "importing_gsc", "fetching_serps", "clustering", "mapping_parents", "running"];
+const SERP_DEBUG = true;
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Wird vorbereitet...",
@@ -54,7 +55,13 @@ const STATUS_LABELS: Record<string, string> = {
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-  return (await res.json()) as T;
+  const json = (await res.json()) as T;
+  if (SERP_DEBUG) {
+    console.groupCollapsed(`[SERP][fetchJson] ${url}`);
+    console.debug(json);
+    console.groupEnd();
+  }
+  return json;
 }
 
 function ParentNode({ data, selected }: NodeProps & { selected?: boolean }) {
@@ -233,6 +240,42 @@ export default function KeywordWorkspacePage() {
     }
   }, [serpData, selectedParent]);
 
+  // Debug dumps
+  useEffect(() => {
+    if (!SERP_DEBUG) return;
+    console.groupCollapsed("[SERP][status]");
+    console.debug({
+      status: statusData?.status,
+      zyteRequested: statusData?.zyteRequested,
+      zyteSucceeded: statusData?.zyteSucceeded,
+      zyteCached: statusData?.zyteCached,
+      minDemand: statusData?.minDemand,
+      urlOverlapThreshold: statusData?.urlOverlapThreshold,
+      runId: statusData?.id,
+      startedAt: statusData?.startedAt,
+      finishedAt: statusData?.finishedAt
+    });
+    console.groupEnd();
+  }, [statusData]);
+
+  useEffect(() => {
+    if (!SERP_DEBUG) return;
+    console.groupCollapsed("[SERP][data]");
+    console.debug({
+      runId: serpData?.runId,
+      generatedAt: serpData?.generatedAt,
+      parents: serpData?.parents?.map((p) => ({
+        id: p.id,
+        name: p.name,
+        totalDemand: p.totalDemand,
+        keywordCount: p.keywordCount,
+        subclusters: p.subclusters.length
+      })),
+      selectedParent
+    });
+    console.groupEnd();
+  }, [serpData, selectedParent]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       const parsed = Number(minDemandInput);
@@ -244,6 +287,11 @@ export default function KeywordWorkspacePage() {
   async function triggerRun() {
     if (!projectId) return;
     try {
+      if (SERP_DEBUG) {
+        console.groupCollapsed("[SERP][run-trigger]");
+        console.debug({ projectId, minDemand, overlapThreshold: undefined, ts: new Date().toISOString() });
+        console.groupEnd();
+      }
       const res = await fetch(`/api/keyword-workspace/projects/${projectId}/serp-cluster/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -253,10 +301,12 @@ export default function KeywordWorkspacePage() {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.message ?? "Run failed");
       }
+      if (SERP_DEBUG) console.info("[SERP][run-trigger] accepted run start");
       toast.success("SERP-Clustering gestartet");
       await mutateStatus();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Fehler beim Start");
+      if (SERP_DEBUG) console.error("[SERP][run-trigger] failed", e);
     }
   }
 
