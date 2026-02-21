@@ -199,6 +199,7 @@ export default function KeywordWorkspacePage() {
   const [minDemandInput, setMinDemandInput] = useState("5");
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
   const [pollInterval, setPollInterval] = useState(0);
+  const [showSidebar, setShowSidebar] = useState(false);
   const wasRunningRef = useRef(false);
 
   const { data: serpData, mutate: mutateSerp } = useSWR<SerpResponse>(
@@ -359,103 +360,24 @@ export default function KeywordWorkspacePage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-[320px_1fr]">
-        <Card className="h-[78vh]">
-          <CardHeader>
-            <CardTitle>Sidebar</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 h-[70vh]">
-            {selectedParentData ? (
-              <>
-                <div>
-                  <div className="text-base font-semibold">{selectedParentData.name}</div>
-                  <div className="text-sm text-muted-foreground">
-                    Demand {Math.round(selectedParentData.totalDemand)} · Keywords {selectedParentData.keywordCount}
-                  </div>
-                  {selectedParentData.topDomains?.length ? (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {selectedParentData.topDomains.map((d) => (
-                        <Badge key={d} variant="secondary" className="text-[10px]">
-                          {d}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    {selectedParentData.subclusters.length} Subcluster · Ø Overlap{" "}
-                    {selectedParentData.subclusters.length
-                      ? Math.round(
-                          (selectedParentData.subclusters.reduce((s, c) => s + (c.overlapScore ?? 0), 0) /
-                            selectedParentData.subclusters.length) *
-                            100
-                        )
-                      : 0}
-                    %
-                  </div>
-                </div>
-                <ScrollArea className="h-[60vh] pr-2">
-                  <div className="space-y-3">
-                    {selectedParentData.subclusters.map((s) => (
-                      <div key={s.id} className="rounded border p-2 bg-muted/40">
-                        <div className="flex items-center justify-between">
-                          <div className="font-semibold text-sm">{s.name}</div>
-                          <span className="text-[11px] text-muted-foreground">
-                            {Math.round(s.totalDemand)} · {s.keywordCount} KW
-                          </span>
-                        </div>
-                        {s.topDomains?.length ? (
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {s.topDomains.slice(0, 3).map((d) => (
-                              <Badge key={d} variant="outline" className="text-[10px]">
-                                {d}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : null}
-                        <div className="space-y-1 text-xs text-muted-foreground mt-2">
-                          {s.keywords.map((k) => (
-                            <div key={k.id} className="flex justify-between gap-2">
-                              <span className="truncate">{k.kwRaw}</span>
-                              <span>{Math.round(k.demandMonthly)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {isRunning ? "Warte auf Ergebnisse..." : "Wähle einen Parent-Cluster."}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="h-[78vh]">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Clustering Graph</CardTitle>
-            {serpData?.generatedAt ? (
-              <span className="text-xs text-muted-foreground">
-                Stand {new Date(serpData.generatedAt).toLocaleString()}
-              </span>
-            ) : null}
-          </CardHeader>
-          <CardContent className="h-[68vh]">
-            {isRunning ? (
-              <div className="h-full flex flex-col items-center justify-center gap-4">
-                <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                <div className="text-center space-y-1">
-                  <p className="text-sm font-medium">
-                    {STATUS_LABELS[statusData?.status] ?? "Clustering läuft..."}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Bitte warte, das kann je nach Keyword-Anzahl einige Minuten dauern.
-                  </p>
-                </div>
+      <Card className="h-[78vh]">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Clustering Graph</CardTitle>
+          {serpData?.generatedAt ? (
+            <span className="text-xs text-muted-foreground">Stand {new Date(serpData.generatedAt).toLocaleString()}</span>
+          ) : null}
+        </CardHeader>
+        <CardContent className="relative h-[68vh]">
+          {isRunning ? (
+            <div className="h-full flex flex-col items-center justify-center gap-4">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              <div className="text-center space-y-1">
+                <p className="text-sm font-medium">{STATUS_LABELS[statusData?.status] ?? "Clustering läuft..."}</p>
+                <p className="text-xs text-muted-foreground">Bitte warte, das kann je nach Keyword-Anzahl einige Minuten dauern.</p>
               </div>
-            ) : serpData?.parents?.length ? (
+            </div>
+          ) : serpData?.parents?.length ? (
+            <>
               <ReactFlow
                 nodes={flowData.nodes}
                 edges={flowData.edges}
@@ -464,32 +386,120 @@ export default function KeywordWorkspacePage() {
                   if (node.id.startsWith("parent-")) setSelectedParent(node.id.replace("parent-", ""));
                 }}
                 fitView
+                className="h-full"
               >
                 <Background gap={16} />
                 <Controls />
               </ReactFlow>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
-                {statusData?.status === "failed" ? (
-                  <>
-                    <p>Letztes Clustering fehlgeschlagen: {statusData.error}</p>
-                    <Button size="sm" onClick={triggerRun} disabled={!projectId}>
-                      Erneut versuchen
+              <Button
+                size="icon"
+                className="absolute bottom-4 right-4 h-12 w-12 rounded-full shadow-lg"
+                onClick={() => setShowSidebar((p) => !p)}
+                variant="secondary"
+              >
+                <span className="sr-only">Details öffnen</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 6h16M4 12h16M4 18h10" />
+                </svg>
+              </Button>
+              {showSidebar && (
+                <div className="absolute inset-y-4 right-4 w-[340px] max-w-[90vw] rounded-lg border bg-card shadow-2xl backdrop-blur-md overflow-hidden z-10 animate-in slide-in-from-right">
+                  <div className="flex items-center justify-between border-b px-4 py-3">
+                    <div>
+                      <div className="text-base font-semibold">{selectedParentData?.name ?? "Details"}</div>
+                      {selectedParentData ? (
+                        <div className="text-xs text-muted-foreground">
+                          Demand {Math.round(selectedParentData.totalDemand)} · Keywords {selectedParentData.keywordCount}
+                        </div>
+                      ) : null}
+                    </div>
+                    <Button size="icon" variant="ghost" onClick={() => setShowSidebar(false)}>
+                      ✕
                     </Button>
-                  </>
-                ) : (
-                  <>
-                    <p>Noch kein SERP-Clustering gelaufen.</p>
-                    <Button size="sm" onClick={triggerRun} disabled={!projectId}>
-                      Jetzt starten
-                    </Button>
-                  </>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                  </div>
+                  <div className="px-4 py-3 text-xs text-muted-foreground">
+                    {selectedParentData?.topDomains?.length ? (
+                      <div className="flex flex-wrap gap-1">
+                        {selectedParentData.topDomains.map((d) => (
+                          <Badge key={d} variant="secondary" className="text-[10px]">
+                            {d}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : null}
+                    {selectedParentData ? (
+                      <div className="mt-1">
+                        {selectedParentData.subclusters.length} Subcluster · Ø Overlap{" "}
+                        {selectedParentData.subclusters.length
+                          ? Math.round(
+                              (selectedParentData.subclusters.reduce((s, c) => s + (c.overlapScore ?? 0), 0) /
+                                selectedParentData.subclusters.length) *
+                                100
+                            )
+                          : 0}
+                        %
+                      </div>
+                    ) : null}
+                  </div>
+                  <ScrollArea className="h-[55vh] px-4 pb-4">
+                    <div className="space-y-3">
+                      {selectedParentData ? (
+                        selectedParentData.subclusters.map((s) => (
+                          <div key={s.id} className="rounded border p-2 bg-muted/40">
+                            <div className="flex items-center justify-between">
+                              <div className="font-semibold text-sm">{s.name}</div>
+                              <span className="text-[11px] text-muted-foreground">
+                                {Math.round(s.totalDemand)} · {s.keywordCount} KW
+                              </span>
+                            </div>
+                            {s.topDomains?.length ? (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {s.topDomains.slice(0, 3).map((d) => (
+                                  <Badge key={d} variant="outline" className="text-[10px]">
+                                    {d}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : null}
+                            <div className="space-y-1 text-xs text-muted-foreground mt-2">
+                              {s.keywords.map((k) => (
+                                <div key={k.id} className="flex justify-between gap-2">
+                                  <span className="truncate">{k.kwRaw}</span>
+                                  <span>{Math.round(k.demandMonthly)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Wähle einen Parent-Cluster.</p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
+              {statusData?.status === "failed" ? (
+                <>
+                  <p>Letztes Clustering fehlgeschlagen: {statusData.error}</p>
+                  <Button size="sm" onClick={triggerRun} disabled={!projectId}>
+                    Erneut versuchen
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p>Noch kein SERP-Clustering gelaufen.</p>
+                  <Button size="sm" onClick={triggerRun} disabled={!projectId}>
+                    Jetzt starten
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
