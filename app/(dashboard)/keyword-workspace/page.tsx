@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import ReactFlow, { Background, Controls, Edge, Node, NodeProps } from "reactflow";
 import "reactflow/dist/style.css";
-import { Play, RefreshCw } from "lucide-react";
+import { Loader2, Play, RefreshCw } from "lucide-react";
 import { useSite } from "@/components/dashboard/site-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,17 @@ type SerpResponse = {
   runId: string | null;
   generatedAt: string | null;
   parents: SerpParent[];
+};
+
+const ACTIVE_STATUSES = ["pending", "importing_gsc", "fetching_serps", "clustering", "mapping_parents", "running"];
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Wird vorbereitet...",
+  importing_gsc: "GSC-Daten werden importiert (6 Monate)...",
+  fetching_serps: "SERP-Daten werden von Google geholt...",
+  clustering: "Keywords werden geclustert...",
+  mapping_parents: "Themen werden mit KI gruppiert...",
+  running: "Clustering l\u00e4uft..."
 };
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -97,8 +108,9 @@ export default function KeywordWorkspacePage() {
 
   const [minDemand, setMinDemand] = useState(5);
   const [minDemandInput, setMinDemandInput] = useState("5");
-  const [isRunning, setIsRunning] = useState(false);
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
+  const [pollInterval, setPollInterval] = useState(0);
+  const wasRunningRef = useRef(false);
 
   const { data: serpData, mutate: mutateSerp } = useSWR<SerpResponse>(
     projectId ? `/api/keyword-workspace/projects/${projectId}/serp-cluster?minDemand=${minDemand}` : null,
@@ -108,8 +120,30 @@ export default function KeywordWorkspacePage() {
   const { data: statusData, mutate: mutateStatus } = useSWR<any>(
     projectId ? `/api/keyword-workspace/projects/${projectId}/serp-cluster/status` : null,
     fetchJson,
-    { refreshInterval: isRunning ? 4000 : 0 }
+    { refreshInterval: pollInterval }
   );
+
+  const isRunning = !!statusData?.status && ACTIVE_STATUSES.includes(statusData.status);
+
+  // Control polling based on status
+  useEffect(() => {
+    setPollInterval(isRunning ? 2000 : 0);
+  }, [isRunning]);
+
+  // Auto-refresh data when clustering finishes
+  useEffect(() => {
+    if (isRunning) {
+      wasRunningRef.current = true;
+    } else if (wasRunningRef.current && statusData?.status) {
+      wasRunningRef.current = false;
+      if (statusData.status === "completed") {
+        mutateSerp();
+        toast.success("Clustering abgeschlossen!");
+      } else if (statusData.status === "failed") {
+        toast.error(`Clustering fehlgeschlagen: ${statusData.error ?? "Unbekannter Fehler"}`);
+      }
+    }
+  }, [isRunning, statusData?.status, mutateSerp]);
 
   useEffect(() => {
     if (serpData?.parents?.length && !selectedParent) {
@@ -125,17 +159,8 @@ export default function KeywordWorkspacePage() {
     return () => clearTimeout(timer);
   }, [minDemandInput]);
 
-  useEffect(() => {
-    if (statusData?.status === "running" || statusData?.status === "pending") {
-      setIsRunning(true);
-    } else if (statusData) {
-      setIsRunning(false);
-    }
-  }, [statusData]);
-
   async function triggerRun() {
     if (!projectId) return;
-    setIsRunning(true);
     try {
       const res = await fetch(`/api/keyword-workspace/projects/${projectId}/serp-cluster/run`, {
         method: "POST",
@@ -148,11 +173,8 @@ export default function KeywordWorkspacePage() {
       }
       toast.success("SERP-Clustering gestartet");
       await mutateStatus();
-      await mutateSerp();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Fehler beim Start");
-    } finally {
-      setIsRunning(false);
     }
   }
 
@@ -198,9 +220,9 @@ export default function KeywordWorkspacePage() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Keine Property ausgewählt</CardTitle>
+          <CardTitle>Keine Property ausgew\u00e4hlt</CardTitle>
         </CardHeader>
-        <CardContent>Wähle oben links eine Property aus, um den Workspace zu laden.</CardContent>
+        <CardContent>W\u00e4hle oben links eine Property aus, um den Workspace zu laden.</CardContent>
       </Card>
     );
   }
@@ -216,21 +238,16 @@ export default function KeywordWorkspacePage() {
             onChange={(e) => setMinDemandInput(e.target.value)}
             placeholder="Min Impr."
           />
-          <span className="text-xs text-muted-foreground">Min Impressions (default 5)</span>
+          <span className="text-xs text-muted-foreground">Min Impressions/Monat</span>
         </div>
         <Button onClick={triggerRun} disabled={isRunning || !projectId} className="gap-2">
           <Play className="h-4 w-4" />
-          {isRunning ? "Läuft..." : "SERP clustern"}
+          {isRunning ? "L\u00e4uft..." : "SERP clustern"}
         </Button>
         <Button variant="outline" onClick={() => Promise.all([mutateSerp(), mutateStatus()])} className="gap-2">
           <RefreshCw className="h-4 w-4" />
           Refresh
         </Button>
-        {statusData?.status && (
-          <span className="text-xs text-muted-foreground">
-            Status: {statusData.status} {statusData.error ? `· ${statusData.error}` : ""}
-          </span>
-        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
@@ -239,7 +256,19 @@ export default function KeywordWorkspacePage() {
             <CardTitle>Clustering Graph</CardTitle>
           </CardHeader>
           <CardContent className="h-[65vh]">
-            {serpData?.parents?.length ? (
+            {isRunning ? (
+              <div className="h-full flex flex-col items-center justify-center gap-4">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                <div className="text-center space-y-1">
+                  <p className="text-sm font-medium">
+                    {STATUS_LABELS[statusData?.status] ?? "Clustering l\u00e4uft..."}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Bitte warte, das kann je nach Keyword-Anzahl einige Minuten dauern.
+                  </p>
+                </div>
+              </div>
+            ) : serpData?.parents?.length ? (
               <ReactFlow
                 nodes={flowData.nodes}
                 edges={flowData.edges}
@@ -254,10 +283,21 @@ export default function KeywordWorkspacePage() {
               </ReactFlow>
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
-                <p>Noch kein SERP-Clustering gelaufen.</p>
-                <Button size="sm" onClick={triggerRun} disabled={isRunning || !projectId}>
-                  Jetzt starten
-                </Button>
+                {statusData?.status === "failed" ? (
+                  <>
+                    <p>Letztes Clustering fehlgeschlagen: {statusData.error}</p>
+                    <Button size="sm" onClick={triggerRun} disabled={!projectId}>
+                      Erneut versuchen
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p>Noch kein SERP-Clustering gelaufen.</p>
+                    <Button size="sm" onClick={triggerRun} disabled={!projectId}>
+                      Jetzt starten
+                    </Button>
+                  </>
+                )}
               </div>
             )}
           </CardContent>
@@ -307,7 +347,9 @@ export default function KeywordWorkspacePage() {
                 </ScrollArea>
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">Wähle einen Parent-Cluster.</p>
+              <p className="text-sm text-muted-foreground">
+                {isRunning ? "Warte auf Ergebnisse..." : "W\u00e4hle einen Parent-Cluster."}
+              </p>
             )}
           </CardContent>
         </Card>

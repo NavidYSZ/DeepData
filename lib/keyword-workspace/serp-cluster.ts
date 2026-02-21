@@ -4,6 +4,12 @@ import { nanoid } from "nanoid";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import { prisma } from "@/lib/db";
+import { searchAnalyticsQuery } from "@/lib/gsc";
+import {
+  ensureWorkspaceSource,
+  ingestSourceMetrics,
+  recomputeDemandForProject
+} from "@/lib/keyword-workspace/service";
 
 type KeywordLite = {
   id: string;
@@ -36,6 +42,7 @@ type ParentJson = {
 
 const ZYTE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_CONCURRENCY = 5;
+const GSC_DAYS = 180;
 
 function createLimiter(limit: number) {
   let active = 0;
@@ -74,38 +81,72 @@ function jaccard(a: Set<string>, b: Set<string>) {
 }
 
 async function fetchZyteSerp(keyword: string): Promise<SerpFetchResult> {
-  if (!process.env.ZYTE_API_KEY) {
+  const apiKey = process.env.ZYTE_API_KEY;
+  if (!apiKey) {
     return { urls: [], status: 0, durationMs: 0, error: "ZYTE_API_KEY missing" };
   }
-  const started = Date.now();
-  const body = {
-    url: `https://www.google.com/search?q=${encodeURIComponent(keyword)}&num=10&hl=de`,
-    browserHtml: true,
-    pageType: "searchEngineResultsPage"
-  };
-  const res = await fetch("https://api.zyte.com/v1/extract", {
-    method: "POST",
-    headers: {
-      Authorization: `Apikey ${process.env.ZYTE_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
-  const durationMs = Date.now() - started;
-  const status = res.status;
-  let json: any = null;
-  try {
-    json = await res.json();
-  } catch {
-    /* ignore */
-  }
-  const urls: SerpTopUrl[] =
-    json?.search?.results
-      ?.filter((r: any) => r?.url)
-      ?.slice(0, 10)
-      ?.map((r: any, idx: number) => ({ url: r.url, position: r.position ?? idx + 1 })) ?? [];
 
-  return { urls, status, durationMs, raw: json, error: status >= 400 ? json?.message ?? "fetch_failed" : undefined };
+  const body = {
+    url: `https://www.google.de/search?q=${encodeURIComponent(keyword)}&hl=de`,
+    serp: true,
+    serpOptions: { extractFrom: "httpResponseBody" },
+    geolocation: "DE",
+    device: "desktop",
+    followRedirect: true
+  };
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const started = Date.now();
+    let res: Response;
+    try {
+      res = await fetch("https://api.zyte.com/v1/extract", {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${Buffer.from(apiKey + ":").toString("base64")}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+      });
+    } catch (e) {
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 2000));
+        continue;
+      }
+      return { urls: [], status: 0, durationMs: Date.now() - started, error: `network_error: ${String(e)}` };
+    }
+
+    const durationMs = Date.now() - started;
+    const status = res.status;
+
+    // Retry on server errors or rate limits
+    if ((status >= 500 || status === 429) && attempt === 0) {
+      await new Promise((r) => setTimeout(r, status === 429 ? 5000 : 2000));
+      continue;
+    }
+
+    let json: any = null;
+    try {
+      json = await res.json();
+    } catch {
+      /* ignore */
+    }
+
+    const organicResults: any[] = json?.serp?.organicResults ?? [];
+    const urls: SerpTopUrl[] = organicResults
+      .filter((r: any) => r?.url)
+      .slice(0, 10)
+      .map((r: any) => ({ url: r.url, position: r.rank ?? 0 }));
+
+    return {
+      urls,
+      status,
+      durationMs,
+      raw: json,
+      error: status >= 400 ? json?.message ?? `fetch_failed_${status}` : undefined
+    };
+  }
+
+  return { urls: [], status: 0, durationMs: 0, error: "max_retries" };
 }
 
 function buildOverlapGraph(keywords: KeywordLite[], urlHosts: Record<string, Set<string>>, threshold: number) {
@@ -251,39 +292,86 @@ async function mapParentsWithLlm(subclusters: ReturnType<typeof clusterGraph>) {
   }));
 }
 
+function toIso(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
 export async function runSerpClustering(params: {
+  runId: string;
   projectId: string;
   userId: string;
+  accessToken?: string;
+  gscSiteUrl?: string;
   minDemand?: number;
   overlapThreshold?: number;
   forceRefetch?: boolean;
 }) {
-  const { projectId, userId, minDemand = 5, overlapThreshold = 0.3, forceRefetch = false } = params;
-  const project = await prisma.keywordProject.findFirst({ where: { id: projectId, userId } });
-  if (!project) throw new Error("PROJECT_NOT_FOUND");
+  const { runId, projectId, userId, accessToken, gscSiteUrl, minDemand = 5, overlapThreshold = 0.3, forceRefetch = false } = params;
 
-  const keywords = await prisma.keyword.findMany({
-    where: { projectId, demand: { demandMonthly: { gte: minDemand } } },
-    include: { demand: true }
-  });
-  if (!keywords.length) throw new Error("NO_KEYWORDS");
-
-  const runId = nanoid();
-  await prisma.serpClusterRun.create({
-    data: {
-      id: runId,
-      projectId,
-      status: "running",
-      urlOverlapThreshold: overlapThreshold,
-      minDemand
-    }
-  });
+  async function updateStatus(status: string, extra?: Record<string, any>) {
+    await prisma.serpClusterRun.update({
+      where: { id: runId },
+      data: { status, ...extra }
+    });
+  }
 
   let zyteRequested = 0;
   let zyteSucceeded = 0;
   let zyteCached = 0;
 
   try {
+    // ── Phase 1: Auto-import GSC data if needed ──
+    const kwCount = await prisma.keyword.count({
+      where: { projectId, demand: { demandMonthly: { gte: minDemand } } }
+    });
+
+    if (kwCount === 0 && accessToken && gscSiteUrl) {
+      await updateStatus("importing_gsc");
+
+      const to = new Date();
+      to.setHours(0, 0, 0, 0);
+      const from = new Date(to);
+      from.setDate(to.getDate() - GSC_DAYS + 1);
+
+      const source = await ensureWorkspaceSource(projectId, "gsc", "GSC Auto", {
+        siteUrl: gscSiteUrl,
+        days: GSC_DAYS
+      });
+
+      const rows = await searchAnalyticsQuery(accessToken, gscSiteUrl, {
+        startDate: toIso(from),
+        endDate: toIso(to),
+        dimensions: ["query"],
+        rowLimit: 5000
+      });
+
+      await ingestSourceMetrics({
+        projectId,
+        sourceId: source.id,
+        replaceExistingForSource: true,
+        rows: rows.map((row) => ({
+          kwRaw: row.keys?.[0] ?? "",
+          impressions: row.impressions,
+          clicks: row.clicks,
+          position: row.position,
+          dateFrom: from,
+          dateTo: to
+        }))
+      });
+
+      await recomputeDemandForProject(projectId);
+    }
+
+    // ── Phase 2: Query keywords ──
+    await updateStatus("fetching_serps");
+
+    const keywords = await prisma.keyword.findMany({
+      where: { projectId, demand: { demandMonthly: { gte: minDemand } } },
+      include: { demand: true }
+    });
+    if (!keywords.length) throw new Error("NO_KEYWORDS");
+
+    // ── Phase 3: Fetch SERPs ──
     const limit = createLimiter(MAX_CONCURRENCY);
     const urlHosts: Record<string, Set<string>> = {};
 
@@ -331,12 +419,12 @@ export async function runSerpClustering(params: {
 
     const usableKeywords = keywords.filter((k) => (urlHosts[k.id]?.size ?? 0) > 0);
     if (!usableKeywords.length) {
-      await prisma.serpClusterRun.update({
-        where: { id: runId },
-        data: { status: "failed", finishedAt: new Date(), error: "NO_SERPS" }
-      });
+      await updateStatus("failed", { finishedAt: new Date(), error: "NO_SERPS", zyteRequested, zyteSucceeded, zyteCached });
       throw new Error("NO_SERPS");
     }
+
+    // ── Phase 4: Build graph + cluster ──
+    await updateStatus("clustering", { zyteRequested, zyteSucceeded, zyteCached });
 
     const graph = buildOverlapGraph(
       usableKeywords.map((k) => ({ id: k.id, kwRaw: k.kwRaw, demandMonthly: k.demand?.demandMonthly ?? 0 })),
@@ -351,9 +439,12 @@ export async function runSerpClustering(params: {
     );
 
     const subclusters = clustered.map((s) => ({ ...s, id: nanoid() }));
+
+    // ── Phase 5: Map parents with LLM ──
+    await updateStatus("mapping_parents");
     const parents = await mapParentsWithLlm(subclusters);
 
-    // persist
+    // ── Phase 6: Persist results ──
     await prisma.$transaction(async (tx) => {
       await tx.serpSubclusterMember.deleteMany({ where: { subcluster: { projectId } } });
       await tx.serpParentToSubcluster.deleteMany({ where: { parent: { projectId } } });
@@ -429,7 +520,7 @@ export async function runSerpClustering(params: {
     await prisma.serpClusterRun.update({
       where: { id: runId },
       data: { status: "failed", finishedAt: new Date(), error: e instanceof Error ? e.message : String(e), zyteRequested, zyteSucceeded, zyteCached }
-    });
+    }).catch(() => {});
     throw e;
   }
 }
