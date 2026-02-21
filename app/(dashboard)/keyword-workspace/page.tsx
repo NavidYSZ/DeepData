@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
-import ReactFlow, { Background, Controls, Edge, Node, NodeProps } from "reactflow";
+import ReactFlow, { Background, Controls, Edge, Node, NodeProps, ReactFlowInstance } from "reactflow";
 import "reactflow/dist/style.css";
 import { Loader2, Play, RefreshCw } from "lucide-react";
 import dagre from "dagre";
@@ -74,15 +74,6 @@ function ParentNode({ data, selected }: NodeProps & { selected?: boolean }) {
       <div className="text-sm font-semibold truncate">{data.name}</div>
       <div className="text-xs text-muted-foreground">Demand {Math.round(data.totalDemand)}</div>
       <div className="text-xs text-muted-foreground">Keywords {data.keywordCount}</div>
-      {data.topDomains?.length ? (
-        <div className="mt-1 flex flex-wrap gap-1">
-          {data.topDomains.slice(0, 4).map((d: string) => (
-            <Badge key={d} variant="secondary" className="text-[10px]">
-              {d}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -105,15 +96,6 @@ function SubclusterNode({ data }: NodeProps) {
           </div>
         ))}
       </div>
-      {data.topDomains?.length ? (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {data.topDomains.slice(0, 3).map((d: string) => (
-            <Badge key={d} variant="outline" className="text-[10px]">
-              {d}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -201,6 +183,8 @@ export default function KeywordWorkspacePage() {
   const [pollInterval, setPollInterval] = useState(0);
   const [showSidebar, setShowSidebar] = useState(false);
   const wasRunningRef = useRef(false);
+  const flowRef = useRef<ReactFlowInstance | null>(null);
+  const lastFitKeyRef = useRef<string>("");
 
   const { data: serpData, mutate: mutateSerp } = useSWR<SerpResponse>(
     projectId ? `/api/keyword-workspace/projects/${projectId}/serp-cluster?minDemand=${minDemand}` : null,
@@ -316,6 +300,17 @@ export default function KeywordWorkspacePage() {
     return layoutFlow(parents, selectedParent);
   }, [serpData, selectedParent]);
 
+  useEffect(() => {
+    if (!flowRef.current) return;
+    if (!serpData?.runId) return;
+    const fitKey = `${serpData.runId}:${selectedParent ?? "none"}:${flowData.nodes.length}`;
+    if (lastFitKeyRef.current === fitKey) return;
+    lastFitKeyRef.current = fitKey;
+    requestAnimationFrame(() => {
+      flowRef.current?.fitView({ padding: 0.2, duration: 300 });
+    });
+  }, [serpData?.runId, selectedParent, flowData.nodes.length]);
+
   const selectedParentData = useMemo(
     () => serpData?.parents.find((p) => p.id === selectedParent) ?? null,
     [serpData, selectedParent]
@@ -382,10 +377,12 @@ export default function KeywordWorkspacePage() {
                 nodes={flowData.nodes}
                 edges={flowData.edges}
                 nodeTypes={nodeTypes}
+                onInit={(instance) => {
+                  flowRef.current = instance;
+                }}
                 onNodeClick={(_, node) => {
                   if (node.id.startsWith("parent-")) setSelectedParent(node.id.replace("parent-", ""));
                 }}
-                fitView
                 className="h-full"
               >
                 <Background gap={16} />
