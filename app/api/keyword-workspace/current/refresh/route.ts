@@ -16,7 +16,7 @@ import {
 
 const bodySchema = z.object({
   siteUrl: z.string().min(1),
-  days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30)
+  days: z.union([z.literal(7), z.literal(30), z.literal(90), z.literal(180)]).default(30)
 });
 
 function err(code: string, message: string, details: Record<string, unknown> = {}, status = 400) {
