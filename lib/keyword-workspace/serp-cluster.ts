@@ -111,8 +111,7 @@ async function fetchZyteSerp(keyword: string): Promise<SerpFetchResult> {
 
   const body = {
     url: `https://www.google.de/search?q=${encodeURIComponent(keyword)}&hl=de`,
-    serp: true,
-    serpOptions: { extractFrom: "httpResponseBody" },
+    serp: { extractFrom: "httpResponseBody" },
     geolocation: "DE",
     device: "desktop",
     followRedirect: true
@@ -431,7 +430,7 @@ export async function runSerpClustering(params: {
     const tasks = keywords.map((kw) =>
       limit(async () => {
         const existing = await prisma.serpSnapshot.findFirst({
-          where: { projectId, keywordId: kw.id },
+          where: { projectId, keywordId: kw.id, status: "ok" },
           orderBy: { fetchedAt: "desc" }
         });
         const fresh = existing && Date.now() - existing.fetchedAt.getTime() < ZYTE_TTL_MS;
