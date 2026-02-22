@@ -21,12 +21,23 @@ export async function GET() {
     : await prisma.gscAccount.findFirst({ where: { userId }, orderBy: { created_at: "asc" } });
 
   if (!account?.refresh_token) {
-    return NextResponse.json({ error: "Not connected" }, { status: 401 });
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[GSC][sites] missing_refresh_token", { userId, accountId, accountFound: !!account });
+    }
+    return NextResponse.json({ error: "Not connected", code: "missing_refresh_token" }, { status: 401 });
   }
 
   try {
     const tokens = await refreshAccessToken(decrypt(account.refresh_token));
     const sites = await listSites(tokens.access_token);
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[GSC][sites] success", {
+        userId,
+        accountId: account.id,
+        email: account.email,
+        siteCount: sites.length
+      });
+    }
     return NextResponse.json(
       {
         sites: sites.map((s) => ({
@@ -37,8 +48,14 @@ export async function GET() {
       { status: 200 }
     );
   } catch (err: any) {
-    console.error("GSC sites error", err);
     const message = err?.message ?? "Server error";
+    const invalidGrant = /invalid_grant|token revoked|token_expired/i.test(message);
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[GSC][sites] error", { userId, accountId, email: account.email, message });
+    }
+    if (invalidGrant) {
+      return NextResponse.json({ error: message, code: "refresh_invalid" }, { status: 401 });
+    }
     if (message.includes("ACCESS_TOKEN_SCOPE_INSUFFICIENT") || message.includes("insufficientPermissions")) {
       return NextResponse.json({ error: message, code: "insufficient_scope" }, { status: 403 });
     }

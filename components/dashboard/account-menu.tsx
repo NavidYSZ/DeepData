@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { useSession, signIn } from "next-auth/react";
 import { ChevronDown } from "lucide-react";
+import { useSWRConfig } from "swr";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ function truncateLabel(value: string, maxLength = 28) {
 export function AccountMenu({ className, compact = false }: AccountMenuProps) {
   const { status } = useSession();
   const { data, mutate } = useSWR<AccountsResponse>(status === "authenticated" ? "/api/accounts" : null, fetcher);
+  const { mutate: mutateGlobal } = useSWRConfig();
   const [selecting, setSelecting] = useState<string | null>(null);
 
   const accounts = data?.accounts ?? [];
@@ -57,6 +59,7 @@ export function AccountMenu({ className, compact = false }: AccountMenuProps) {
     } catch (e) {
       // ignore storage errors (e.g. during SSR)
     }
+    mutateGlobal("/api/gsc/sites");
     mutate();
     window.location.reload();
   }

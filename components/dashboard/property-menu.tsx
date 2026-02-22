@@ -21,7 +21,7 @@ interface SitesResponse {
 }
 
 const fetcher = async (url: string) => {
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: "no-store", next: { revalidate: 0 } });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err: any = new Error(json?.error || "fetch error");
@@ -44,7 +44,15 @@ export function PropertyMenu({
   const { site, setSite } = useSite();
   const sidebar = useSidebar();
   const forcedOpenRef = useRef(false);
-  const { data, error, isLoading } = useSWR<SitesResponse>("/api/gsc/sites", fetcher);
+  const accountId =
+    typeof document !== "undefined"
+      ? document.cookie
+          .split(";")
+          .map((c) => c.trim())
+          .find((c) => c.startsWith("accountId="))
+          ?.split("=")[1] ?? ""
+      : "";
+  const { data, error, isLoading } = useSWR<SitesResponse>(["/api/gsc/sites", accountId], ([url]) => fetcher(url));
 
   useEffect(() => {
     if (!data?.sites?.length) return;

@@ -37,7 +37,10 @@ export async function POST(request: Request) {
     : await prisma.gscAccount.findFirst({ where: { userId }, orderBy: { created_at: "asc" } });
 
   if (!account?.refresh_token) {
-    return NextResponse.json({ error: "Not connected" }, { status: 401 });
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[GSC][query] missing_refresh_token", { userId, accountId, accountFound: !!account });
+    }
+    return NextResponse.json({ error: "Not connected", code: "missing_refresh_token" }, { status: 401 });
   }
 
   let body: z.infer<typeof bodySchema>;
@@ -71,9 +74,31 @@ export async function POST(request: Request) {
         : undefined
     });
 
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[GSC][query] success", {
+        userId,
+        accountId: account.id,
+        email: account.email,
+        siteUrl: body.siteUrl,
+        rowCount: rows.length
+      });
+    }
     return NextResponse.json({ rows }, { status: 200 });
   } catch (err: any) {
-    console.error("GSC query error", err);
-    return NextResponse.json({ error: err.message ?? "Server error" }, { status: 500 });
+    const message = err?.message ?? "Server error";
+    const invalidGrant = /invalid_grant|token revoked|token_expired/i.test(message);
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[GSC][query] error", {
+        userId,
+        accountId: account.id,
+        email: account.email,
+        siteUrl: body.siteUrl,
+        message
+      });
+    }
+    if (invalidGrant) {
+      return NextResponse.json({ error: message, code: "refresh_invalid" }, { status: 401 });
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
