@@ -22,8 +22,9 @@ const pageTitles: Record<string, string> = {
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const isKeywordWorkspace = pathname.startsWith("/keyword-workspace");
   const pageTitle =
-    pathname.startsWith("/keyword-workspace") ? "Keyword Mapping" : pageTitles[pathname] ?? "Dashboard";
+    isKeywordWorkspace ? "Keyword Mapping" : pageTitles[pathname] ?? "Dashboard";
 
   return (
     <SiteProvider>
@@ -31,9 +32,17 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="flex min-h-screen w-full">
           <AppSidebar pathname={pathname} />
 
-          <SidebarInset>
+          <SidebarInset className={cn(isKeywordWorkspace && "overflow-hidden")}>
             <SiteHeader pageTitle={pageTitle} />
-            <main className={cn("container max-w-screen-2xl space-y-6 px-4 py-6 md:px-6")}>{children}</main>
+            <main
+              className={cn(
+                isKeywordWorkspace
+                  ? "flex-1 min-h-0 w-full max-w-none overflow-hidden p-0"
+                  : "container max-w-screen-2xl space-y-6 px-4 py-6 md:px-6"
+              )}
+            >
+              {children}
+            </main>
           </SidebarInset>
         </div>
       </SidebarProvider>

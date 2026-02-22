@@ -399,7 +399,7 @@ export default function KeywordWorkspacePage() {
   }
 
   return (
-    <div className="fixed left-0 right-0 bottom-0 top-16 overflow-hidden bg-card">
+    <div className="relative h-full w-full overflow-hidden bg-card">
       {serpData?.generatedAt ? (
         <div className="absolute top-3 left-3 text-[11px] text-muted-foreground z-10">
           Stand {new Date(serpData.generatedAt).toLocaleString()}
