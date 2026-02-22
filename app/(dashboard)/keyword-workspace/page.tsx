@@ -330,7 +330,7 @@ export default function KeywordWorkspacePage() {
     <motion.div
       layoutId={`parent-${selectedParentData.id}`}
       className="absolute z-10 rounded-lg border bg-card shadow-2xl p-4 overflow-auto"
-      style={{ top: "10vh", left: "4vw", width: "38vw", maxHeight: "78vh" }}
+      style={{ top: "10vh", left: "3vw", width: "30vw", maxHeight: "70vh" }}
       transition={{ duration: 0.35, ease: "easeInOut" }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -399,75 +399,71 @@ export default function KeywordWorkspacePage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-4">
-        <div className="flex items-center gap-2">
+    <div className="h-[calc(100vh-80px)] relative overflow-hidden rounded-lg border bg-card">
+      {serpData?.generatedAt ? (
+        <div className="absolute top-3 left-3 text-[11px] text-muted-foreground z-10">
+          Stand {new Date(serpData.generatedAt).toLocaleString()}
+        </div>
+      ) : null}
+
+      {isRunning ? (
+        <div className="h-full flex flex-col items-center justify-center gap-4">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <div className="text-center space-y-1">
+            <p className="text-sm font-medium">{STATUS_LABELS[statusData?.status] ?? "Clustering läuft..."}</p>
+            <p className="text-xs text-muted-foreground">Bitte warte, das kann je nach Keyword-Anzahl einige Minuten dauern.</p>
+          </div>
+        </div>
+      ) : parents.length === 0 ? (
+        <div className="h-full flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
+          <p>Noch kein SERP-Clustering gelaufen.</p>
+          <Button size="sm" onClick={triggerRun} disabled={!projectId}>
+            Jetzt starten
+          </Button>
+        </div>
+      ) : viewMode === "overview" ? (
+        <div className="h-full overflow-auto pb-16 p-4">{overviewCards}</div>
+      ) : (
+        <div className="h-full relative">
+          {stackBlock}
+          <AnimatePresence>{focusPanel}</AnimatePresence>
+          <div className="absolute inset-0 pl-[36vw] pt-6 pr-4 pb-12">
+            {subFlow.nodes.length ? (
+              focusSubclusters
+            ) : (
+              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                Keine Subcluster gefunden.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="pointer-events-none absolute inset-0 flex items-end justify-center pb-3">
+        <div className="pointer-events-auto bg-card/90 backdrop-blur-sm border rounded-full shadow-lg px-3 py-2 flex items-center gap-2 text-xs">
           <Input
             type="number"
-            className="w-24"
+            className="w-24 h-8 text-xs"
             value={minDemandInput}
             onChange={(e) => setMinDemandInput(e.target.value)}
             placeholder="Min Impr."
           />
-          <span className="text-xs text-muted-foreground">Min Impressions</span>
+          <Button size="sm" className="h-8 gap-1" onClick={triggerRun} disabled={isRunning || !projectId}>
+            <Play className="h-3 w-3" />
+            {isRunning ? "Läuft" : "Clustern"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1"
+            onClick={() => Promise.all([mutateSerp(), mutateStatus()])}
+            disabled={isRunning}
+          >
+            <RefreshCw className="h-3 w-3" />
+            Refresh
+          </Button>
         </div>
-        <Button onClick={triggerRun} disabled={isRunning || !projectId} className="gap-2">
-          <Play className="h-4 w-4" />
-          {isRunning ? "Läuft..." : "SERP clustern"}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => Promise.all([mutateSerp(), mutateStatus()])}
-          disabled={isRunning}
-          className="gap-2"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </Button>
       </div>
-
-      <Card className="h-[78vh] overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Parent Cluster</CardTitle>
-          {serpData?.generatedAt ? (
-            <span className="text-xs text-muted-foreground">Stand {new Date(serpData.generatedAt).toLocaleString()}</span>
-          ) : null}
-        </CardHeader>
-        <CardContent className="relative h-[68vh]">
-          {isRunning ? (
-            <div className="h-full flex flex-col items-center justify-center gap-4">
-              <Loader2 className="h-10 w-10 animate-spin text-primary" />
-              <div className="text-center space-y-1">
-                <p className="text-sm font-medium">{STATUS_LABELS[statusData?.status] ?? "Clustering läuft..."}</p>
-                <p className="text-xs text-muted-foreground">Bitte warte, das kann je nach Keyword-Anzahl einige Minuten dauern.</p>
-              </div>
-            </div>
-          ) : parents.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
-              <p>Noch kein SERP-Clustering gelaufen.</p>
-              <Button size="sm" onClick={triggerRun} disabled={!projectId}>
-                Jetzt starten
-              </Button>
-            </div>
-          ) : viewMode === "overview" ? (
-            <div className="h-full overflow-auto pb-4">{overviewCards}</div>
-          ) : (
-            <div className="h-full relative">
-              {stackBlock}
-              <AnimatePresence>{focusPanel}</AnimatePresence>
-              <div className="absolute inset-0 pl-[44vw]">
-                {subFlow.nodes.length ? (
-                  focusSubclusters
-                ) : (
-                  <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                    Keine Subcluster gefunden.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
