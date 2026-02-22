@@ -65,6 +65,9 @@ const FLOW_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 const OVERVIEW_STAGGER_MS = 14;
 const DOCK_STAGGER_MS = 22;
 const FITVIEW_ANIM_MS = 420;
+const FLOW_OUT_MS = 420;
+const FLOW_OUT_STAGGER_MS = 24;
+const FITVIEW_DELAY_MS = 120;
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -126,7 +129,7 @@ function ParentNode({ data }: NodeProps) {
       className={[
         "rounded-lg border bg-card p-3 shadow-sm w-[280px] will-change-[transform,opacity]",
         isDocked
-          ? "opacity-0 scale-[0.2] pointer-events-none"
+          ? "opacity-0 scale-[0.8] pointer-events-none"
           : isClickFeedback
             ? "opacity-100 scale-[0.97] cursor-pointer shadow-md"
             : "opacity-100 scale-100 cursor-pointer hover:shadow-md hover:-translate-y-1"
@@ -194,9 +197,9 @@ function buildFlowGraph(
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
-  const transitionStyle = (delayMs = 0) => ({
+  const transitionStyle = (delayMs = 0, durationMs = FLOW_ANIM_MS) => ({
     transitionProperty: "transform, opacity",
-    transitionDuration: `${FLOW_ANIM_MS}ms`,
+    transitionDuration: `${durationMs}ms`,
     transitionTimingFunction: FLOW_EASING,
     transitionDelay: `${delayMs}ms`
   });
@@ -324,7 +327,7 @@ function buildFlowGraph(
           docked: true,
           onSelect
         },
-        style: { ...transitionStyle(idx * DOCK_STAGGER_MS), zIndex: 1 },
+        style: { ...transitionStyle(idx * FLOW_OUT_STAGGER_MS, FLOW_OUT_MS), zIndex: 1 },
         draggable: false
       });
     });
@@ -547,12 +550,16 @@ export default function KeywordWorkspacePage() {
           .map((node) => ({ id: node.id }))
       : flowNodes.map((node) => ({ id: node.id }));
 
-    requestAnimationFrame(() => {
-      flowRef.current?.fitView({ padding: 0.15, duration: FITVIEW_ANIM_MS, nodes: visibleNodeIds });
-      window.setTimeout(() => {
-        requestAnimationFrame(() => updateDockTarget());
-      }, FITVIEW_ANIM_MS + 20);
-    });
+    const delay = selectedParent ? FITVIEW_DELAY_MS : 0;
+    const timer = window.setTimeout(() => {
+      requestAnimationFrame(() => {
+        flowRef.current?.fitView({ padding: 0.15, duration: FITVIEW_ANIM_MS, nodes: visibleNodeIds });
+        window.setTimeout(() => {
+          requestAnimationFrame(() => updateDockTarget());
+        }, FITVIEW_ANIM_MS + 20);
+      });
+    }, delay);
+    return () => window.clearTimeout(timer);
   }, [selectedParent, flowNodes, updateDockTarget]);
 
   useEffect(() => {
