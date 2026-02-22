@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import ReactFlow, { Background, Controls, Edge, Node, NodeProps, ReactFlowInstance } from "reactflow";
 import "reactflow/dist/style.css";
-import { LayoutGrid, Loader2, Play, RefreshCw } from "lucide-react";
+import { LayoutGrid, Loader2, Menu, Play, RefreshCw } from "lucide-react";
 import dagre from "dagre";
 import { useSite } from "@/components/dashboard/site-context";
 import { Button } from "@/components/ui/button";
@@ -596,7 +596,7 @@ export default function KeywordWorkspacePage() {
       ) : null}
 
       {selectedParent && !isRunning && parents.length > 0 ? (
-        <div className="absolute top-4 right-4 z-20">
+        <div className="absolute top-4 right-4 z-20 flex gap-2">
           <Button
             type="button"
             size="icon"
@@ -605,6 +605,14 @@ export default function KeywordWorkspacePage() {
             aria-label="Zur Parent-Cluster-Übersicht"
           >
             <LayoutGrid className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            className="h-11 w-11 rounded-full border border-primary/70 bg-primary text-primary-foreground shadow-2xl transition-transform duration-200 hover:scale-105"
+            aria-label="Menü"
+          >
+            <Menu className="h-4 w-4" />
           </Button>
         </div>
       ) : null}
