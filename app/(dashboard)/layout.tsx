@@ -33,7 +33,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <AppSidebar pathname={pathname} />
 
           <SidebarInset className={cn(isKeywordWorkspace && "overflow-hidden")}>
-            <SiteHeader pageTitle={pageTitle} />
+            {!isKeywordWorkspace ? <SiteHeader pageTitle={pageTitle} /> : null}
             <main
               className={cn(
                 isKeywordWorkspace

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import ReactFlow, { Background, Controls, Edge, Node, NodeProps, ReactFlowInstance } from "reactflow";
 import "reactflow/dist/style.css";
-import { Loader2, Play, RefreshCw } from "lucide-react";
+import { LayoutGrid, Loader2, Play, RefreshCw } from "lucide-react";
 import dagre from "dagre";
 import { useSite } from "@/components/dashboard/site-context";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,11 @@ const SUB_HEIGHT = 150;
 const GRID_COLS = 4;
 const GRID_GAP_X = 40;
 const GRID_GAP_Y = 40;
+const FLOW_ANIM_MS = 560;
+const FLOW_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
+const OVERVIEW_STAGGER_MS = 14;
+const DOCK_STAGGER_MS = 22;
+const FITVIEW_ANIM_MS = 420;
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -73,7 +78,7 @@ async function fetchJson<T>(url: string): Promise<T> {
   return json;
 }
 
-/* ── Custom Node: Parent (unified – compact / expanded / stacked) ── */
+/* ── Custom Node: Parent (unified – compact / expanded / docked) ── */
 function ParentNode({ data }: NodeProps) {
   /* ── Expanded detail view (selected parent) ── */
   if (data.expanded) {
@@ -87,9 +92,6 @@ function ParentNode({ data }: NodeProps) {
               Demand {Math.round(data.totalDemand)} · Keywords {data.keywordCount}
             </div>
           </div>
-          <Button size="sm" variant="ghost" onClick={() => data.onBack?.()}>
-            Zurück
-          </Button>
         </div>
         <div className="mt-3 text-xs text-muted-foreground">
           {data.subclusterCount} Subcluster
@@ -116,27 +118,20 @@ function ParentNode({ data }: NodeProps) {
     );
   }
 
-  /* ── Stacked view (top-right corner, click → back to overview) ── */
-  if (data.stacked) {
-    return (
-      <div
-        className="rounded-lg border bg-card p-3 shadow-sm w-[220px] cursor-pointer opacity-50 hover:opacity-80 transition-opacity duration-200"
-        onClick={() => data.onBack?.()}
-      >
-        <div className="text-sm font-semibold truncate">{data.name}</div>
-        <div className="text-xs text-muted-foreground">Demand {Math.round(data.totalDemand)}</div>
-        {data.stackLabel ? (
-          <div className="text-[11px] text-primary font-medium mt-1">{data.stackLabel}</div>
-        ) : null}
-      </div>
-    );
-  }
-
   /* ── Normal compact card (overview grid) ── */
+  const isDocked = !!data.docked;
   return (
     <div
-      className="rounded-lg border bg-card p-3 shadow-sm w-[280px] cursor-pointer transition-all duration-300 hover:shadow-md hover:-translate-y-1"
-      onClick={() => data.onSelect?.(data.parentId)}
+      className={[
+        "rounded-lg border bg-card p-3 shadow-sm w-[280px] will-change-[transform,opacity]",
+        isDocked
+          ? "opacity-0 scale-[0.2] pointer-events-none"
+          : "opacity-100 scale-100 cursor-pointer hover:shadow-md hover:-translate-y-1"
+      ].join(" ")}
+      onClick={() => {
+        if (isDocked) return;
+        data.onSelect?.(data.parentId);
+      }}
     >
       <div className="text-sm font-semibold truncate">{data.name}</div>
       <div className="text-xs text-muted-foreground">Demand {Math.round(data.totalDemand)}</div>
@@ -179,14 +174,19 @@ function buildFlowGraph(
   parents: SerpParent[],
   selectedParent: string | null,
   onSelect: (id: string) => void,
-  onBack: () => void
+  dockTarget: { x: number; y: number } | null
 ): { nodes: Node[]; edges: Edge[] } {
   if (!parents.length) return { nodes: [], edges: [] };
 
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
-  const TRANSITION_STYLE = { transition: "transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)" };
+  const transitionStyle = (delayMs = 0) => ({
+    transitionProperty: "transform, opacity",
+    transitionDuration: `${FLOW_ANIM_MS}ms`,
+    transitionTimingFunction: FLOW_EASING,
+    transitionDelay: `${delayMs}ms`
+  });
 
   if (!selectedParent) {
     // ── Overview: grid of parent nodes ──
@@ -208,7 +208,7 @@ function buildFlowGraph(
           subclusterCount: p.subclusters.length,
           onSelect
         },
-        style: TRANSITION_STYLE,
+        style: transitionStyle(idx * OVERVIEW_STAGGER_MS),
         draggable: false
       });
     });
@@ -239,10 +239,9 @@ function buildFlowGraph(
         expanded: true,
         keywordsFlat,
         totalKeywords: selected.keywordCount,
-        onBack,
         onSelect
       },
-      style: { ...TRANSITION_STYLE, zIndex: 10 },
+      style: { ...transitionStyle(), zIndex: 10 },
       draggable: false
     });
 
@@ -271,7 +270,7 @@ function buildFlowGraph(
             y: pos?.y - SUB_HEIGHT / 2 || 0
           },
           data: { ...s },
-          style: TRANSITION_STYLE,
+          style: transitionStyle(),
           draggable: false
         });
         edges.push({
@@ -284,18 +283,18 @@ function buildFlowGraph(
       });
     }
 
-    // Stacked parent nodes (top-right corner)
+    // Dock remaining parent nodes into top-right return button target
     const rest = parents.filter((p) => p.id !== selectedParent);
-    const stackX = maxSubX + 80;
-    const stackY = -10;
+    const dockX = (dockTarget?.x ?? maxSubX + 120) - PARENT_WIDTH / 2;
+    const dockY = (dockTarget?.y ?? 0) - PARENT_HEIGHT / 2;
 
     rest.forEach((p, idx) => {
       nodes.push({
         id: `parent-${p.id}`,
         type: "parentNode",
         position: {
-          x: stackX + idx * 8,
-          y: stackY + idx * 5
+          x: dockX,
+          y: dockY
         },
         data: {
           parentId: p.id,
@@ -303,12 +302,10 @@ function buildFlowGraph(
           totalDemand: p.totalDemand,
           keywordCount: p.keywordCount,
           subclusterCount: p.subclusters.length,
-          stacked: true,
-          stackLabel: idx === 0 ? `← ${rest.length} weitere Cluster` : undefined,
-          onBack,
+          docked: true,
           onSelect
         },
-        style: { ...TRANSITION_STYLE, zIndex: rest.length - idx },
+        style: { ...transitionStyle(idx * DOCK_STAGGER_MS), zIndex: 1 },
         draggable: false
       });
     });
@@ -332,6 +329,8 @@ export default function KeywordWorkspacePage() {
   const [pollInterval, setPollInterval] = useState(0);
   const wasRunningRef = useRef(false);
   const flowRef = useRef<ReactFlowInstance | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const [dockTarget, setDockTarget] = useState<{ x: number; y: number } | null>(null);
 
   const { data: serpData, mutate: mutateSerp } = useSWR<SerpResponse>(
     projectId ? `/api/keyword-workspace/projects/${projectId}/serp-cluster?minDemand=${minDemand}` : null,
@@ -345,6 +344,22 @@ export default function KeywordWorkspacePage() {
   );
 
   const isRunning = !!statusData?.status && ACTIVE_STATUSES.includes(statusData.status);
+
+  const updateDockTarget = useCallback(() => {
+    if (!flowRef.current || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const buttonSize = 44;
+    const offset = 16;
+    const flowPoint = flowRef.current.screenToFlowPosition({
+      x: rect.right - offset - buttonSize / 2,
+      y: rect.top + offset + buttonSize / 2
+    });
+    setDockTarget((previous) => {
+      if (!previous) return flowPoint;
+      if (Math.abs(previous.x - flowPoint.x) < 0.5 && Math.abs(previous.y - flowPoint.y) < 0.5) return previous;
+      return flowPoint;
+    });
+  }, []);
 
   useEffect(() => {
     setPollInterval(isRunning ? 2000 : 0);
@@ -441,19 +456,18 @@ export default function KeywordWorkspacePage() {
   // Reliable click handler at ReactFlow level (backup for node onClick)
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
+      if (selectedParent) return;
       if (node.type !== "parentNode") return;
-      if (node.data.stacked || node.data.expanded) {
-        setSelectedParent(null);
-      } else if (node.data.parentId) {
+      if (node.data.parentId) {
         setSelectedParent(node.data.parentId);
       }
     },
-    []
+    [selectedParent]
   );
 
   const { nodes: flowNodes, edges: flowEdges } = useMemo(
-    () => buildFlowGraph(parents, selectedParent, handleSelect, handleBack),
-    [parents, selectedParent, handleSelect, handleBack]
+    () => buildFlowGraph(parents, selectedParent, handleSelect, dockTarget),
+    [parents, selectedParent, handleSelect, dockTarget]
   );
 
   // fitView when nodes change
@@ -463,10 +477,30 @@ export default function KeywordWorkspacePage() {
     const nodeKey = `${selectedParent ?? "overview"}:${flowNodes.length}`;
     if (prevNodeKeyRef.current === nodeKey) return;
     prevNodeKeyRef.current = nodeKey;
+
+    const visibleNodeIds = selectedParent
+      ? flowNodes
+          .filter((node) => node.id === `parent-${selectedParent}` || node.type === "subNode")
+          .map((node) => ({ id: node.id }))
+      : flowNodes.map((node) => ({ id: node.id }));
+
     requestAnimationFrame(() => {
-      flowRef.current?.fitView({ padding: 0.15, duration: 400 });
+      flowRef.current?.fitView({ padding: 0.15, duration: FITVIEW_ANIM_MS, nodes: visibleNodeIds });
+      window.setTimeout(() => {
+        requestAnimationFrame(() => updateDockTarget());
+      }, FITVIEW_ANIM_MS + 20);
     });
-  }, [selectedParent, flowNodes.length]);
+  }, [selectedParent, flowNodes, updateDockTarget]);
+
+  useEffect(() => {
+    const rafId = requestAnimationFrame(() => updateDockTarget());
+    return () => cancelAnimationFrame(rafId);
+  }, [selectedParent, updateDockTarget]);
+
+  useEffect(() => {
+    window.addEventListener("resize", updateDockTarget);
+    return () => window.removeEventListener("resize", updateDockTarget);
+  }, [updateDockTarget]);
 
   if (!site) {
     return (
@@ -480,10 +514,24 @@ export default function KeywordWorkspacePage() {
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-card">
+    <div ref={canvasRef} className="relative h-full w-full overflow-hidden bg-card">
       {serpData?.generatedAt ? (
         <div className="absolute top-3 left-3 text-[11px] text-muted-foreground z-10">
           Stand {new Date(serpData.generatedAt).toLocaleString()}
+        </div>
+      ) : null}
+
+      {selectedParent && !isRunning && parents.length > 0 ? (
+        <div className="absolute top-4 right-4 z-20">
+          <Button
+            type="button"
+            size="icon"
+            className="h-11 w-11 rounded-full border border-border/60 bg-background/95 shadow-xl backdrop-blur transition-transform duration-200 hover:scale-105"
+            onClick={handleBack}
+            aria-label="Zur Parent-Cluster-Übersicht"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
         </div>
       ) : null}
 
@@ -509,8 +557,10 @@ export default function KeywordWorkspacePage() {
           nodeTypes={nodeTypes}
           onInit={(instance) => {
             flowRef.current = instance;
+            requestAnimationFrame(() => updateDockTarget());
           }}
           onNodeClick={handleNodeClick}
+          onMoveEnd={() => updateDockTarget()}
           panOnDrag
           zoomOnScroll
           fitView
