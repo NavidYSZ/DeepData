@@ -589,7 +589,7 @@ export default function KeywordWorkspacePage() {
           <Button
             type="button"
             size="icon"
-            className="h-11 w-11 rounded-full border border-border/60 bg-background/95 shadow-xl backdrop-blur transition-transform duration-200 hover:scale-105"
+            className="h-11 w-11 rounded-full border border-primary/70 bg-primary text-primary-foreground shadow-2xl transition-transform duration-200 hover:scale-105"
             onClick={handleBack}
             aria-label="Zur Parent-Cluster-Übersicht"
           >
