@@ -44,6 +44,11 @@ type SerpResponse = {
 const ACTIVE_STATUSES = ["pending", "importing_gsc", "fetching_serps", "clustering", "mapping_parents", "running"];
 const SERP_DEBUG = true;
 
+const MOTION = {
+  duration: { fast: 0.15, normal: 0.3, slow: 0.45 },
+  ease: [0.25, 0.1, 0.25, 1] as const,
+} as const;
+
 const STATUS_LABELS: Record<string, string> = {
   pending: "Wird vorbereitet...",
   importing_gsc: "GSC-Daten werden importiert (6 Monate)...",
@@ -67,7 +72,7 @@ async function fetchJson<T>(url: string): Promise<T> {
 
 function SubclusterNode({ data }: NodeProps) {
   return (
-    <div className="rounded-lg border bg-accent px-3 py-2 shadow-sm w-64 transition-all duration-200 hover:-translate-y-1">
+    <div className="rounded-lg border bg-accent px-3 py-2 shadow-sm w-64 transition-all duration-300 hover:-translate-y-1">
       <div className="text-sm font-semibold truncate">{data.name}</div>
       <div className="text-xs text-muted-foreground">
         Demand {Math.round(data.totalDemand)} · {data.keywordCount} KW
@@ -278,7 +283,8 @@ export default function KeywordWorkspacePage() {
             layoutId={`parent-${p.id}`}
             layout
             className="rounded-lg border bg-card p-3 shadow-sm cursor-pointer hover:shadow-md transition"
-            whileHover={{ scale: 1.02 }}
+            transition={{ duration: MOTION.duration.normal, ease: MOTION.ease }}
+            whileHover={{ scale: 1.02, transition: { duration: MOTION.duration.fast } }}
             onClick={() => {
               setSelectedParent(p.id);
               setViewMode("focus");
@@ -301,6 +307,7 @@ export default function KeywordWorkspacePage() {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: MOTION.duration.normal, ease: MOTION.ease }}
           onClick={() => {
             setViewMode("overview");
             setSelectedParent(null);
@@ -314,7 +321,7 @@ export default function KeywordWorkspacePage() {
                 layoutId={`parent-${p.id}`}
                 className="absolute inset-0 rounded-lg border bg-card p-2 shadow-md"
                 style={{ top: idx * 6, right: idx * 10, scale: 0.6 }}
-                whileHover={{ scale: 0.63 }}
+                whileHover={{ scale: 0.63, transition: { duration: MOTION.duration.fast } }}
               >
                 <div className="text-xs font-semibold truncate">{p.name}</div>
                 <div className="text-[11px] text-muted-foreground">KW {p.keywordCount}</div>
@@ -326,12 +333,16 @@ export default function KeywordWorkspacePage() {
     </AnimatePresence>
   );
 
-  const focusPanel = selectedParentData ? (
+  const focusPanelContent = selectedParentData ? (
     <motion.div
+      key={selectedParentData.id}
       layoutId={`parent-${selectedParentData.id}`}
       className="absolute z-10 rounded-lg border bg-card shadow-2xl p-4 overflow-auto"
       style={{ top: "10vh", left: "3vw", width: "30vw", maxHeight: "70vh" }}
-      transition={{ duration: 0.35, ease: "easeInOut" }}
+      initial={{ opacity: 0, scale: 0.97 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.97 }}
+      transition={{ duration: MOTION.duration.normal, ease: MOTION.ease }}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -426,7 +437,7 @@ export default function KeywordWorkspacePage() {
       ) : (
         <div className="h-full relative">
           {stackBlock}
-          <AnimatePresence>{focusPanel}</AnimatePresence>
+          <AnimatePresence mode="wait">{focusPanelContent}</AnimatePresence>
           <div className="absolute inset-0 pl-[36vw] pt-6 pr-4 pb-12">
             {subFlow.nodes.length ? (
               focusSubclusters
