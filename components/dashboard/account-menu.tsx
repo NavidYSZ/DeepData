@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { useSession, signIn } from "next-auth/react";
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { useSWRConfig } from "swr";
 
 import { cn } from "@/lib/utils";
@@ -25,6 +25,7 @@ interface Account {
 
 interface AccountsResponse {
   accounts: Account[];
+  activeAccountId?: string;
 }
 
 const fetcher = async (url: string) => {
@@ -50,21 +51,39 @@ export function AccountMenu({ className, compact = false }: AccountMenuProps) {
   const [selecting, setSelecting] = useState<string | null>(null);
 
   const accounts = data?.accounts ?? [];
+  const activeId = data?.activeAccountId;
 
-  function selectAccount(id: string) {
+  async function selectAccount(id: string) {
+    if (id === activeId) return;
     setSelecting(id);
-    document.cookie = `accountId=${id}; path=/; samesite=lax`;
+    try {
+      const res = await fetch("/api/accounts/switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: id }),
+      });
+      if (!res.ok) {
+        setSelecting(null);
+        return;
+      }
+    } catch {
+      setSelecting(null);
+      return;
+    }
     try {
       localStorage.removeItem("gsc-site");
     } catch (e) {
       // ignore storage errors (e.g. during SSR)
     }
-    mutateGlobal("/api/gsc/sites");
-    mutate();
+    mutateGlobal(
+      (key: unknown) => Array.isArray(key) && key[0] === "/api/gsc/sites",
+      undefined,
+      { revalidate: false }
+    );
     window.location.reload();
   }
 
-  const current = accounts[0];
+  const current = accounts.find((a) => a.id === activeId) ?? accounts[0];
   const currentEmail = current?.email ?? "Account auswählen";
   const currentEmailShort = truncateLabel(currentEmail);
 
@@ -105,7 +124,11 @@ export function AccountMenu({ className, compact = false }: AccountMenuProps) {
             >
               <div className="flex w-full min-w-0 items-center justify-between gap-2">
                 <span className="min-w-0 truncate">{acc.email ?? "Ohne E-Mail"}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">{acc.id.slice(0, 6)}</span>
+                {acc.id === activeId ? (
+                  <Check className="h-4 w-4 shrink-0 text-primary" />
+                ) : (
+                  <span className="shrink-0 text-xs text-muted-foreground">{acc.id.slice(0, 6)}</span>
+                )}
               </div>
             </DropdownMenuItem>
           ))}

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
@@ -13,5 +14,8 @@ export async function GET() {
     orderBy: { created_at: "asc" },
     select: { id: true, email: true, created_at: true }
   });
-  return NextResponse.json({ accounts });
+
+  const activeAccountId = cookies().get("accountId")?.value ?? accounts[0]?.id ?? null;
+
+  return NextResponse.json({ accounts, activeAccountId });
 }
