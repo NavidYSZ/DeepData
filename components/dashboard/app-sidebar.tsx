@@ -53,13 +53,16 @@ const navGroups = [
   }
 ];
 
+const collapsibleTextClass =
+  "inline-block overflow-hidden whitespace-nowrap transition-[width,opacity,transform] duration-200 ease-out group-data-[collapsed=true]:w-0 group-data-[collapsed=true]:-translate-x-1 group-data-[collapsed=true]:opacity-0";
+
 export function AppSidebar({ pathname }: { pathname: string }) {
   return (
     <Sidebar>
       <SidebarHeader className="gap-3">
         <div className="flex w-full items-center gap-2">
           <SidebarTrigger className="h-8 w-8 shrink-0" />
-          <span className="truncate text-sm font-semibold tracking-tight group-data-[collapsed=true]:hidden">
+          <span className={["text-sm font-semibold tracking-tight", collapsibleTextClass].join(" ")}>
             DeepData
           </span>
         </div>
@@ -81,7 +84,7 @@ export function AppSidebar({ pathname }: { pathname: string }) {
                       <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label}>
                         <Link href={item.href}>
                           <Icon className="h-4 w-4 shrink-0" />
-                          <span className="truncate group-data-[collapsed=true]:hidden">{item.label}</span>
+                          <span className={collapsibleTextClass}>{item.label}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -102,7 +105,7 @@ export function AppSidebar({ pathname }: { pathname: string }) {
                         <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.label}>
                           <Link href={item.href}>
                             <Icon className="h-4 w-4 shrink-0" />
-                            <span className="truncate group-data-[collapsed=true]:hidden">{item.label}</span>
+                            <span className={collapsibleTextClass}>{item.label}</span>
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -124,7 +127,7 @@ export function AppSidebar({ pathname }: { pathname: string }) {
               <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Settings">
                 <Link href="/settings">
                   <Settings className="h-4 w-4 shrink-0" />
-                  <span className="truncate">Settings</span>
+                  <span className={collapsibleTextClass}>Settings</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

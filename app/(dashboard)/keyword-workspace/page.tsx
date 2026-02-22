@@ -73,60 +73,75 @@ async function fetchJson<T>(url: string): Promise<T> {
   return json;
 }
 
-/* ── Custom Node: Parent (compact card) ── */
+/* ── Custom Node: Parent (unified – compact / expanded / stacked) ── */
 function ParentNode({ data }: NodeProps) {
-  const dimmed = data.dimmed as boolean;
+  /* ── Expanded detail view (selected parent) ── */
+  if (data.expanded) {
+    const keywords: SerpKeyword[] = data.keywordsFlat ?? [];
+    return (
+      <div className="rounded-lg border bg-card shadow-2xl p-4 w-[360px] max-h-[520px] overflow-hidden flex flex-col">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-lg font-semibold leading-tight">{data.name}</div>
+            <div className="text-sm text-muted-foreground">
+              Demand {Math.round(data.totalDemand)} · Keywords {data.keywordCount}
+            </div>
+          </div>
+          <Button size="sm" variant="ghost" onClick={() => data.onBack?.()}>
+            Zurück
+          </Button>
+        </div>
+        <div className="mt-3 text-xs text-muted-foreground">
+          {data.subclusterCount} Subcluster
+        </div>
+        <div className="mt-3 space-y-1 flex-1 min-h-0">
+          <div className="text-sm font-medium">Keywords (Top 50)</div>
+          <ScrollArea className="h-[340px] rounded border">
+            <div className="p-3 space-y-1 text-sm text-muted-foreground">
+              {keywords.map((k) => (
+                <div key={k.id} className="flex justify-between gap-2">
+                  <span className="truncate">{k.kwRaw}</span>
+                  <span>{Math.round(k.demandMonthly)}</span>
+                </div>
+              ))}
+              {data.totalKeywords > keywords.length ? (
+                <div className="text-xs text-muted-foreground mt-2">
+                  +{data.totalKeywords - keywords.length} weitere
+                </div>
+              ) : null}
+            </div>
+          </ScrollArea>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Stacked view (top-right corner, click → back to overview) ── */
+  if (data.stacked) {
+    return (
+      <div
+        className="rounded-lg border bg-card p-3 shadow-sm w-[220px] cursor-pointer opacity-50 hover:opacity-80 transition-opacity duration-200"
+        onClick={() => data.onBack?.()}
+      >
+        <div className="text-sm font-semibold truncate">{data.name}</div>
+        <div className="text-xs text-muted-foreground">Demand {Math.round(data.totalDemand)}</div>
+        {data.stackLabel ? (
+          <div className="text-[11px] text-primary font-medium mt-1">{data.stackLabel}</div>
+        ) : null}
+      </div>
+    );
+  }
+
+  /* ── Normal compact card (overview grid) ── */
   return (
     <div
-      className={`rounded-lg border bg-card p-3 shadow-sm w-[280px] cursor-pointer transition-all duration-300
-        ${dimmed ? "opacity-40 scale-90 hover:opacity-70" : "hover:shadow-md hover:-translate-y-1"}`}
+      className="rounded-lg border bg-card p-3 shadow-sm w-[280px] cursor-pointer transition-all duration-300 hover:shadow-md hover:-translate-y-1"
       onClick={() => data.onSelect?.(data.parentId)}
     >
       <div className="text-sm font-semibold truncate">{data.name}</div>
       <div className="text-xs text-muted-foreground">Demand {Math.round(data.totalDemand)}</div>
       <div className="text-xs text-muted-foreground">Keywords {data.keywordCount}</div>
       <div className="text-xs text-muted-foreground mt-1">{data.subclusterCount} Subcluster</div>
-    </div>
-  );
-}
-
-/* ── Custom Node: Parent Detail (expanded with keyword list) ── */
-function ParentDetailNode({ data }: NodeProps) {
-  const keywords: SerpKeyword[] = data.keywordsFlat ?? [];
-  return (
-    <div className="rounded-lg border bg-card shadow-2xl p-4 w-[360px] max-h-[520px] overflow-hidden flex flex-col">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-lg font-semibold leading-tight">{data.name}</div>
-          <div className="text-sm text-muted-foreground">
-            Demand {Math.round(data.totalDemand)} · Keywords {data.keywordCount}
-          </div>
-        </div>
-        <Button size="sm" variant="ghost" onClick={() => data.onBack?.()}>
-          Zurück
-        </Button>
-      </div>
-      <div className="mt-3 text-xs text-muted-foreground">
-        {data.subclusterCount} Subcluster
-      </div>
-      <div className="mt-3 space-y-1 flex-1 min-h-0">
-        <div className="text-sm font-medium">Keywords (Top 50)</div>
-        <ScrollArea className="h-[340px] rounded border">
-          <div className="p-3 space-y-1 text-sm text-muted-foreground">
-            {keywords.map((k) => (
-              <div key={k.id} className="flex justify-between gap-2">
-                <span className="truncate">{k.kwRaw}</span>
-                <span>{Math.round(k.demandMonthly)}</span>
-              </div>
-            ))}
-            {data.totalKeywords > keywords.length ? (
-              <div className="text-xs text-muted-foreground mt-2">
-                +{data.totalKeywords - keywords.length} weitere
-              </div>
-            ) : null}
-          </div>
-        </ScrollArea>
-      </div>
     </div>
   );
 }
@@ -156,7 +171,6 @@ function SubclusterNode({ data }: NodeProps) {
 
 const nodeTypes = {
   parentNode: ParentNode,
-  parentDetailNode: ParentDetailNode,
   subNode: SubclusterNode
 };
 
@@ -171,6 +185,8 @@ function buildFlowGraph(
 
   const nodes: Node[] = [];
   const edges: Edge[] = [];
+
+  const TRANSITION_STYLE = { transition: "transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)" };
 
   if (!selectedParent) {
     // ── Overview: grid of parent nodes ──
@@ -190,9 +206,9 @@ function buildFlowGraph(
           totalDemand: p.totalDemand,
           keywordCount: p.keywordCount,
           subclusterCount: p.subclusters.length,
-          dimmed: false,
           onSelect
         },
+        style: TRANSITION_STYLE,
         draggable: false
       });
     });
@@ -207,45 +223,31 @@ function buildFlowGraph(
       .sort((a, b) => (b.demandMonthly ?? 0) - (a.demandMonthly ?? 0))
       .slice(0, 50);
 
-    // Detail node (left)
-    const detailNodeId = `parent-detail-${selected.id}`;
+    const selectedNodeId = `parent-${selected.id}`;
+
+    // Selected parent → expanded detail (left side, same node ID for smooth transition)
     nodes.push({
-      id: detailNodeId,
-      type: "parentDetailNode",
+      id: selectedNodeId,
+      type: "parentNode",
       position: { x: 0, y: 0 },
       data: {
+        parentId: selected.id,
         name: selected.name,
         totalDemand: selected.totalDemand,
         keywordCount: selected.keywordCount,
         subclusterCount: selected.subclusters.length,
+        expanded: true,
         keywordsFlat,
         totalKeywords: selected.keywordCount,
-        onBack
+        onBack,
+        onSelect
       },
+      style: { ...TRANSITION_STYLE, zIndex: 10 },
       draggable: false
     });
 
-    // Dimmed parent nodes (stacked below detail)
-    const rest = parents.filter((p) => p.id !== selectedParent);
-    rest.forEach((p, idx) => {
-      nodes.push({
-        id: `parent-${p.id}`,
-        type: "parentNode",
-        position: { x: 0, y: DETAIL_HEIGHT + 40 + idx * (PARENT_HEIGHT * 0.55) },
-        data: {
-          parentId: p.id,
-          name: p.name,
-          totalDemand: p.totalDemand,
-          keywordCount: p.keywordCount,
-          subclusterCount: p.subclusters.length,
-          dimmed: true,
-          onSelect
-        },
-        draggable: false
-      });
-    });
-
     // Subcluster nodes (right, dagre layout)
+    let maxSubX = DETAIL_WIDTH + 120;
     if (selected.subclusters.length) {
       const g = new dagre.graphlib.Graph();
       g.setDefaultEdgeLabel(() => ({}));
@@ -258,26 +260,58 @@ function buildFlowGraph(
 
       selected.subclusters.forEach((s) => {
         const pos = g.node(`sub-${s.id}`);
+        const nx = xOffset + (pos?.x - SUB_WIDTH / 2 || 0);
+        if (nx + SUB_WIDTH > maxSubX) maxSubX = nx + SUB_WIDTH;
         const nodeId = `sub-${s.id}`;
         nodes.push({
           id: nodeId,
           type: "subNode",
           position: {
-            x: xOffset + (pos?.x - SUB_WIDTH / 2 || 0),
+            x: nx,
             y: pos?.y - SUB_HEIGHT / 2 || 0
           },
           data: { ...s },
+          style: TRANSITION_STYLE,
           draggable: false
         });
         edges.push({
-          id: `e-${detailNodeId}-${nodeId}`,
-          source: detailNodeId,
+          id: `e-${selectedNodeId}-${nodeId}`,
+          source: selectedNodeId,
           target: nodeId,
           animated: true,
           style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5, opacity: 0.4 }
         });
       });
     }
+
+    // Stacked parent nodes (top-right corner)
+    const rest = parents.filter((p) => p.id !== selectedParent);
+    const stackX = maxSubX + 80;
+    const stackY = -10;
+
+    rest.forEach((p, idx) => {
+      nodes.push({
+        id: `parent-${p.id}`,
+        type: "parentNode",
+        position: {
+          x: stackX + idx * 8,
+          y: stackY + idx * 5
+        },
+        data: {
+          parentId: p.id,
+          name: p.name,
+          totalDemand: p.totalDemand,
+          keywordCount: p.keywordCount,
+          subclusterCount: p.subclusters.length,
+          stacked: true,
+          stackLabel: idx === 0 ? `← ${rest.length} weitere Cluster` : undefined,
+          onBack,
+          onSelect
+        },
+        style: { ...TRANSITION_STYLE, zIndex: rest.length - idx },
+        draggable: false
+      });
+    });
   }
 
   return { nodes, edges };
@@ -404,6 +438,19 @@ export default function KeywordWorkspacePage() {
   const handleSelect = useCallback((id: string) => setSelectedParent(id), []);
   const handleBack = useCallback(() => setSelectedParent(null), []);
 
+  // Reliable click handler at ReactFlow level (backup for node onClick)
+  const handleNodeClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      if (node.type !== "parentNode") return;
+      if (node.data.stacked || node.data.expanded) {
+        setSelectedParent(null);
+      } else if (node.data.parentId) {
+        setSelectedParent(node.data.parentId);
+      }
+    },
+    []
+  );
+
   const { nodes: flowNodes, edges: flowEdges } = useMemo(
     () => buildFlowGraph(parents, selectedParent, handleSelect, handleBack),
     [parents, selectedParent, handleSelect, handleBack]
@@ -463,13 +510,13 @@ export default function KeywordWorkspacePage() {
           onInit={(instance) => {
             flowRef.current = instance;
           }}
+          onNodeClick={handleNodeClick}
           panOnDrag
           zoomOnScroll
           fitView
           fitViewOptions={{ padding: 0.15 }}
           nodesDraggable={false}
           nodesConnectable={false}
-          elementsSelectable={false}
           minZoom={0.3}
           maxZoom={1.5}
         >

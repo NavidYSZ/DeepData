@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
-import * as Collapsible from "@radix-ui/react-collapsible";
 import { Menu, PanelLeft, PanelRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -11,10 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
+type SidebarPinMode = "hover" | "open" | "closed";
+
 interface SidebarContextValue {
   open: boolean;
   setOpen: (value: boolean) => void;
   isMobile: boolean;
+  hovered: boolean;
+  setHovered: (value: boolean) => void;
+  pinMode: SidebarPinMode;
+  setPinMode: (value: SidebarPinMode) => void;
+  desktopExpanded: boolean;
   collapsed: boolean;
   setCollapsed: (value: boolean) => void;
   toggleCollapsed: () => void;
@@ -30,40 +36,54 @@ function useSidebar() {
   return context;
 }
 
-const STORAGE_KEY = "sidebar:collapsed";
-
 function SidebarProvider({ children, defaultOpen = false }: { children: React.ReactNode; defaultOpen?: boolean }) {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const [open, setOpen] = React.useState(defaultOpen);
-  const [collapsed, setCollapsedState] = React.useState(false);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored === "true") setCollapsedState(true);
-  }, []);
+  const [hovered, setHovered] = React.useState(false);
+  const [pinMode, setPinMode] = React.useState<SidebarPinMode>("hover");
+  const desktopExpanded = pinMode === "open" || (pinMode === "hover" && hovered);
+  const collapsed = isMobile ? false : !desktopExpanded;
 
   function setCollapsed(value: boolean) {
-    setCollapsedState(value);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(STORAGE_KEY, value ? "true" : "false");
-    }
+    if (isMobile) return;
+    setHovered(false);
+    setPinMode(value ? "closed" : "open");
   }
 
   function toggleCollapsed() {
-    setCollapsed(!collapsed);
+    if (isMobile) return;
+    setHovered(false);
+    setPinMode((prev) => {
+      if (prev === "hover") return "open";
+      if (prev === "open") return "closed";
+      return "hover";
+    });
   }
 
   return (
-    <SidebarContext.Provider value={{ open, setOpen, isMobile, collapsed, setCollapsed, toggleCollapsed }}>
+    <SidebarContext.Provider
+      value={{
+        open,
+        setOpen,
+        isMobile,
+        hovered,
+        setHovered,
+        pinMode,
+        setPinMode,
+        desktopExpanded,
+        collapsed,
+        setCollapsed,
+        toggleCollapsed
+      }}
+    >
       {children}
     </SidebarContext.Provider>
   );
 }
 
 const Sidebar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement>>(
-  ({ className, children, ...props }, ref) => {
-    const { open, setOpen, isMobile, collapsed, setCollapsed } = useSidebar();
+  ({ className, children, onMouseEnter, onMouseLeave, ...props }, ref) => {
+    const { open, setOpen, isMobile, collapsed, pinMode, setHovered, desktopExpanded } = useSidebar();
 
     if (isMobile) {
       return (
@@ -78,20 +98,29 @@ const Sidebar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement>>
     }
 
     return (
-      <Collapsible.Root open={!collapsed} onOpenChange={(openState) => setCollapsed(!openState)}>
+      <div className="sticky top-0 z-40 hidden h-screen w-16 shrink-0 md:block">
         <aside
           ref={ref}
           data-collapsed={collapsed ? "true" : "false"}
           className={cn(
-            "group sticky top-0 hidden h-screen flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all md:flex",
+            "group absolute inset-y-0 left-0 flex h-screen flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width,box-shadow] duration-300 ease-in-out",
             collapsed ? "w-16" : "w-72",
+            desktopExpanded ? "shadow-xl shadow-black/10 dark:shadow-black/35" : "shadow-none",
             className
           )}
+          onMouseEnter={(event) => {
+            onMouseEnter?.(event);
+            if (pinMode === "hover") setHovered(true);
+          }}
+          onMouseLeave={(event) => {
+            onMouseLeave?.(event);
+            if (pinMode === "hover") setHovered(false);
+          }}
           {...props}
         >
           <TooltipProvider delayDuration={50}>{children}</TooltipProvider>
         </aside>
-      </Collapsible.Root>
+      </div>
     );
   }
 );
@@ -242,7 +271,7 @@ const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenuButtonP
         data-active={isActive ? "true" : undefined}
         className={cn(
           "group flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground",
-          collapsed && "justify-center",
+          collapsed && "justify-center gap-0",
           className
         )}
         {...props}
