@@ -264,21 +264,23 @@ function buildFlowGraph(
 
     // Subcluster nodes (right, dagre layout)
     let maxSubX = DETAIL_WIDTH + 120;
-    if (selected.subclusters.length) {
+    const sortedSubclusters = [...selected.subclusters].sort((a, b) => (b.totalDemand ?? 0) - (a.totalDemand ?? 0));
+    if (sortedSubclusters.length) {
       const g = new dagre.graphlib.Graph();
       g.setDefaultEdgeLabel(() => ({}));
       g.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 60 });
 
-      selected.subclusters.forEach((s) => g.setNode(`sub-${s.id}`, { width: SUB_WIDTH, height: SUB_HEIGHT }));
+      sortedSubclusters.forEach((s) => g.setNode(`sub-${s.id}`, { width: SUB_WIDTH, height: SUB_HEIGHT }));
       dagre.layout(g);
 
       const xOffset = DETAIL_WIDTH + 120;
 
-      selected.subclusters.forEach((s, idx) => {
+      sortedSubclusters.forEach((s, idx) => {
         const pos = g.node(`sub-${s.id}`);
         const nx = xOffset + (pos?.x - SUB_WIDTH / 2 || 0);
         if (nx + SUB_WIDTH > maxSubX) maxSubX = nx + SUB_WIDTH;
         const nodeId = `sub-${s.id}`;
+        const keywordsSorted = [...(s.keywords ?? [])].sort((a, b) => (b.demandMonthly ?? 0) - (a.demandMonthly ?? 0));
         nodes.push({
           id: nodeId,
           type: "subNode",
@@ -286,13 +288,13 @@ function buildFlowGraph(
             x: nx,
             y: pos?.y - SUB_HEIGHT / 2 || 0
           },
-          data: { ...s, reveal: revealSubclusters, delayMs: revealSubclusters ? idx * 45 : 0 },
+          data: { ...s, keywords: keywordsSorted, reveal: revealSubclusters, delayMs: revealSubclusters ? idx * 45 : 0 },
           style: transitionStyle(),
           draggable: false
         });
       });
       if (revealSubclusters) {
-        selected.subclusters.forEach((s) => {
+        sortedSubclusters.forEach((s) => {
           const nodeId = `sub-${s.id}`;
           edges.push({
             id: `e-${selectedNodeId}-${nodeId}`,
