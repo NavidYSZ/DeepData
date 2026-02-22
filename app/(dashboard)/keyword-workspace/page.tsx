@@ -595,8 +595,8 @@ export default function KeywordWorkspacePage() {
         </div>
       ) : null}
 
-      {selectedParent && !isRunning && parents.length > 0 ? (
-        <div className="absolute top-4 right-4 z-20 flex gap-2">
+      <div className="absolute top-4 right-4 z-20 flex gap-2">
+        {selectedParent && !isRunning && parents.length > 0 ? (
           <Button
             type="button"
             size="icon"
@@ -606,16 +606,16 @@ export default function KeywordWorkspacePage() {
           >
             <LayoutGrid className="h-4 w-4" />
           </Button>
-          <Button
-            type="button"
-            size="icon"
-            className="h-11 w-11 rounded-full border border-primary/70 bg-primary text-primary-foreground shadow-2xl transition-transform duration-200 hover:scale-105"
-            aria-label="Menü"
-          >
-            <Menu className="h-4 w-4" />
-          </Button>
-        </div>
-      ) : null}
+        ) : null}
+        <Button
+          type="button"
+          size="icon"
+          className="h-11 w-11 rounded-full border border-primary/70 bg-primary text-primary-foreground shadow-2xl transition-transform duration-200 hover:scale-105"
+          aria-label="Menü"
+        >
+          <Menu className="h-4 w-4" />
+        </Button>
+      </div>
 
       {isRunning ? (
         <div className="h-full flex flex-col items-center justify-center gap-4">
