@@ -68,6 +68,7 @@ const FITVIEW_ANIM_MS = 420;
 const FLOW_OUT_MS = 420;
 const FLOW_OUT_STAGGER_MS = 24;
 const FITVIEW_DELAY_MS = 120;
+const PARENT_MORPH_MS = 480;
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -87,7 +88,10 @@ function ParentNode({ data }: NodeProps) {
   if (data.expanded) {
     const keywords: SerpKeyword[] = data.keywordsFlat ?? [];
     return (
-      <div className="rounded-lg border bg-card shadow-2xl p-4 w-[360px] max-h-[520px] overflow-hidden flex flex-col">
+      <div
+        className="rounded-lg border bg-card shadow-2xl p-4 w-[360px] max-h-[520px] overflow-hidden flex flex-col transition-[transform,opacity,width,height] duration-[480ms]"
+        style={{ transitionTimingFunction: FLOW_EASING }}
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-lg font-semibold leading-tight">{data.name}</div>
@@ -127,7 +131,7 @@ function ParentNode({ data }: NodeProps) {
   return (
     <div
       className={[
-        "rounded-lg border bg-card p-3 shadow-sm w-[280px] will-change-[transform,opacity]",
+        "rounded-lg border bg-card p-3 shadow-sm w-[280px] will-change-[transform,opacity] transition-[transform,opacity,width,height] duration-[480ms]",
         isDocked
           ? "opacity-0 scale-[0.8] pointer-events-none"
           : isClickFeedback
