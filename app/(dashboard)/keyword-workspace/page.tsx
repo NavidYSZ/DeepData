@@ -120,13 +120,16 @@ function ParentNode({ data }: NodeProps) {
 
   /* ── Normal compact card (overview grid) ── */
   const isDocked = !!data.docked;
+  const isClickFeedback = !!data.clickFeedback;
   return (
     <div
       className={[
         "rounded-lg border bg-card p-3 shadow-sm w-[280px] will-change-[transform,opacity]",
         isDocked
           ? "opacity-0 scale-[0.2] pointer-events-none"
-          : "opacity-100 scale-100 cursor-pointer hover:shadow-md hover:-translate-y-1"
+          : isClickFeedback
+            ? "opacity-100 scale-[0.97] cursor-pointer shadow-md"
+            : "opacity-100 scale-100 cursor-pointer hover:shadow-md hover:-translate-y-1"
       ].join(" ")}
       onClick={() => {
         if (isDocked) return;
@@ -143,8 +146,16 @@ function ParentNode({ data }: NodeProps) {
 
 /* ── Custom Node: Subcluster ── */
 function SubclusterNode({ data }: NodeProps) {
+  const isVisible = data.reveal !== false;
+  const delayMs = typeof data.delayMs === "number" ? `${data.delayMs}ms` : undefined;
   return (
-    <div className="rounded-lg border bg-accent px-3 py-2 shadow-sm w-64 transition-all duration-300 hover:-translate-y-1">
+    <div
+      className={[
+        "rounded-lg border bg-accent px-3 py-2 shadow-sm w-64 transition-[opacity,transform] duration-300",
+        isVisible ? "opacity-100 translate-x-0 hover:-translate-y-1" : "opacity-0 translate-x-6 pointer-events-none"
+      ].join(" ")}
+      style={{ transitionDelay: delayMs }}
+    >
       <div className="text-sm font-semibold truncate">{data.name}</div>
       <div className="text-xs text-muted-foreground">
         Demand {Math.round(data.totalDemand)} · {data.keywordCount} KW
@@ -174,7 +185,9 @@ function buildFlowGraph(
   parents: SerpParent[],
   selectedParent: string | null,
   onSelect: (id: string) => void,
-  dockTarget: { x: number; y: number } | null
+  dockTarget: { x: number; y: number } | null,
+  clickFeedbackParentId: string | null,
+  revealSubclusters: boolean
 ): { nodes: Node[]; edges: Edge[] } {
   if (!parents.length) return { nodes: [], edges: [] };
 
@@ -206,6 +219,7 @@ function buildFlowGraph(
           totalDemand: p.totalDemand,
           keywordCount: p.keywordCount,
           subclusterCount: p.subclusters.length,
+          clickFeedback: clickFeedbackParentId === p.id,
           onSelect
         },
         style: transitionStyle(idx * OVERVIEW_STAGGER_MS),
@@ -257,7 +271,7 @@ function buildFlowGraph(
 
       const xOffset = DETAIL_WIDTH + 120;
 
-      selected.subclusters.forEach((s) => {
+      selected.subclusters.forEach((s, idx) => {
         const pos = g.node(`sub-${s.id}`);
         const nx = xOffset + (pos?.x - SUB_WIDTH / 2 || 0);
         if (nx + SUB_WIDTH > maxSubX) maxSubX = nx + SUB_WIDTH;
@@ -269,18 +283,23 @@ function buildFlowGraph(
             x: nx,
             y: pos?.y - SUB_HEIGHT / 2 || 0
           },
-          data: { ...s },
+          data: { ...s, reveal: revealSubclusters, delayMs: revealSubclusters ? idx * 45 : 0 },
           style: transitionStyle(),
           draggable: false
         });
-        edges.push({
-          id: `e-${selectedNodeId}-${nodeId}`,
-          source: selectedNodeId,
-          target: nodeId,
-          animated: true,
-          style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5, opacity: 0.4 }
-        });
       });
+      if (revealSubclusters) {
+        selected.subclusters.forEach((s) => {
+          const nodeId = `sub-${s.id}`;
+          edges.push({
+            id: `e-${selectedNodeId}-${nodeId}`,
+            source: selectedNodeId,
+            target: nodeId,
+            animated: true,
+            style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5, opacity: 0.4 }
+          });
+        });
+      }
     }
 
     // Dock remaining parent nodes into top-right return button target
@@ -326,11 +345,14 @@ export default function KeywordWorkspacePage() {
   const [minDemand, setMinDemand] = useState(5);
   const [minDemandInput, setMinDemandInput] = useState("5");
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
+  const [clickFeedbackParentId, setClickFeedbackParentId] = useState<string | null>(null);
+  const [revealSubclusters, setRevealSubclusters] = useState(false);
   const [pollInterval, setPollInterval] = useState(0);
   const wasRunningRef = useRef(false);
   const flowRef = useRef<ReactFlowInstance | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const [dockTarget, setDockTarget] = useState<{ x: number; y: number } | null>(null);
+  const selectTimerRef = useRef<number | null>(null);
 
   const { data: serpData, mutate: mutateSerp } = useSWR<SerpResponse>(
     projectId ? `/api/keyword-workspace/projects/${projectId}/serp-cluster?minDemand=${minDemand}` : null,
@@ -450,8 +472,24 @@ export default function KeywordWorkspacePage() {
 
   const parents = serpData?.parents ?? [];
 
-  const handleSelect = useCallback((id: string) => setSelectedParent(id), []);
-  const handleBack = useCallback(() => setSelectedParent(null), []);
+  const handleSelect = useCallback((id: string) => {
+    setClickFeedbackParentId(id);
+    if (selectTimerRef.current) window.clearTimeout(selectTimerRef.current);
+    selectTimerRef.current = window.setTimeout(() => {
+      setSelectedParent(id);
+      setClickFeedbackParentId(null);
+      selectTimerRef.current = null;
+    }, 130);
+  }, []);
+
+  const handleBack = useCallback(() => {
+    if (selectTimerRef.current) {
+      window.clearTimeout(selectTimerRef.current);
+      selectTimerRef.current = null;
+    }
+    setClickFeedbackParentId(null);
+    setSelectedParent(null);
+  }, []);
 
   // Reliable click handler at ReactFlow level (backup for node onClick)
   const handleNodeClick = useCallback(
@@ -459,15 +497,40 @@ export default function KeywordWorkspacePage() {
       if (selectedParent) return;
       if (node.type !== "parentNode") return;
       if (node.data.parentId) {
-        setSelectedParent(node.data.parentId);
+        handleSelect(node.data.parentId);
       }
     },
-    [selectedParent]
+    [selectedParent, handleSelect]
   );
 
   const { nodes: flowNodes, edges: flowEdges } = useMemo(
-    () => buildFlowGraph(parents, selectedParent, handleSelect, dockTarget),
-    [parents, selectedParent, handleSelect, dockTarget]
+    () =>
+      buildFlowGraph(
+        parents,
+        selectedParent,
+        handleSelect,
+        dockTarget,
+        clickFeedbackParentId,
+        revealSubclusters
+      ),
+    [parents, selectedParent, handleSelect, dockTarget, clickFeedbackParentId, revealSubclusters]
+  );
+
+  useEffect(() => {
+    if (!selectedParent) {
+      setRevealSubclusters(false);
+      return;
+    }
+    setRevealSubclusters(false);
+    const timerId = window.setTimeout(() => setRevealSubclusters(true), 280);
+    return () => window.clearTimeout(timerId);
+  }, [selectedParent]);
+
+  useEffect(
+    () => () => {
+      if (selectTimerRef.current) window.clearTimeout(selectTimerRef.current);
+    },
+    []
   );
 
   // fitView when nodes change
