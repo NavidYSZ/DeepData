@@ -52,6 +52,11 @@ export function AccountMenu({ className, compact = false }: AccountMenuProps) {
   function selectAccount(id: string) {
     setSelecting(id);
     document.cookie = `accountId=${id}; path=/; samesite=lax`;
+    try {
+      localStorage.removeItem("gsc-site");
+    } catch (e) {
+      // ignore storage errors (e.g. during SSR)
+    }
     mutate();
     window.location.reload();
   }

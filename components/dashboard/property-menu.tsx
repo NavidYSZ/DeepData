@@ -1,9 +1,10 @@
 "use client";
 
 import useSWR from "swr";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useSite } from "@/components/dashboard/site-context";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -41,6 +42,8 @@ export function PropertyMenu({
   shape?: "default" | "gsc-pill";
 } = {}) {
   const { site, setSite } = useSite();
+  const sidebar = useSidebar();
+  const forcedOpenRef = useRef(false);
   const { data, error, isLoading } = useSWR<SitesResponse>("/api/gsc/sites", fetcher);
 
   useEffect(() => {
@@ -90,7 +93,22 @@ export function PropertyMenu({
           )}
         </div>
       ) : (
-        <Select value={site ?? ""} onValueChange={(val) => setSite(val || null)}>
+        <Select
+          value={site ?? ""}
+          onValueChange={(val) => setSite(val || null)}
+          onOpenChange={(open) => {
+            if (!sidebar) return;
+            if (open) {
+              if (sidebar.pinMode === "hover") {
+                sidebar.setPinMode("open");
+                forcedOpenRef.current = true;
+              }
+            } else if (forcedOpenRef.current) {
+              sidebar.setPinMode("hover");
+              forcedOpenRef.current = false;
+            }
+          }}
+        >
           <SelectTrigger className={triggerClassName}>
             <SelectValue placeholder="Property wählen" />
           </SelectTrigger>
