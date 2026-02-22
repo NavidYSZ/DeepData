@@ -1,18 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import ReactFlow, { Background, Controls, Edge, Node, NodeProps, ReactFlowInstance } from "reactflow";
 import "reactflow/dist/style.css";
 import { Loader2, Play, RefreshCw } from "lucide-react";
 import dagre from "dagre";
-import { AnimatePresence, motion } from "framer-motion";
 import { useSite } from "@/components/dashboard/site-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 type SerpKeyword = { id: string; kwRaw: string; demandMonthly: number };
@@ -44,19 +42,24 @@ type SerpResponse = {
 const ACTIVE_STATUSES = ["pending", "importing_gsc", "fetching_serps", "clustering", "mapping_parents", "running"];
 const SERP_DEBUG = true;
 
-const MOTION = {
-  duration: { fast: 0.15, normal: 0.3, slow: 0.45 },
-  ease: [0.25, 0.1, 0.25, 1] as const,
-} as const;
-
 const STATUS_LABELS: Record<string, string> = {
   pending: "Wird vorbereitet...",
   importing_gsc: "GSC-Daten werden importiert (6 Monate)...",
   fetching_serps: "SERP-Daten werden von Google geholt...",
   clustering: "Keywords werden geclustert...",
   mapping_parents: "Themen werden mit KI gruppiert...",
-  running: "Clustering l\u00e4uft..."
+  running: "Clustering läuft..."
 };
+
+const PARENT_WIDTH = 280;
+const PARENT_HEIGHT = 120;
+const DETAIL_WIDTH = 360;
+const DETAIL_HEIGHT = 520;
+const SUB_WIDTH = 260;
+const SUB_HEIGHT = 150;
+const GRID_COLS = 4;
+const GRID_GAP_X = 40;
+const GRID_GAP_Y = 40;
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -70,6 +73,65 @@ async function fetchJson<T>(url: string): Promise<T> {
   return json;
 }
 
+/* ── Custom Node: Parent (compact card) ── */
+function ParentNode({ data }: NodeProps) {
+  const dimmed = data.dimmed as boolean;
+  return (
+    <div
+      className={`rounded-lg border bg-card p-3 shadow-sm w-[280px] cursor-pointer transition-all duration-300
+        ${dimmed ? "opacity-40 scale-90 hover:opacity-70" : "hover:shadow-md hover:-translate-y-1"}`}
+      onClick={() => data.onSelect?.(data.parentId)}
+    >
+      <div className="text-sm font-semibold truncate">{data.name}</div>
+      <div className="text-xs text-muted-foreground">Demand {Math.round(data.totalDemand)}</div>
+      <div className="text-xs text-muted-foreground">Keywords {data.keywordCount}</div>
+      <div className="text-xs text-muted-foreground mt-1">{data.subclusterCount} Subcluster</div>
+    </div>
+  );
+}
+
+/* ── Custom Node: Parent Detail (expanded with keyword list) ── */
+function ParentDetailNode({ data }: NodeProps) {
+  const keywords: SerpKeyword[] = data.keywordsFlat ?? [];
+  return (
+    <div className="rounded-lg border bg-card shadow-2xl p-4 w-[360px] max-h-[520px] overflow-hidden flex flex-col">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-lg font-semibold leading-tight">{data.name}</div>
+          <div className="text-sm text-muted-foreground">
+            Demand {Math.round(data.totalDemand)} · Keywords {data.keywordCount}
+          </div>
+        </div>
+        <Button size="sm" variant="ghost" onClick={() => data.onBack?.()}>
+          Zurück
+        </Button>
+      </div>
+      <div className="mt-3 text-xs text-muted-foreground">
+        {data.subclusterCount} Subcluster
+      </div>
+      <div className="mt-3 space-y-1 flex-1 min-h-0">
+        <div className="text-sm font-medium">Keywords (Top 50)</div>
+        <ScrollArea className="h-[340px] rounded border">
+          <div className="p-3 space-y-1 text-sm text-muted-foreground">
+            {keywords.map((k) => (
+              <div key={k.id} className="flex justify-between gap-2">
+                <span className="truncate">{k.kwRaw}</span>
+                <span>{Math.round(k.demandMonthly)}</span>
+              </div>
+            ))}
+            {data.totalKeywords > keywords.length ? (
+              <div className="text-xs text-muted-foreground mt-2">
+                +{data.totalKeywords - keywords.length} weitere
+              </div>
+            ) : null}
+          </div>
+        </ScrollArea>
+      </div>
+    </div>
+  );
+}
+
+/* ── Custom Node: Subcluster ── */
 function SubclusterNode({ data }: NodeProps) {
   return (
     <div className="rounded-lg border bg-accent px-3 py-2 shadow-sm w-64 transition-all duration-300 hover:-translate-y-1">
@@ -93,36 +155,135 @@ function SubclusterNode({ data }: NodeProps) {
 }
 
 const nodeTypes = {
+  parentNode: ParentNode,
+  parentDetailNode: ParentDetailNode,
   subNode: SubclusterNode
 };
 
-const SUB_WIDTH = 260;
-const SUB_HEIGHT = 150;
+/* ── Layout builder ── */
+function buildFlowGraph(
+  parents: SerpParent[],
+  selectedParent: string | null,
+  onSelect: (id: string) => void,
+  onBack: () => void
+): { nodes: Node[]; edges: Edge[] } {
+  if (!parents.length) return { nodes: [], edges: [] };
 
-function buildSubclusterFlow(parent: SerpParent | null) {
-  if (!parent) return { nodes: [] as Node[], edges: [] as Edge[] };
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
 
-  const g = new dagre.graphlib.Graph();
-  g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: "LR", nodesep: 60, ranksep: 80 });
+  if (!selectedParent) {
+    // ── Overview: grid of parent nodes ──
+    parents.forEach((p, idx) => {
+      const col = idx % GRID_COLS;
+      const row = Math.floor(idx / GRID_COLS);
+      nodes.push({
+        id: `parent-${p.id}`,
+        type: "parentNode",
+        position: {
+          x: col * (PARENT_WIDTH + GRID_GAP_X),
+          y: row * (PARENT_HEIGHT + GRID_GAP_Y)
+        },
+        data: {
+          parentId: p.id,
+          name: p.name,
+          totalDemand: p.totalDemand,
+          keywordCount: p.keywordCount,
+          subclusterCount: p.subclusters.length,
+          dimmed: false,
+          onSelect
+        },
+        draggable: false
+      });
+    });
+  } else {
+    // ── Focus mode ──
+    const selected = parents.find((p) => p.id === selectedParent);
+    if (!selected) return { nodes: [], edges: [] };
 
-  parent.subclusters.forEach((s) => g.setNode(`sub-${s.id}`, { width: SUB_WIDTH, height: SUB_HEIGHT }));
+    // Flat keywords for detail node
+    const keywordsFlat = selected.subclusters
+      .flatMap((s) => s.keywords)
+      .sort((a, b) => (b.demandMonthly ?? 0) - (a.demandMonthly ?? 0))
+      .slice(0, 50);
 
-  dagre.layout(g);
+    // Detail node (left)
+    const detailNodeId = `parent-detail-${selected.id}`;
+    nodes.push({
+      id: detailNodeId,
+      type: "parentDetailNode",
+      position: { x: 0, y: 0 },
+      data: {
+        name: selected.name,
+        totalDemand: selected.totalDemand,
+        keywordCount: selected.keywordCount,
+        subclusterCount: selected.subclusters.length,
+        keywordsFlat,
+        totalKeywords: selected.keywordCount,
+        onBack
+      },
+      draggable: false
+    });
 
-  const nodes: Node[] = parent.subclusters.map((s) => {
-    const pos = g.node(`sub-${s.id}`);
-    return {
-      id: `sub-${s.id}`,
-      type: "subNode",
-      data: { ...s },
-      position: { x: pos?.x - SUB_WIDTH / 2 || 0, y: pos?.y - SUB_HEIGHT / 2 || 0 }
-    };
-  });
+    // Dimmed parent nodes (stacked below detail)
+    const rest = parents.filter((p) => p.id !== selectedParent);
+    rest.forEach((p, idx) => {
+      nodes.push({
+        id: `parent-${p.id}`,
+        type: "parentNode",
+        position: { x: 0, y: DETAIL_HEIGHT + 40 + idx * (PARENT_HEIGHT * 0.55) },
+        data: {
+          parentId: p.id,
+          name: p.name,
+          totalDemand: p.totalDemand,
+          keywordCount: p.keywordCount,
+          subclusterCount: p.subclusters.length,
+          dimmed: true,
+          onSelect
+        },
+        draggable: false
+      });
+    });
 
-  return { nodes, edges: [] as Edge[] };
+    // Subcluster nodes (right, dagre layout)
+    if (selected.subclusters.length) {
+      const g = new dagre.graphlib.Graph();
+      g.setDefaultEdgeLabel(() => ({}));
+      g.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 60 });
+
+      selected.subclusters.forEach((s) => g.setNode(`sub-${s.id}`, { width: SUB_WIDTH, height: SUB_HEIGHT }));
+      dagre.layout(g);
+
+      const xOffset = DETAIL_WIDTH + 120;
+
+      selected.subclusters.forEach((s) => {
+        const pos = g.node(`sub-${s.id}`);
+        const nodeId = `sub-${s.id}`;
+        nodes.push({
+          id: nodeId,
+          type: "subNode",
+          position: {
+            x: xOffset + (pos?.x - SUB_WIDTH / 2 || 0),
+            y: pos?.y - SUB_HEIGHT / 2 || 0
+          },
+          data: { ...s },
+          draggable: false
+        });
+        edges.push({
+          id: `e-${detailNodeId}-${nodeId}`,
+          source: detailNodeId,
+          target: nodeId,
+          animated: true,
+          style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5, opacity: 0.4 }
+        });
+      });
+    }
+  }
+
+  return { nodes, edges };
 }
 
+/* ── Main Page Component ── */
 export default function KeywordWorkspacePage() {
   const { site } = useSite();
   const { data: workspace } = useSWR<{ projectId: string; siteUrl: string | null }>(
@@ -134,11 +295,9 @@ export default function KeywordWorkspacePage() {
   const [minDemand, setMinDemand] = useState(5);
   const [minDemandInput, setMinDemandInput] = useState("5");
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"overview" | "focus">("overview");
   const [pollInterval, setPollInterval] = useState(0);
   const wasRunningRef = useRef(false);
   const flowRef = useRef<ReactFlowInstance | null>(null);
-  const lastFitKeyRef = useRef<string>("");
 
   const { data: serpData, mutate: mutateSerp } = useSWR<SerpResponse>(
     projectId ? `/api/keyword-workspace/projects/${projectId}/serp-cluster?minDemand=${minDemand}` : null,
@@ -153,12 +312,10 @@ export default function KeywordWorkspacePage() {
 
   const isRunning = !!statusData?.status && ACTIVE_STATUSES.includes(statusData.status);
 
-  // Control polling based on status
   useEffect(() => {
     setPollInterval(isRunning ? 2000 : 0);
   }, [isRunning]);
 
-  // Auto-refresh data when clustering finishes
   useEffect(() => {
     if (isRunning) {
       wasRunningRef.current = true;
@@ -173,13 +330,6 @@ export default function KeywordWorkspacePage() {
     }
   }, [isRunning, statusData?.status, mutateSerp]);
 
-  useEffect(() => {
-    if (serpData?.parents?.length && !selectedParent) {
-      setSelectedParent(serpData.parents[0].id);
-    }
-  }, [serpData, selectedParent]);
-
-  // Debug dumps
   useEffect(() => {
     if (!SERP_DEBUG) return;
     console.groupCollapsed("[SERP][status]");
@@ -250,153 +400,26 @@ export default function KeywordWorkspacePage() {
   }
 
   const parents = serpData?.parents ?? [];
-  const selectedParentData = parents.find((p) => p.id === selectedParent) ?? null;
 
-  const subFlow = useMemo(() => buildSubclusterFlow(selectedParentData), [selectedParentData]);
+  const handleSelect = useCallback((id: string) => setSelectedParent(id), []);
+  const handleBack = useCallback(() => setSelectedParent(null), []);
 
+  const { nodes: flowNodes, edges: flowEdges } = useMemo(
+    () => buildFlowGraph(parents, selectedParent, handleSelect, handleBack),
+    [parents, selectedParent, handleSelect, handleBack]
+  );
+
+  // fitView when nodes change
+  const prevNodeKeyRef = useRef<string>("");
   useEffect(() => {
-    if (!flowRef.current) return;
-    if (!serpData?.runId) return;
-    if (!subFlow.nodes.length) return;
-    const fitKey = `${serpData.runId}:${selectedParent ?? "none"}:${subFlow.nodes.length}`;
-    if (lastFitKeyRef.current === fitKey) return;
-    lastFitKeyRef.current = fitKey;
+    if (!flowRef.current || !flowNodes.length) return;
+    const nodeKey = `${selectedParent ?? "overview"}:${flowNodes.length}`;
+    if (prevNodeKeyRef.current === nodeKey) return;
+    prevNodeKeyRef.current = nodeKey;
     requestAnimationFrame(() => {
-      flowRef.current?.fitView({ padding: 0.2, duration: 300 });
+      flowRef.current?.fitView({ padding: 0.15, duration: 400 });
     });
-  }, [serpData?.runId, selectedParent, subFlow.nodes.length]);
-
-  const keywordsFlat = useMemo(() => {
-    if (!selectedParentData) return [];
-    const all = selectedParentData.subclusters.flatMap((s) => s.keywords);
-    return all.sort((a, b) => (b.demandMonthly ?? 0) - (a.demandMonthly ?? 0)).slice(0, 50);
-  }, [selectedParentData]);
-
-  const restParents = useMemo(() => parents.filter((p) => p.id !== selectedParent), [parents, selectedParent]);
-
-  const overviewCards = (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-      <AnimatePresence>
-        {parents.map((p) => (
-          <motion.div
-            key={p.id}
-            layoutId={`parent-${p.id}`}
-            layout
-            className="rounded-lg border bg-card p-3 shadow-sm cursor-pointer hover:shadow-md transition"
-            transition={{ duration: MOTION.duration.normal, ease: MOTION.ease }}
-            whileHover={{ scale: 1.02, transition: { duration: MOTION.duration.fast } }}
-            onClick={() => {
-              setSelectedParent(p.id);
-              setViewMode("focus");
-            }}
-          >
-            <div className="text-sm font-semibold truncate">{p.name}</div>
-            <div className="text-xs text-muted-foreground">Demand {Math.round(p.totalDemand)}</div>
-            <div className="text-xs text-muted-foreground">Keywords {p.keywordCount}</div>
-          </motion.div>
-        ))}
-      </AnimatePresence>
-    </div>
-  );
-
-  const stackBlock = (
-    <AnimatePresence>
-      {viewMode === "focus" && restParents.length ? (
-        <motion.div
-          className="absolute top-4 right-4 z-20 cursor-pointer select-none"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: MOTION.duration.normal, ease: MOTION.ease }}
-          onClick={() => {
-            setViewMode("overview");
-            setSelectedParent(null);
-          }}
-        >
-          <div className="text-[11px] text-muted-foreground text-right mb-1">Alle Parent-Cluster</div>
-          <div className="relative w-44 h-16">
-            {restParents.slice(0, 3).map((p, idx) => (
-              <motion.div
-                key={p.id}
-                layoutId={`parent-${p.id}`}
-                className="absolute inset-0 rounded-lg border bg-card p-2 shadow-md"
-                style={{ top: idx * 6, right: idx * 10, scale: 0.6 }}
-                whileHover={{ scale: 0.63, transition: { duration: MOTION.duration.fast } }}
-              >
-                <div className="text-xs font-semibold truncate">{p.name}</div>
-                <div className="text-[11px] text-muted-foreground">KW {p.keywordCount}</div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
-  );
-
-  const focusPanelContent = selectedParentData ? (
-    <motion.div
-      key={selectedParentData.id}
-      layoutId={`parent-${selectedParentData.id}`}
-      className="absolute z-10 rounded-lg border bg-card shadow-2xl p-4 overflow-auto"
-      style={{ top: "10vh", left: "3vw", width: "30vw", maxHeight: "70vh" }}
-      initial={{ opacity: 0, scale: 0.97 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.97 }}
-      transition={{ duration: MOTION.duration.normal, ease: MOTION.ease }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-lg font-semibold leading-tight">{selectedParentData.name}</div>
-          <div className="text-sm text-muted-foreground">
-            Demand {Math.round(selectedParentData.totalDemand)} · Keywords {selectedParentData.keywordCount}
-          </div>
-        </div>
-        <Button size="sm" variant="ghost" onClick={() => setViewMode("overview")}>
-          Zurück
-        </Button>
-      </div>
-      <div className="mt-3 text-xs text-muted-foreground">
-        {selectedParentData.subclusters.length} Subcluster
-      </div>
-      <div className="mt-3 space-y-1">
-        <div className="text-sm font-medium">Keywords (Top 50)</div>
-        <ScrollArea className="h-[320px] rounded border">
-          <div className="p-3 space-y-1 text-sm text-muted-foreground">
-            {keywordsFlat.map((k) => (
-              <div key={k.id} className="flex justify-between gap-2">
-                <span className="truncate">{k.kwRaw}</span>
-                <span>{Math.round(k.demandMonthly)}</span>
-              </div>
-            ))}
-            {selectedParentData.keywordCount > keywordsFlat.length ? (
-              <div className="text-xs text-muted-foreground mt-2">
-                +{selectedParentData.keywordCount - keywordsFlat.length} weitere
-              </div>
-            ) : null}
-          </div>
-        </ScrollArea>
-      </div>
-    </motion.div>
-  ) : null;
-
-  const focusSubclusters = (
-    <div className="w-full h-full">
-      <ReactFlow
-        nodes={subFlow.nodes}
-        edges={subFlow.edges}
-        nodeTypes={nodeTypes}
-        onInit={(instance) => {
-          flowRef.current = instance;
-        }}
-        className="h-full"
-        panOnDrag
-        zoomOnScroll
-      >
-        <Background gap={16} />
-        <Controls />
-      </ReactFlow>
-    </div>
-  );
+  }, [selectedParent, flowNodes.length]);
 
   if (!site) {
     return (
@@ -432,22 +455,27 @@ export default function KeywordWorkspacePage() {
             Jetzt starten
           </Button>
         </div>
-      ) : viewMode === "overview" ? (
-        <div className="h-full overflow-auto pb-16 p-4">{overviewCards}</div>
       ) : (
-        <div className="h-full relative">
-          {stackBlock}
-          <AnimatePresence mode="wait">{focusPanelContent}</AnimatePresence>
-          <div className="absolute inset-0 pl-[36vw] pt-6 pr-4 pb-12">
-            {subFlow.nodes.length ? (
-              focusSubclusters
-            ) : (
-              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                Keine Subcluster gefunden.
-              </div>
-            )}
-          </div>
-        </div>
+        <ReactFlow
+          nodes={flowNodes}
+          edges={flowEdges}
+          nodeTypes={nodeTypes}
+          onInit={(instance) => {
+            flowRef.current = instance;
+          }}
+          panOnDrag
+          zoomOnScroll
+          fitView
+          fitViewOptions={{ padding: 0.15 }}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          minZoom={0.3}
+          maxZoom={1.5}
+        >
+          <Background gap={16} />
+          <Controls />
+        </ReactFlow>
       )}
 
       <div className="pointer-events-none absolute inset-0 flex items-end justify-center pb-3">
