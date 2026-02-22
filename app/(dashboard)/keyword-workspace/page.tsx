@@ -165,14 +165,16 @@ function SubclusterNode({ data }: NodeProps) {
       {typeof data.overlapScore === "number" ? (
         <div className="text-[11px] text-muted-foreground">Avg Overlap {(data.overlapScore * 100).toFixed(0)}%</div>
       ) : null}
-      <div className="mt-1 text-xs text-muted-foreground space-y-0.5">
-        {data.keywords?.slice(0, 3).map((k: SerpKeyword) => (
-          <div key={k.id} className="flex justify-between gap-1">
-            <span className="truncate">{k.kwRaw}</span>
-            <span>{Math.round(k.demandMonthly)}</span>
-          </div>
-        ))}
-      </div>
+      <ScrollArea className="mt-1 max-h-32">
+        <div className="text-xs text-muted-foreground space-y-0.5 pr-1">
+          {data.keywords?.map((k: SerpKeyword) => (
+            <div key={k.id} className="flex justify-between gap-1">
+              <span className="truncate">{k.kwRaw}</span>
+              <span>{Math.round(k.demandMonthly)}</span>
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
     </div>
   );
 }
