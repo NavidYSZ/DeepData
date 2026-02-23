@@ -110,12 +110,12 @@ function ParentNode({ data }: NodeProps) {
           <ScrollArea className="h-[340px] rounded border">
             <div className="p-3 space-y-1 text-sm text-muted-foreground">
               {keywords.map((k) => (
-                <div key={k.id} className="flex justify-between gap-2">
-                  <span className="truncate flex items-center gap-1">
+                <div key={k.id} className="flex min-w-0 items-center justify-between gap-2">
+                  <span className="flex min-w-0 flex-1 items-center gap-1">
                     {k.demandSource === "upload" && <ExternalBadge />}
-                    {k.kwRaw}
+                    <span className="truncate">{k.kwRaw}</span>
                   </span>
-                  <span>{Math.round(k.demandMonthly)}</span>
+                  <span className="shrink-0 tabular-nums">{Math.round(k.demandMonthly)}</span>
                 </div>
               ))}
             </div>
@@ -173,12 +173,12 @@ function SubclusterNode({ data }: NodeProps) {
       <ScrollArea className="mt-1 max-h-32">
         <div className="text-xs text-muted-foreground space-y-0.5 pr-1">
           {data.keywords?.map((k: SerpKeyword) => (
-            <div key={k.id} className="flex justify-between gap-1">
-              <span className="truncate flex items-center gap-1">
+            <div key={k.id} className="flex min-w-0 items-center justify-between gap-1">
+              <span className="flex min-w-0 flex-1 items-center gap-1">
                 {k.demandSource === "upload" && <ExternalBadge />}
-                {k.kwRaw}
+                <span className="truncate">{k.kwRaw}</span>
               </span>
-              <span>{Math.round(k.demandMonthly)}</span>
+              <span className="shrink-0 tabular-nums">{Math.round(k.demandMonthly)}</span>
             </div>
           ))}
         </div>
