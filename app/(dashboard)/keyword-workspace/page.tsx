@@ -4,13 +4,31 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import ReactFlow, { Background, Controls, Edge, Node, NodeProps, ReactFlowInstance } from "reactflow";
 import "reactflow/dist/style.css";
-import { LayoutGrid, Loader2, Menu, Play, RefreshCw, Upload } from "lucide-react";
+import * as XLSX from "xlsx";
+import { Download, FileSpreadsheet, FileText, LayoutGrid, Loader2, Menu, Play, RefreshCw, Settings2, Upload } from "lucide-react";
 import dagre from "dagre";
 import { useSite } from "@/components/dashboard/site-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { UploadKeywordsDialog } from "@/components/keyword-workspace/upload-dialog";
 import { ExternalBadge } from "@/components/keyword-workspace/external-badge";
@@ -39,6 +57,22 @@ type SerpResponse = {
   runId: string | null;
   generatedAt: string | null;
   parents: SerpParent[];
+};
+type ExportScope = "all" | "current";
+type ExportFormat = "xlsx" | "csv";
+type KeywordClusterExportRow = {
+  keyword: string;
+  cluster: string;
+  topicalCluster: string;
+  demandMonthly: number;
+  demandSource: string;
+  clusterTotalDemand: number;
+  topicalTotalDemand: number;
+  clusterKeywordCount: number;
+  topicalKeywordCount: number;
+  overlapScore: number | "";
+  topDomains: string;
+  topUrls: string;
 };
 
 const ACTIVE_STATUSES = ["pending", "importing_gsc", "fetching_serps", "clustering", "mapping_parents", "running"];
@@ -72,6 +106,66 @@ const FLOW_OUT_MS = 420;
 const FLOW_OUT_STAGGER_MS = 24;
 const FITVIEW_DELAY_MS = 120;
 const PARENT_MORPH_MS = 480;
+const KEYWORD_EXPORT_COLUMNS: Array<{ key: keyof KeywordClusterExportRow; header: string; width: number }> = [
+  { key: "keyword", header: "Keyword", width: 38 },
+  { key: "cluster", header: "Cluster", width: 30 },
+  { key: "topicalCluster", header: "Topical Cluster", width: 30 },
+  { key: "demandMonthly", header: "Demand Monthly", width: 16 },
+  { key: "demandSource", header: "Demand Source", width: 15 },
+  { key: "clusterTotalDemand", header: "Cluster Demand", width: 16 },
+  { key: "topicalTotalDemand", header: "Topical Demand", width: 16 },
+  { key: "clusterKeywordCount", header: "Cluster Keywords", width: 16 },
+  { key: "topicalKeywordCount", header: "Topical Keywords", width: 16 },
+  { key: "overlapScore", header: "Overlap Score", width: 14 },
+  { key: "topDomains", header: "Top Domains", width: 30 },
+  { key: "topUrls", header: "Top URLs", width: 40 }
+];
+
+function slugifyFilenamePart(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40) || "export";
+}
+
+function buildKeywordExportRows(parents: SerpParent[]): KeywordClusterExportRow[] {
+  const rows: KeywordClusterExportRow[] = [];
+  for (const parent of parents) {
+    for (const subcluster of parent.subclusters) {
+      for (const keyword of subcluster.keywords) {
+        rows.push({
+          keyword: keyword.kwRaw,
+          cluster: subcluster.name,
+          topicalCluster: parent.name,
+          demandMonthly: Math.round(keyword.demandMonthly ?? 0),
+          demandSource: keyword.demandSource ?? "none",
+          clusterTotalDemand: Math.round(subcluster.totalDemand ?? 0),
+          topicalTotalDemand: Math.round(parent.totalDemand ?? 0),
+          clusterKeywordCount: subcluster.keywordCount ?? 0,
+          topicalKeywordCount: parent.keywordCount ?? 0,
+          overlapScore: typeof subcluster.overlapScore === "number" ? Number(subcluster.overlapScore.toFixed(3)) : "",
+          topDomains: (subcluster.topDomains ?? []).join(", "),
+          topUrls: (subcluster.topUrls ?? []).join(", ")
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+function serializeKeywordExportRows(rows: KeywordClusterExportRow[]): Array<Record<string, string | number>> {
+  return rows.map((row) => {
+    const record: Record<string, string | number> = {};
+    for (const column of KEYWORD_EXPORT_COLUMNS) {
+      const value = row[column.key];
+      record[column.header] = value === null || value === undefined ? "" : value;
+    }
+    return record;
+  });
+}
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -376,6 +470,9 @@ export default function KeywordWorkspacePage() {
   const projectId = workspace?.projectId ?? null;
 
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportScope, setExportScope] = useState<ExportScope>("all");
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("xlsx");
   const [minDemand, setMinDemand] = useState(5);
   const [minDemandInput, setMinDemandInput] = useState("5");
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
@@ -505,6 +602,57 @@ export default function KeywordWorkspacePage() {
   }
 
   const parents = serpData?.parents ?? [];
+  const currentParent = useMemo(
+    () => (selectedParent ? parents.find((parent) => parent.id === selectedParent) ?? null : null),
+    [parents, selectedParent]
+  );
+  const scopedParentsForExport = useMemo(() => {
+    if (exportScope === "all" || !currentParent) return parents;
+    return [currentParent];
+  }, [exportScope, currentParent, parents]);
+  const scopedExportRows = useMemo(() => buildKeywordExportRows(scopedParentsForExport), [scopedParentsForExport]);
+  const exportStats = useMemo(() => {
+    const clusterCount = scopedParentsForExport.reduce((sum, parent) => sum + parent.subclusters.length, 0);
+    return {
+      topicalClusterCount: scopedParentsForExport.length,
+      clusterCount,
+      keywordCount: scopedExportRows.length
+    };
+  }, [scopedParentsForExport, scopedExportRows.length]);
+
+  const exportKeywordClusters = useCallback(() => {
+    if (!scopedExportRows.length) {
+      toast.error("Keine Cluster-Daten zum Export vorhanden.");
+      return;
+    }
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+    const scopePart =
+      exportScope === "all"
+        ? "alle-cluster"
+        : slugifyFilenamePart(currentParent?.name ?? "aktuelle-ansicht");
+    const baseFilename = `keyword-cluster-export-${scopePart}-${timestamp}`;
+    const serializedRows = serializeKeywordExportRows(scopedExportRows);
+    const worksheet = XLSX.utils.json_to_sheet(serializedRows, { skipHeader: false });
+    worksheet["!cols"] = KEYWORD_EXPORT_COLUMNS.map((column) => ({ wch: column.width }));
+
+    if (exportFormat === "xlsx") {
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Keyword Cluster");
+      XLSX.writeFile(workbook, `${baseFilename}.xlsx`, { compression: true });
+    } else {
+      const csv = XLSX.utils.sheet_to_csv(worksheet, { FS: ";", RS: "\n" });
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${baseFilename}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    setExportDialogOpen(false);
+    toast.success(`Export erstellt: ${scopedExportRows.length.toLocaleString("de-DE")} Keywords.`);
+  }, [scopedExportRows, exportScope, currentParent, exportFormat]);
 
   const handleSelect = useCallback((id: string) => {
     setClickFeedbackParentId(id);
@@ -634,14 +782,40 @@ export default function KeywordWorkspacePage() {
             <LayoutGrid className="h-4 w-4" />
           </Button>
         ) : null}
-        <Button
-          type="button"
-          size="icon"
-          className="h-11 w-11 rounded-full border border-primary/70 bg-primary text-primary-foreground shadow-2xl transition-transform duration-200 hover:scale-105"
-          aria-label="Menü"
-        >
-          <Menu className="h-4 w-4" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              size="icon"
+              className="h-11 w-11 rounded-full border border-primary/70 bg-primary text-primary-foreground shadow-2xl transition-transform duration-200 hover:scale-105"
+              aria-label="Menü"
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            sideOffset={10}
+            className="w-56 rounded-xl border-border/70 bg-card/95 p-1.5 shadow-2xl backdrop-blur-md"
+          >
+            <DropdownMenuItem
+              className="cursor-pointer rounded-lg px-3 py-2 text-sm font-medium"
+              onClick={() => toast.info("Settings folgt als Nächstes.")}
+            >
+              <Settings2 className="mr-2 h-4 w-4 text-muted-foreground" />
+              Settings
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer rounded-lg px-3 py-2 text-sm font-medium"
+              disabled={isRunning || parents.length === 0}
+              onClick={() => setExportDialogOpen(true)}
+            >
+              <Download className="mr-2 h-4 w-4 text-muted-foreground" />
+              Export
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {isRunning ? (
@@ -719,6 +893,129 @@ export default function KeywordWorkspacePage() {
           </Button>
         </div>
       </div>
+
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="max-w-[680px] rounded-2xl border-border/70 bg-card/95 p-0 backdrop-blur-md">
+          <DialogHeader className="border-b border-border/60 px-6 pb-4 pt-6">
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Download className="h-5 w-5 text-primary" />
+              Cluster Export
+            </DialogTitle>
+            <DialogDescription>
+              Exportiere Keyword-Daten aus dem Clustering als strukturierte Tabelle. Die Spalten sind fix und einfach erweiterbar.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 px-6 pb-6">
+            <div className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4">
+              <Label className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Exportumfang</Label>
+              <RadioGroup
+                value={exportScope}
+                onValueChange={(value) => setExportScope(value as ExportScope)}
+                className="grid gap-2"
+              >
+                <label
+                  htmlFor="export-scope-all"
+                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/70 bg-card/70 px-3 py-3"
+                >
+                  <RadioGroupItem id="export-scope-all" value="all" className="mt-0.5" />
+                  <span className="space-y-0.5">
+                    <span className="block text-sm font-medium">Alle Keyword Cluster</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Exportiert alle Topical Cluster, Cluster und Keywords aus dem letzten Run.
+                    </span>
+                  </span>
+                </label>
+                <label
+                  htmlFor="export-scope-current"
+                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/70 bg-card/70 px-3 py-3"
+                >
+                  <RadioGroupItem id="export-scope-current" value="current" className="mt-0.5" />
+                  <span className="space-y-0.5">
+                    <span className="block text-sm font-medium">Aktuelle Ansicht</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {currentParent
+                        ? `Exportiert nur "${currentParent.name}".`
+                        : "Aktuell ist keine Topic geöffnet, daher entspricht dies allen Clustern."}
+                    </span>
+                  </span>
+                </label>
+              </RadioGroup>
+            </div>
+
+            <div className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4">
+              <Label className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Format</Label>
+              <RadioGroup
+                value={exportFormat}
+                onValueChange={(value) => setExportFormat(value as ExportFormat)}
+                className="grid gap-2 sm:grid-cols-2"
+              >
+                <label
+                  htmlFor="export-format-xlsx"
+                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/70 bg-card/70 px-3 py-3"
+                >
+                  <RadioGroupItem id="export-format-xlsx" value="xlsx" className="mt-0.5" />
+                  <span className="space-y-0.5">
+                    <span className="flex items-center gap-1 text-sm font-medium">
+                      <FileSpreadsheet className="h-4 w-4 text-primary" />
+                      Excel (.xlsx)
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      Empfohlen für Umlaute, Filter und stabile Excel-Kompatibilität.
+                    </span>
+                  </span>
+                </label>
+                <label
+                  htmlFor="export-format-csv"
+                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/70 bg-card/70 px-3 py-3"
+                >
+                  <RadioGroupItem id="export-format-csv" value="csv" className="mt-0.5" />
+                  <span className="space-y-0.5">
+                    <span className="flex items-center gap-1 text-sm font-medium">
+                      <FileText className="h-4 w-4 text-primary" />
+                      CSV (UTF-8)
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      Mit UTF-8 BOM für saubere Zeichendarstellung in Excel.
+                    </span>
+                  </span>
+                </label>
+              </RadioGroup>
+            </div>
+
+            <div className="rounded-xl border border-border/70 bg-card/60 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Vorschau</p>
+              <div className="mt-2 grid gap-2 text-xs sm:grid-cols-3">
+                <div className="rounded-md border border-border/70 bg-muted/20 p-2">
+                  <p className="text-muted-foreground">Topical Cluster</p>
+                  <p className="text-sm font-semibold">{exportStats.topicalClusterCount.toLocaleString("de-DE")}</p>
+                </div>
+                <div className="rounded-md border border-border/70 bg-muted/20 p-2">
+                  <p className="text-muted-foreground">Cluster</p>
+                  <p className="text-sm font-semibold">{exportStats.clusterCount.toLocaleString("de-DE")}</p>
+                </div>
+                <div className="rounded-md border border-border/70 bg-muted/20 p-2">
+                  <p className="text-muted-foreground">Keywords</p>
+                  <p className="text-sm font-semibold">{exportStats.keywordCount.toLocaleString("de-DE")}</p>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Spalten: {KEYWORD_EXPORT_COLUMNS.map((column) => column.header).join(" · ")}
+              </p>
+            </div>
+
+            <DialogFooter className="pt-1">
+              <Button type="button" variant="ghost" onClick={() => setExportDialogOpen(false)}>
+                Abbrechen
+              </Button>
+              <Button type="button" onClick={exportKeywordClusters} disabled={exportStats.keywordCount === 0}>
+                <Download className="h-4 w-4" />
+                Export starten
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {projectId && (
         <UploadKeywordsDialog
