@@ -5,7 +5,7 @@ import useSWR from "swr";
 import ReactFlow, { Background, Controls, Edge, Node, NodeProps, ReactFlowInstance } from "reactflow";
 import "reactflow/dist/style.css";
 import * as XLSX from "xlsx";
-import { Download, FileSpreadsheet, FileText, LayoutGrid, Loader2, Menu, Play, RefreshCw, Settings2, Upload } from "lucide-react";
+import { ChevronDown, Columns3, Download, FileSpreadsheet, FileText, LayoutGrid, Loader2, Menu, Play, RefreshCw, Settings2, Upload } from "lucide-react";
 import dagre from "dagre";
 import { useSite } from "@/components/dashboard/site-context";
 import { Button } from "@/components/ui/button";
@@ -24,8 +24,10 @@ import {
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
@@ -61,9 +63,9 @@ type SerpResponse = {
 type ExportScope = "all" | "current";
 type ExportFormat = "xlsx" | "csv";
 type KeywordClusterExportRow = {
-  keyword: string;
-  cluster: string;
   topicalCluster: string;
+  cluster: string;
+  keyword: string;
   demandMonthly: number;
   demandSource: string;
   clusterTotalDemand: number;
@@ -71,9 +73,9 @@ type KeywordClusterExportRow = {
   clusterKeywordCount: number;
   topicalKeywordCount: number;
   overlapScore: number | "";
-  topDomains: string;
-  topUrls: string;
 };
+type KeywordExportColumn = { key: keyof KeywordClusterExportRow; header: string; width: number };
+type OptionalKeywordExportColumnKey = Exclude<keyof KeywordClusterExportRow, "topicalCluster" | "cluster" | "keyword">;
 
 const ACTIVE_STATUSES = ["pending", "importing_gsc", "fetching_serps", "clustering", "mapping_parents", "running"];
 const SERP_DEBUG = true;
@@ -106,20 +108,21 @@ const FLOW_OUT_MS = 420;
 const FLOW_OUT_STAGGER_MS = 24;
 const FITVIEW_DELAY_MS = 120;
 const PARENT_MORPH_MS = 480;
-const KEYWORD_EXPORT_COLUMNS: Array<{ key: keyof KeywordClusterExportRow; header: string; width: number }> = [
-  { key: "keyword", header: "Keyword", width: 38 },
-  { key: "cluster", header: "Cluster", width: 30 },
+const FIXED_KEYWORD_EXPORT_COLUMNS: KeywordExportColumn[] = [
   { key: "topicalCluster", header: "Topical Cluster", width: 30 },
+  { key: "cluster", header: "Cluster", width: 30 },
+  { key: "keyword", header: "Keyword", width: 38 }
+];
+const OPTIONAL_KEYWORD_EXPORT_COLUMNS: Array<KeywordExportColumn & { key: OptionalKeywordExportColumnKey }> = [
   { key: "demandMonthly", header: "Demand Monthly", width: 16 },
   { key: "demandSource", header: "Demand Source", width: 15 },
   { key: "clusterTotalDemand", header: "Cluster Demand", width: 16 },
   { key: "topicalTotalDemand", header: "Topical Demand", width: 16 },
   { key: "clusterKeywordCount", header: "Cluster Keywords", width: 16 },
   { key: "topicalKeywordCount", header: "Topical Keywords", width: 16 },
-  { key: "overlapScore", header: "Overlap Score", width: 14 },
-  { key: "topDomains", header: "Top Domains", width: 30 },
-  { key: "topUrls", header: "Top URLs", width: 40 }
+  { key: "overlapScore", header: "Overlap Score", width: 14 }
 ];
+const DEFAULT_OPTIONAL_COLUMN_KEYS: OptionalKeywordExportColumnKey[] = OPTIONAL_KEYWORD_EXPORT_COLUMNS.map((column) => column.key);
 
 function slugifyFilenamePart(value: string): string {
   return value
@@ -137,18 +140,16 @@ function buildKeywordExportRows(parents: SerpParent[]): KeywordClusterExportRow[
     for (const subcluster of parent.subclusters) {
       for (const keyword of subcluster.keywords) {
         rows.push({
-          keyword: keyword.kwRaw,
-          cluster: subcluster.name,
           topicalCluster: parent.name,
+          cluster: subcluster.name,
+          keyword: keyword.kwRaw,
           demandMonthly: Math.round(keyword.demandMonthly ?? 0),
           demandSource: keyword.demandSource ?? "none",
           clusterTotalDemand: Math.round(subcluster.totalDemand ?? 0),
           topicalTotalDemand: Math.round(parent.totalDemand ?? 0),
           clusterKeywordCount: subcluster.keywordCount ?? 0,
           topicalKeywordCount: parent.keywordCount ?? 0,
-          overlapScore: typeof subcluster.overlapScore === "number" ? Number(subcluster.overlapScore.toFixed(3)) : "",
-          topDomains: (subcluster.topDomains ?? []).join(", "),
-          topUrls: (subcluster.topUrls ?? []).join(", ")
+          overlapScore: typeof subcluster.overlapScore === "number" ? Number(subcluster.overlapScore.toFixed(3)) : ""
         });
       }
     }
@@ -156,10 +157,13 @@ function buildKeywordExportRows(parents: SerpParent[]): KeywordClusterExportRow[
   return rows;
 }
 
-function serializeKeywordExportRows(rows: KeywordClusterExportRow[]): Array<Record<string, string | number>> {
+function serializeKeywordExportRows(
+  rows: KeywordClusterExportRow[],
+  columns: KeywordExportColumn[]
+): Array<Record<string, string | number>> {
   return rows.map((row) => {
     const record: Record<string, string | number> = {};
-    for (const column of KEYWORD_EXPORT_COLUMNS) {
+    for (const column of columns) {
       const value = row[column.key];
       record[column.header] = value === null || value === undefined ? "" : value;
     }
@@ -473,6 +477,7 @@ export default function KeywordWorkspacePage() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportScope, setExportScope] = useState<ExportScope>("all");
   const [exportFormat, setExportFormat] = useState<ExportFormat>("xlsx");
+  const [selectedOptionalColumns, setSelectedOptionalColumns] = useState<OptionalKeywordExportColumnKey[]>(DEFAULT_OPTIONAL_COLUMN_KEYS);
   const [minDemand, setMinDemand] = useState(5);
   const [minDemandInput, setMinDemandInput] = useState("5");
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
@@ -611,6 +616,18 @@ export default function KeywordWorkspacePage() {
     return [currentParent];
   }, [exportScope, currentParent, parents]);
   const scopedExportRows = useMemo(() => buildKeywordExportRows(scopedParentsForExport), [scopedParentsForExport]);
+  const activeExportColumns = useMemo<KeywordExportColumn[]>(
+    () => [
+      ...FIXED_KEYWORD_EXPORT_COLUMNS,
+      ...OPTIONAL_KEYWORD_EXPORT_COLUMNS.filter((column) => selectedOptionalColumns.includes(column.key))
+    ],
+    [selectedOptionalColumns]
+  );
+  const selectedOptionalColumnCount = selectedOptionalColumns.length;
+  const selectedOptionalColumnLabel =
+    selectedOptionalColumnCount === 0
+      ? "Keine Zusatzspalten"
+      : `${selectedOptionalColumnCount} von ${OPTIONAL_KEYWORD_EXPORT_COLUMNS.length} Zusatzspalten`;
   const exportStats = useMemo(() => {
     const clusterCount = scopedParentsForExport.reduce((sum, parent) => sum + parent.subclusters.length, 0);
     return {
@@ -631,9 +648,9 @@ export default function KeywordWorkspacePage() {
         ? "alle-cluster"
         : slugifyFilenamePart(currentParent?.name ?? "aktuelle-ansicht");
     const baseFilename = `keyword-cluster-export-${scopePart}-${timestamp}`;
-    const serializedRows = serializeKeywordExportRows(scopedExportRows);
+    const serializedRows = serializeKeywordExportRows(scopedExportRows, activeExportColumns);
     const worksheet = XLSX.utils.json_to_sheet(serializedRows, { skipHeader: false });
-    worksheet["!cols"] = KEYWORD_EXPORT_COLUMNS.map((column) => ({ wch: column.width }));
+    worksheet["!cols"] = activeExportColumns.map((column) => ({ wch: column.width }));
 
     if (exportFormat === "xlsx") {
       const workbook = XLSX.utils.book_new();
@@ -652,7 +669,23 @@ export default function KeywordWorkspacePage() {
 
     setExportDialogOpen(false);
     toast.success(`Export erstellt: ${scopedExportRows.length.toLocaleString("de-DE")} Keywords.`);
-  }, [scopedExportRows, exportScope, currentParent, exportFormat]);
+  }, [scopedExportRows, activeExportColumns, exportScope, currentParent, exportFormat]);
+
+  const updateOptionalColumns = useCallback((next: Set<OptionalKeywordExportColumnKey>) => {
+    setSelectedOptionalColumns(
+      OPTIONAL_KEYWORD_EXPORT_COLUMNS.map((column) => column.key).filter((key) => next.has(key))
+    );
+  }, []);
+
+  const toggleOptionalColumn = useCallback(
+    (key: OptionalKeywordExportColumnKey, checked: boolean | "indeterminate") => {
+      const next = new Set(selectedOptionalColumns);
+      if (checked === true) next.add(key);
+      else next.delete(key);
+      updateOptionalColumns(next);
+    },
+    [selectedOptionalColumns, updateOptionalColumns]
+  );
 
   const handleSelect = useCallback((id: string) => {
     setClickFeedbackParentId(id);
@@ -983,6 +1016,54 @@ export default function KeywordWorkspacePage() {
               </RadioGroup>
             </div>
 
+            <div className="space-y-3 rounded-xl border border-border/70 bg-muted/20 p-4">
+              <Label className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Zusatzspalten</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" className="h-9 gap-2">
+                      <Columns3 className="h-4 w-4" />
+                      Spalten auswählen
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-64">
+                    <DropdownMenuLabel>Optionale Spalten</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() =>
+                        setSelectedOptionalColumns(OPTIONAL_KEYWORD_EXPORT_COLUMNS.map((column) => column.key))
+                      }
+                    >
+                      Alle auswählen
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() => setSelectedOptionalColumns([])}
+                    >
+                      Alle abwählen
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {OPTIONAL_KEYWORD_EXPORT_COLUMNS.map((column) => (
+                      <DropdownMenuCheckboxItem
+                        key={column.key}
+                        checked={selectedOptionalColumns.includes(column.key)}
+                        onCheckedChange={(checked) => toggleOptionalColumn(column.key, checked)}
+                        onSelect={(event) => event.preventDefault()}
+                      >
+                        {column.header}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <p className="text-xs text-muted-foreground">{selectedOptionalColumnLabel}</p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Fixe Spalten: {FIXED_KEYWORD_EXPORT_COLUMNS.map((column) => column.header).join(" · ")}
+              </p>
+            </div>
+
             <div className="rounded-xl border border-border/70 bg-card/60 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Vorschau</p>
               <div className="mt-2 grid gap-2 text-xs sm:grid-cols-3">
@@ -1000,7 +1081,7 @@ export default function KeywordWorkspacePage() {
                 </div>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                Spalten: {KEYWORD_EXPORT_COLUMNS.map((column) => column.header).join(" · ")}
+                Spalten: {activeExportColumns.map((column) => column.header).join(" · ")}
               </p>
             </div>
 
