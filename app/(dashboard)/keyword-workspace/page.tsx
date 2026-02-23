@@ -57,7 +57,8 @@ const PARENT_WIDTH = 280;
 const PARENT_HEIGHT = 120;
 const DETAIL_WIDTH = 360;
 const DETAIL_HEIGHT = 520;
-const SUB_WIDTH = 260;
+const SUB_MIN_W = 260;
+const SUB_MAX_W = 380;
 const SUB_HEIGHT = 150;
 const GRID_COLS = 4;
 const GRID_GAP_X = 40;
@@ -158,10 +159,10 @@ function SubclusterNode({ data }: NodeProps) {
   return (
     <div
       className={[
-        "rounded-lg border bg-accent px-3 py-2 shadow-sm w-64 transition-[opacity,transform] duration-300",
+        "rounded-lg border bg-accent px-3 py-2 shadow-sm transition-[opacity,transform] duration-300",
         isVisible ? "opacity-100 translate-x-0 hover:-translate-y-1" : "opacity-0 translate-x-6 pointer-events-none"
       ].join(" ")}
-      style={{ transitionDelay: delayMs }}
+      style={{ width: data.subWidth ?? 256, minWidth: 256, transitionDelay: delayMs }}
     >
       <div className="text-sm font-semibold truncate">{data.name}</div>
       <div className="text-xs text-muted-foreground">
@@ -191,6 +192,19 @@ const nodeTypes = {
   parentNode: ParentNode,
   subNode: SubclusterNode
 };
+
+/* ── Estimate optimal subcluster node width based on longest keyword ── */
+function estimateSubWidth(keywords: SerpKeyword[]): number {
+  if (!keywords.length) return SUB_MIN_W;
+  const longest = Math.max(
+    ...keywords.map((k) => {
+      const badgeW = k.demandSource === "upload" ? 20 : 0;
+      // ~6.5px per char at text-xs, + badge + gap + demand number + container padding
+      return k.kwRaw.length * 6.5 + badgeW + 54;
+    })
+  );
+  return Math.min(Math.max(Math.ceil(longest), SUB_MIN_W), SUB_MAX_W);
+}
 
 /* ── Layout builder ── */
 function buildFlowGraph(
@@ -278,15 +292,21 @@ function buildFlowGraph(
       g.setDefaultEdgeLabel(() => ({}));
       g.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 60 });
 
-      sortedSubclusters.forEach((s) => g.setNode(`sub-${s.id}`, { width: SUB_WIDTH, height: SUB_HEIGHT }));
+      const subWidths = new Map<string, number>();
+      sortedSubclusters.forEach((s) => {
+        const w = estimateSubWidth(s.keywords ?? []);
+        subWidths.set(s.id, w);
+        g.setNode(`sub-${s.id}`, { width: w, height: SUB_HEIGHT });
+      });
       dagre.layout(g);
 
       const xOffset = DETAIL_WIDTH + 120;
 
       sortedSubclusters.forEach((s, idx) => {
+        const subW = subWidths.get(s.id) ?? SUB_MIN_W;
         const pos = g.node(`sub-${s.id}`);
-        const nx = xOffset + (pos?.x - SUB_WIDTH / 2 || 0);
-        if (nx + SUB_WIDTH > maxSubX) maxSubX = nx + SUB_WIDTH;
+        const nx = xOffset + (pos?.x - subW / 2 || 0);
+        if (nx + subW > maxSubX) maxSubX = nx + subW;
         const nodeId = `sub-${s.id}`;
         const keywordsSorted = [...(s.keywords ?? [])].sort((a, b) => (b.demandMonthly ?? 0) - (a.demandMonthly ?? 0));
         nodes.push({
@@ -296,7 +316,7 @@ function buildFlowGraph(
             x: nx,
             y: pos?.y - SUB_HEIGHT / 2 || 0
           },
-          data: { ...s, keywords: keywordsSorted, reveal: revealSubclusters, delayMs: revealSubclusters ? idx * 45 : 0 },
+          data: { ...s, keywords: keywordsSorted, subWidth: subW, reveal: revealSubclusters, delayMs: revealSubclusters ? idx * 45 : 0 },
           style: transitionStyle(),
           draggable: false
         });
