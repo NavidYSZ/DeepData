@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import ReactFlow, { Background, Controls, Edge, Node, NodeProps, ReactFlowInstance } from "reactflow";
 import "reactflow/dist/style.css";
-import { LayoutGrid, Loader2, Menu, Play, RefreshCw } from "lucide-react";
+import { LayoutGrid, Loader2, Menu, Play, RefreshCw, Upload } from "lucide-react";
 import dagre from "dagre";
 import { useSite } from "@/components/dashboard/site-context";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,10 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
+import { UploadKeywordsDialog } from "@/components/keyword-workspace/upload-dialog";
+import { ExternalBadge } from "@/components/keyword-workspace/external-badge";
 
-type SerpKeyword = { id: string; kwRaw: string; demandMonthly: number };
+type SerpKeyword = { id: string; kwRaw: string; demandMonthly: number; demandSource?: string };
 type SerpSubcluster = {
   id: string;
   name: string;
@@ -109,7 +111,10 @@ function ParentNode({ data }: NodeProps) {
             <div className="p-3 space-y-1 text-sm text-muted-foreground">
               {keywords.map((k) => (
                 <div key={k.id} className="flex justify-between gap-2">
-                  <span className="truncate">{k.kwRaw}</span>
+                  <span className="truncate flex items-center gap-1">
+                    {k.demandSource === "upload" && <ExternalBadge />}
+                    {k.kwRaw}
+                  </span>
                   <span>{Math.round(k.demandMonthly)}</span>
                 </div>
               ))}
@@ -169,7 +174,10 @@ function SubclusterNode({ data }: NodeProps) {
         <div className="text-xs text-muted-foreground space-y-0.5 pr-1">
           {data.keywords?.map((k: SerpKeyword) => (
             <div key={k.id} className="flex justify-between gap-1">
-              <span className="truncate">{k.kwRaw}</span>
+              <span className="truncate flex items-center gap-1">
+                {k.demandSource === "upload" && <ExternalBadge />}
+                {k.kwRaw}
+              </span>
               <span>{Math.round(k.demandMonthly)}</span>
             </div>
           ))}
@@ -347,6 +355,7 @@ export default function KeywordWorkspacePage() {
   );
   const projectId = workspace?.projectId ?? null;
 
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [minDemand, setMinDemand] = useState(5);
   const [minDemandInput, setMinDemandInput] = useState("5");
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
@@ -672,6 +681,16 @@ export default function KeywordWorkspacePage() {
             size="sm"
             variant="outline"
             className="h-8 gap-1"
+            onClick={() => setUploadOpen(true)}
+            disabled={isRunning || !projectId}
+          >
+            <Upload className="h-3 w-3" />
+            Import
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1"
             onClick={() => Promise.all([mutateSerp(), mutateStatus()])}
             disabled={isRunning}
           >
@@ -680,6 +699,18 @@ export default function KeywordWorkspacePage() {
           </Button>
         </div>
       </div>
+
+      {projectId && (
+        <UploadKeywordsDialog
+          projectId={projectId}
+          open={uploadOpen}
+          onOpenChange={setUploadOpen}
+          onImportComplete={() => {
+            mutateSerp();
+            mutateStatus();
+          }}
+        />
+      )}
     </div>
   );
 }

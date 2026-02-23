@@ -1,49 +1,14 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { z } from "zod";
 import path from "path";
-import fs from "fs";
 import { promises as fsp } from "fs";
 import { nanoid } from "nanoid";
-import { parse } from "csv-parse/sync";
-import * as XLSX from "xlsx";
-import iconv from "iconv-lite";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-
-const bodySchema = z.object({
-  projectId: z.string()
-});
+import { parseFile, detectColumns } from "@/lib/keyword-workspace/file-parse";
 
 function err(code: string, message: string, details: Record<string, any> = {}, status = 400) {
   return NextResponse.json({ code, message, details, traceId: nanoid(10) }, { status });
-}
-
-function detectColumns(headers: string[]) {
-  const lower = headers.map((h) => h.toLowerCase());
-  const pick = (preds: string[]) => {
-    const idx = lower.findIndex((h) => preds.some((p) => h.includes(p)));
-    return idx >= 0 ? headers[idx] : null;
-  };
-  return {
-    keyword: pick(["keyword", "kw", "suchbegriff", "query"]),
-    volume: pick(["volume", "search", "sistrix"]),
-    impressions: pick(["impression"]),
-    clicks: pick(["click"]),
-    position: pick(["position", "avg position"]),
-    url: pick(["url", "landing", "page"])
-  };
-}
-
-async function parseFile(filePath: string, buffer: Buffer) {
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext === ".xlsx" || ext === ".xls") {
-    const workbook = XLSX.read(buffer, { type: "buffer" });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    return XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: "" });
-  }
-  const decoded = iconv.decode(buffer, "utf-8");
-  return parse(decoded, { columns: true, skip_empty_lines: true });
 }
 
 export async function POST(req: Request) {
@@ -73,7 +38,7 @@ export async function POST(req: Request) {
 
   let rows: Record<string, any>[] = [];
   try {
-    rows = await parseFile(file.name, buffer);
+    rows = parseFile(file.name, buffer);
   } catch (e) {
     return err("IMPORT_FAILED", "Failed to parse file", { reason: (e as Error).message });
   }
@@ -103,6 +68,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     importId: source.id,
     sourceId: source.id,
+    headers,
     detectedColumns,
     previewRows
   });

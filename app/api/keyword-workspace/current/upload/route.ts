@@ -3,9 +3,6 @@ import { getServerSession } from "next-auth";
 import { nanoid } from "nanoid";
 import path from "path";
 import { promises as fsp } from "fs";
-import { parse } from "csv-parse/sync";
-import * as XLSX from "xlsx";
-import iconv from "iconv-lite";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
@@ -15,42 +12,10 @@ import {
   recomputeDemandForProject,
   rebuildPreclusters
 } from "@/lib/keyword-workspace/service";
+import { parseFile, detectColumns, parseNumber } from "@/lib/keyword-workspace/file-parse";
 
 function err(code: string, message: string, details: Record<string, unknown> = {}, status = 400) {
   return NextResponse.json({ code, message, details, traceId: nanoid(10) }, { status });
-}
-
-function detectColumns(headers: string[]) {
-  const lower = headers.map((h) => h.toLowerCase());
-  const pick = (preds: string[]) => {
-    const idx = lower.findIndex((h) => preds.some((p) => h.includes(p)));
-    return idx >= 0 ? headers[idx] : null;
-  };
-  return {
-    keyword: pick(["keyword", "kw", "suchbegriff", "query"]),
-    volume: pick(["volume", "search", "sistrix", "sv"]),
-    impressions: pick(["impression"]),
-    clicks: pick(["click"]),
-    position: pick(["position"]),
-    url: pick(["url", "landing", "page"])
-  };
-}
-
-function parseFile(name: string, buffer: Buffer) {
-  const ext = path.extname(name).toLowerCase();
-  if (ext === ".xlsx" || ext === ".xls") {
-    const workbook = XLSX.read(buffer, { type: "buffer" });
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    return XLSX.utils.sheet_to_json<Record<string, string | number | null>>(firstSheet, { defval: null });
-  }
-  const decoded = iconv.decode(buffer, "utf-8");
-  return parse(decoded, { columns: true, skip_empty_lines: true }) as Array<Record<string, string | number | null>>;
-}
-
-function parseNumber(value: string | number | null | undefined) {
-  if (value === null || value === undefined || value === "") return null;
-  const asNumber = typeof value === "number" ? value : Number(String(value).replace(",", "."));
-  return Number.isFinite(asNumber) ? asNumber : null;
 }
 
 export async function POST(req: Request) {

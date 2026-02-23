@@ -622,7 +622,8 @@ export async function getLatestSerpClusters(projectId: string, minDemand = 5) {
         const members = s.members.map((m) => ({
           id: m.keywordId,
           kwRaw: m.keyword.kwRaw,
-          demandMonthly: m.keyword.demand?.demandMonthly ?? 0
+          demandMonthly: m.keyword.demand?.demandMonthly ?? 0,
+          demandSource: m.keyword.demand?.demandSource ?? "none"
         }));
         return {
           id: s.id,
