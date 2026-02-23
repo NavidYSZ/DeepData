@@ -97,6 +97,7 @@ export async function POST(_req: Request, ctx: { params: { importId: string } })
       impressions: body.impressionsColumn ? parseNumber(row[body.impressionsColumn]) : null,
       clicks: body.clicksColumn ? parseNumber(row[body.clicksColumn]) : null,
       position: body.positionColumn ? parseNumber(row[body.positionColumn]) : null,
+      kd: body.kdColumn ? parseNumber(row[body.kdColumn]) : null,
       url: body.urlColumn ? String(row[body.urlColumn] ?? "").trim() || null : null
     }))
     .filter((r) => r.kwRaw !== "");

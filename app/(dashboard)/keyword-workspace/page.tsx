@@ -35,7 +35,7 @@ import { toast } from "sonner";
 import { UploadKeywordsDialog } from "@/components/keyword-workspace/upload-dialog";
 import { ExternalBadge } from "@/components/keyword-workspace/external-badge";
 
-type SerpKeyword = { id: string; kwRaw: string; demandMonthly: number; demandSource?: string };
+type SerpKeyword = { id: string; kwRaw: string; demandMonthly: number; demandSource?: string; difficultyScore?: number | null };
 type SerpSubcluster = {
   id: string;
   name: string;
@@ -68,6 +68,7 @@ type KeywordClusterExportRow = {
   keyword: string;
   demandMonthly: number;
   demandSource: string;
+  difficultyScore: number | "";
   clusterTotalDemand: number;
   topicalTotalDemand: number;
   clusterKeywordCount: number;
@@ -116,6 +117,7 @@ const FIXED_KEYWORD_EXPORT_COLUMNS: KeywordExportColumn[] = [
 const OPTIONAL_KEYWORD_EXPORT_COLUMNS: Array<KeywordExportColumn & { key: OptionalKeywordExportColumnKey }> = [
   { key: "demandMonthly", header: "Demand Monthly", width: 16 },
   { key: "demandSource", header: "Demand Source", width: 15 },
+  { key: "difficultyScore", header: "Difficulty Score", width: 14 },
   { key: "clusterTotalDemand", header: "Cluster Demand", width: 16 },
   { key: "topicalTotalDemand", header: "Topical Demand", width: 16 },
   { key: "clusterKeywordCount", header: "Cluster Keywords", width: 16 },
@@ -145,6 +147,10 @@ function buildKeywordExportRows(parents: SerpParent[]): KeywordClusterExportRow[
           keyword: keyword.kwRaw,
           demandMonthly: Math.round(keyword.demandMonthly ?? 0),
           demandSource: keyword.demandSource ?? "none",
+          difficultyScore:
+            typeof keyword.difficultyScore === "number"
+              ? Number(keyword.difficultyScore.toFixed(2))
+              : "",
           clusterTotalDemand: Math.round(subcluster.totalDemand ?? 0),
           topicalTotalDemand: Math.round(parent.totalDemand ?? 0),
           clusterKeywordCount: subcluster.keywordCount ?? 0,

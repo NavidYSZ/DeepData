@@ -62,6 +62,7 @@ export async function POST(req: Request) {
       clicks: detected.clicks ? parseNumber(row[detected.clicks]) : null,
       position: detected.position ? parseNumber(row[detected.position]) : null,
       volume: detected.volume ? parseNumber(row[detected.volume]) : null,
+      kd: detected.kd ? parseNumber(row[detected.kd]) : null,
       url: detected.url ? String(row[detected.url] ?? "") : null
     }))
   });

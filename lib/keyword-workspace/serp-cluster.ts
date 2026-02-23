@@ -598,7 +598,19 @@ export async function getLatestSerpClusters(projectId: string, minDemand = 5) {
           subcluster: {
             include: {
               members: {
-                include: { keyword: { include: { demand: true } } }
+                include: {
+                  keyword: {
+                    include: {
+                      demand: true,
+                      sourceMetrics: {
+                        select: {
+                          kd: true,
+                          source: { select: { type: true } }
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -619,12 +631,19 @@ export async function getLatestSerpClusters(projectId: string, minDemand = 5) {
       topDomains: p.topDomainsJson ? (JSON.parse(p.topDomainsJson) as string[]) : [],
       subclusters: p.subclusters.map((psc) => {
         const s = psc.subcluster;
-        const members = s.members.map((m) => ({
-          id: m.keywordId,
-          kwRaw: m.keyword.kwRaw,
-          demandMonthly: m.keyword.demand?.demandMonthly ?? 0,
-          demandSource: m.keyword.demand?.demandSource ?? "none"
-        }));
+        const members = s.members.map((m) => {
+          const uploadDifficulty = m.keyword.sourceMetrics.reduce<number | null>((best, metric) => {
+            if (metric.source.type !== "upload" || metric.kd === null) return best;
+            return best === null ? metric.kd : Math.max(best, metric.kd);
+          }, null);
+          return {
+            id: m.keywordId,
+            kwRaw: m.keyword.kwRaw,
+            demandMonthly: m.keyword.demand?.demandMonthly ?? 0,
+            demandSource: m.keyword.demand?.demandSource ?? "none",
+            difficultyScore: uploadDifficulty
+          };
+        });
         return {
           id: s.id,
           name: s.name,

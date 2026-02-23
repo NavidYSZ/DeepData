@@ -11,6 +11,7 @@ type MetricInput = {
   clicks?: number | null;
   position?: number | null;
   volume?: number | null;
+  kd?: number | null;
   url?: string | null;
   dateFrom?: Date | null;
   dateTo?: Date | null;
@@ -119,6 +120,7 @@ export async function ingestSourceMetrics(params: {
         clicks: row.clicks ?? null,
         position: row.position ?? null,
         sistrixVolume: row.volume ?? null,
+        kd: row.kd ?? null,
         url: row.url ?? null,
         dateFrom: row.dateFrom ?? null,
         dateTo: row.dateTo ?? null
@@ -139,6 +141,12 @@ export async function ingestSourceMetrics(params: {
       clicks: (existing.clicks ?? 0) + (row.clicks ?? 0),
       position: row.position ?? existing.position,
       sistrixVolume: Math.max(existing.sistrixVolume ?? 0, row.sistrixVolume ?? 0),
+      kd:
+        existing.kd === null
+          ? (row.kd ?? null)
+          : row.kd === null
+            ? existing.kd
+            : Math.max(existing.kd, row.kd),
       url: row.url ?? existing.url
     });
   }
@@ -190,6 +198,7 @@ export async function ingestSourceMetrics(params: {
         clicks: row.clicks,
         position: row.position,
         sistrixVolume: row.sistrixVolume,
+        kd: row.kd,
         url: row.url,
         dateFrom: row.dateFrom,
         dateTo: row.dateTo
@@ -199,6 +208,7 @@ export async function ingestSourceMetrics(params: {
         clicks: row.clicks,
         position: row.position,
         sistrixVolume: row.sistrixVolume,
+        kd: row.kd,
         url: row.url,
         dateFrom: row.dateFrom,
         dateTo: row.dateTo

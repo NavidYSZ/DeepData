@@ -88,6 +88,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
         const position = meta.mapping.positionColumn ? Number(row[meta.mapping.positionColumn] ?? 0) : undefined;
         const url = meta.mapping.urlColumn ? String(row[meta.mapping.urlColumn] ?? "") : undefined;
         const volume = meta.mapping.volumeColumn ? Number(row[meta.mapping.volumeColumn] ?? 0) : undefined;
+        const kd = meta.mapping.kdColumn ? Number(row[meta.mapping.kdColumn] ?? 0) : undefined;
 
         await prisma.keywordSourceMetric.upsert({
           where: { keywordId_sourceId: { keywordId, sourceId: source.id } },
@@ -98,6 +99,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
             clicks: clicks ?? null,
             position: position ?? null,
             sistrixVolume: volume ?? null,
+            kd: kd ?? null,
             url: url || null
           },
           update: {
@@ -105,6 +107,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
             clicks: clicks ?? null,
             position: position ?? null,
             sistrixVolume: volume ?? null,
+            kd: kd ?? null,
             url: url || null
           }
         });
