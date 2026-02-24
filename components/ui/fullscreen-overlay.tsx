@@ -31,7 +31,7 @@ export function FullscreenOverlay({ children, onClose, title, className }: Fulls
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
       <div
         className={cn(
-          "relative w-[95vw] max-w-6xl max-h-[95vh] overflow-hidden rounded-xl border bg-card shadow-2xl",
+          "relative w-[98vw] max-w-[1800px] max-h-[96vh] overflow-hidden rounded-xl border bg-card shadow-2xl",
           className
         )}
       >

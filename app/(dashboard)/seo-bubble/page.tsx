@@ -29,7 +29,14 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
 import { ChartContainer } from "@/components/ui/chart";
-import { Maximize2 } from "lucide-react";
+import { Maximize2, Settings } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger
+} from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useSite } from "@/components/dashboard/site-context";
 import { FilterBar, PageHeader, SectionCard } from "@/components/dashboard/page-shell";
 
@@ -87,6 +94,27 @@ function computeRadius(impressions: number, minImp: number, maxImp: number) {
   return rMin + norm * (rMax - rMin);
 }
 
+// Expected CTR by position – industry average benchmark curve
+const CTR_BENCHMARKS: Record<number, number> = {
+  1: 0.285, 2: 0.157, 3: 0.110, 4: 0.080, 5: 0.072,
+  6: 0.051, 7: 0.041, 8: 0.032, 9: 0.028, 10: 0.025,
+  11: 0.021, 12: 0.019, 13: 0.016, 14: 0.014, 15: 0.012,
+  16: 0.010, 17: 0.009, 18: 0.008, 19: 0.007, 20: 0.006,
+};
+
+function expectedCtr(position: number): number {
+  if (position <= 1) return CTR_BENCHMARKS[1];
+  if (position >= 20) return 0.005;
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  if (lower === upper) return CTR_BENCHMARKS[lower] ?? 0.005;
+  const lVal = CTR_BENCHMARKS[lower] ?? 0.005;
+  const uVal = CTR_BENCHMARKS[upper] ?? 0.005;
+  return lVal + (uVal - lVal) * (position - lower);
+}
+
+type ActiveSegment = "all" | "quickwins" | "hidden-gems" | "highest-impact";
+
 export default function SeoBubblePage() {
   const { site } = useSite();
   const [mode, setMode] = useState<Mode>("query");
@@ -100,8 +128,25 @@ export default function SeoBubblePage() {
   const [selected, setSelected] = useState<DataPoint | null>(null);
   const [detailRows, setDetailRows] = useState<RawRow[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [activeQuadrant, setActiveQuadrant] = useState<"all" | "q1" | "q2" | "q3" | "q4">("all");
+  const [activeSegment, setActiveSegment] = useState<ActiveSegment>("all");
   const [fullscreen, setFullscreen] = useState(false);
+
+  // Brand keyword filter
+  const [brandKeywords, setBrandKeywords] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = localStorage.getItem("seo-bubble-brand-keywords");
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
+  const [brandFilterActive, setBrandFilterActive] = useState(true);
+  const [brandInput, setBrandInput] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const stored = localStorage.getItem("seo-bubble-brand-keywords");
+      return stored ? JSON.parse(stored).join(", ") : "";
+    } catch { return ""; }
+  });
 
   const body = site
     ? {
@@ -180,21 +225,60 @@ export default function SeoBubblePage() {
 
   const notConnected = (error as any)?.status === 401;
 
+  // Brand filter helper
+  const isBrandKeyword = (text: string) => {
+    if (!brandFilterActive || brandKeywords.length === 0) return false;
+    const lower = text.toLowerCase();
+    return brandKeywords.some((bk) => lower.includes(bk.toLowerCase()));
+  };
+
+  const brandFilteredCount = useMemo(() => {
+    if (!brandFilterActive || brandKeywords.length === 0) return 0;
+    return points.filter((p) => isBrandKeyword(p.primary)).length;
+  }, [points, brandKeywords, brandFilterActive]);
+
   const displayPoints = useMemo(() => {
+    let base = points.filter(
+      (p) =>
+        p.impressions >= minImpressions &&
+        (positionCap == null || p.position <= positionCap) &&
+        (ctrCap == null || p.ctr <= ctrCap) &&
+        !isBrandKeyword(p.primary)
+    );
+    if (activeSegment === "all") return base;
+    if (activeSegment === "quickwins") {
+      return base.filter((p) => p.position <= 5 && p.ctr < expectedCtr(p.position));
+    }
+    if (activeSegment === "hidden-gems") {
+      return base.filter((p) => p.position >= 6 && p.position <= 15 && p.ctr > expectedCtr(p.position));
+    }
+    if (activeSegment === "highest-impact") {
+      const withImpact = base.map((p) => {
+        const betterPos = Math.max(1, p.position - 3);
+        const potentialCtr = expectedCtr(betterPos);
+        const delta = Math.max(0, potentialCtr - p.ctr);
+        return { ...p, impact: p.impressions * delta };
+      });
+      withImpact.sort((a, b) => b.impact - a.impact);
+      return withImpact.slice(0, 50);
+    }
+    return base;
+  }, [points, activeSegment, minImpressions, positionCap, ctrCap, brandKeywords, brandFilterActive]);
+
+  // Segment counts for badges
+  const segmentCounts = useMemo(() => {
     const base = points.filter(
       (p) =>
         p.impressions >= minImpressions &&
         (positionCap == null || p.position <= positionCap) &&
-        (ctrCap == null || p.ctr <= ctrCap)
+        (ctrCap == null || p.ctr <= ctrCap) &&
+        !isBrandKeyword(p.primary)
     );
-    if (activeQuadrant === "all") return base;
-    const isQ1 = (p: DataPoint) => p.ctr > ctrLowThreshold && p.position < 10;
-    const isQ2 = (p: DataPoint) => p.ctr <= ctrLowThreshold && p.position < 10;
-    const isQ3 = (p: DataPoint) => p.ctr > ctrLowThreshold && p.position >= 10;
-    const isQ4 = (p: DataPoint) => p.ctr <= ctrLowThreshold && p.position >= 10;
-    const match = { q1: isQ1, q2: isQ2, q3: isQ3, q4: isQ4 }[activeQuadrant];
-    return base.filter(match);
-  }, [points, activeQuadrant, ctrLowThreshold, minImpressions, positionCap, ctrCap]);
+    const quickwins = base.filter((p) => p.position <= 5 && p.ctr < expectedCtr(p.position)).length;
+    const hiddenGems = base.filter((p) => p.position >= 6 && p.position <= 15 && p.ctr > expectedCtr(p.position)).length;
+    const highestImpact = Math.min(50, base.length);
+    return { all: base.length, quickwins, "hidden-gems": hiddenGems, "highest-impact": highestImpact };
+  }, [points, minImpressions, positionCap, ctrCap, brandKeywords, brandFilterActive]);
 
   useEffect(() => {
     if (selected && !displayPoints.find((p) => p.id === selected.id)) {
@@ -369,7 +453,7 @@ export default function SeoBubblePage() {
     <div className="space-y-6">
       <PageHeader
         title="Position vs CTR"
-        description="CTR vs. Position als Bubble-Chart, inkl. Quadranten-Analyse."
+        description="CTR vs. Position als Bubble-Chart mit Quick Wins, Hidden Gems & Impact-Analyse."
       />
 
       <FilterBar className="md:grid-cols-2 xl:grid-cols-6">
@@ -501,22 +585,67 @@ export default function SeoBubblePage() {
         <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <CardTitle>Position vs CTR</CardTitle>
           <div className="flex items-center gap-2 flex-wrap">
-            {[
-              { key: "all", label: "Alle" },
-              { key: "q1", label: "Q1 (CTR hoch, Pos < 10)" },
-              { key: "q2", label: "Q2 (CTR niedrig, Pos < 10)" },
-              { key: "q3", label: "Q3 (CTR hoch, Pos ≥ 10)" },
-              { key: "q4", label: "Q4 (CTR niedrig, Pos ≥ 10)" }
-            ].map((q) => (
+            {([
+              { key: "all" as const, label: "Alle" },
+              { key: "quickwins" as const, label: "Quick Wins" },
+              { key: "hidden-gems" as const, label: "Hidden Gems" },
+              { key: "highest-impact" as const, label: "Highest Impact" }
+            ] as const).map((s) => (
               <Button
-                key={q.key}
+                key={s.key}
                 size="sm"
-                variant={activeQuadrant === q.key ? "secondary" : "outline"}
-                onClick={() => setActiveQuadrant(q.key as any)}
+                variant={activeSegment === s.key ? "secondary" : "outline"}
+                onClick={() => setActiveSegment(s.key)}
               >
-                {q.label}
+                {s.label}
+                <Badge variant="outline" className="ml-1.5 text-[10px] px-1.5 py-0">
+                  {segmentCounts[s.key]}
+                </Badge>
               </Button>
             ))}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Einstellungen">
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" align="end">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Brand-Keywords</Label>
+                    <Input
+                      placeholder="z.B. visable, wlw, europages"
+                      value={brandInput}
+                      onChange={(e) => {
+                        setBrandInput(e.target.value);
+                        const keywords = e.target.value
+                          .split(",")
+                          .map((s) => s.trim())
+                          .filter(Boolean);
+                        setBrandKeywords(keywords);
+                        localStorage.setItem("seo-bubble-brand-keywords", JSON.stringify(keywords));
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Kommasepariert. Keywords die einen dieser Begriffe enthalten werden gefiltert.
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="brand-filter-toggle" className="text-sm">Brand-Keywords ausblenden</Label>
+                    <Switch
+                      id="brand-filter-toggle"
+                      checked={brandFilterActive}
+                      onCheckedChange={setBrandFilterActive}
+                    />
+                  </div>
+                  {brandFilterActive && brandKeywords.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {brandFilteredCount} Brand-Keywords ausgeblendet
+                    </p>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setFullscreen(true)} aria-label="Vollbild">
               <Maximize2 className="h-4 w-4" />
             </Button>
