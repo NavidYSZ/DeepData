@@ -29,7 +29,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
 import { ChartContainer } from "@/components/ui/chart";
-import { Maximize2, Settings } from "lucide-react";
+import { ArrowLeft, Maximize2, Settings } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -292,22 +292,31 @@ export default function SeoBubblePage() {
   const displayMaxCtr = useMemo(() => {
     if (ctrCap != null) return ctrCap;
     if (!displayCtrValues.length) return maxCtr;
+    if (activeSegment !== "all") {
+      // Tight fit: only visible points + 10% padding
+      return Math.min(0.3, Math.max(...displayCtrValues) * 1.1);
+    }
     return Math.min(0.3, Math.max(...displayCtrValues, maxCtr));
-  }, [displayCtrValues, maxCtr, ctrCap]);
+  }, [displayCtrValues, maxCtr, ctrCap, activeSegment]);
 
   const displayYMax = useMemo(() => {
     if (positionCap != null) return positionCap;
     if (!displayPosValues.length) return yMax;
+    if (activeSegment !== "all") {
+      // Tight fit: only visible points + 10% padding
+      return Math.min(100, Math.ceil(Math.max(...displayPosValues) * 1.1));
+    }
     const maxVal = Math.max(...displayPosValues, yMax);
     const p95v = p95(displayPosValues) * 1.2;
     return Math.min(100, Math.max(maxVal, p95v));
-  }, [displayPosValues, yMax, positionCap]);
+  }, [displayPosValues, yMax, positionCap, activeSegment]);
 
-  // Fetch detail rankings for a page when selected in page mode
+  // Fetch detail rankings when a bubble is selected (URLs for query, queries for page)
   useEffect(() => {
-    async function loadDetails(pageUrl: string) {
+    async function loadDetails(value: string) {
       setDetailLoading(true);
       try {
+        const filterDim = mode === "query" ? "query" : "page";
         const res = await fetcher("/api/gsc/query", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -316,7 +325,7 @@ export default function SeoBubblePage() {
             startDate: body?.startDate,
             endDate: body?.endDate,
             dimensions: ["query", "page"],
-            filters: [{ dimension: "page", operator: "equals", expression: pageUrl }],
+            filters: [{ dimension: filterDim, operator: "equals", expression: value }],
             rowLimit: 500
           })
         });
@@ -328,7 +337,7 @@ export default function SeoBubblePage() {
       }
     }
 
-    if (mode === "page" && selected?.primary) {
+    if (selected?.primary) {
       loadDetails(selected.primary);
     } else {
       setDetailRows([]);
@@ -342,7 +351,7 @@ export default function SeoBubblePage() {
       ) : (
         <ChartContainer config={{}} className="h-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 10 }}>
+            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 10 }} onClick={() => setSelected(null)}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               type="number"
@@ -438,7 +447,7 @@ export default function SeoBubblePage() {
               shape="circle"
               fillOpacity={0.7}
               stroke="#312e81"
-              onClick={(p: any) => setSelected(p.payload as DataPoint)}
+              onClick={(p: any, _idx: any, e: any) => { e?.stopPropagation?.(); setSelected(p.payload as DataPoint); }}
             >
               {/* radius is handled by ZAxis (impressions) */}
             </Scatter>
@@ -656,14 +665,60 @@ export default function SeoBubblePage() {
             {renderChart("h-full")}
           </div>
           <div className="min-w-0 space-y-3 lg:col-span-1">
-            <Card className="h-full">
-              <CardHeader>
-                <CardTitle>Details</CardTitle>
+            <Card className="h-full flex flex-col">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2">
+                  {selected && (
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setSelected(null)}>
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {selected ? "Details" : "Ergebnisse"}
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                {!selected && <p className="text-muted-foreground">Klicke auf eine Bubble.</p>}
+              <CardContent className="flex-1 overflow-hidden text-sm">
+                {!selected && (
+                  <div className="h-[440px] overflow-y-auto">
+                    {displayPoints.length === 0 ? (
+                      <p className="text-muted-foreground">Keine Ergebnisse.</p>
+                    ) : (
+                      <div className="rounded-md border border-border/60">
+                        <table className="w-full text-xs table-fixed">
+                          <thead className="bg-muted/50 sticky top-0">
+                            <tr>
+                              <th className="px-2 py-1.5 text-left w-[45%]">{mode === "query" ? "Query" : "Page"}</th>
+                              <th className="px-1.5 py-1.5 text-right w-[18%]">Pos</th>
+                              <th className="px-1.5 py-1.5 text-right w-[18%]">CTR</th>
+                              <th className="px-1.5 py-1.5 text-right w-[19%]">Imp.</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[...displayPoints]
+                              .sort((a, b) => b.impressions - a.impressions)
+                              .map((p) => (
+                                <tr
+                                  key={p.id}
+                                  className="border-t border-border/40 cursor-pointer hover:bg-muted/40 transition-colors"
+                                  onClick={() => setSelected(p)}
+                                >
+                                  <td className="px-2 py-1.5 truncate" title={p.primary}>
+                                    {p.primary}
+                                  </td>
+                                  <td className="px-1.5 py-1.5 text-right">{p.position.toFixed(1)}</td>
+                                  <td className="px-1.5 py-1.5 text-right">{formatPct(p.ctr)}</td>
+                                  <td className="px-1.5 py-1.5 text-right">
+                                    {p.impressions.toLocaleString("de-DE")}
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {selected && (
-                  <>
+                  <div className="space-y-3">
                     <div className="font-semibold break-words">{selected.primary}</div>
                     {selected.secondary && (
                       <div className="text-xs text-muted-foreground break-words">
@@ -676,65 +731,74 @@ export default function SeoBubblePage() {
                       <div>Impressions: {selected.impressions.toLocaleString("de-DE")}</div>
                       <div>Clicks: {selected.clicks.toLocaleString("de-DE")}</div>
                     </div>
-                    {mode === "page" && selected.primary.startsWith("http") && (
-                      <Button variant="outline" size="sm" onClick={() => window.open(selected.primary, "_blank")}>
-                        Seite öffnen
+                    <div className="flex gap-2">
+                      {mode === "page" && selected.primary.startsWith("http") && (
+                        <Button variant="outline" size="sm" onClick={() => window.open(selected.primary, "_blank")}>
+                          Seite öffnen
+                        </Button>
+                      )}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          const txt = `${selected.primary}\n${selected.secondary ?? ""}\nPosition: ${selected.position.toFixed(
+                            1
+                          )}\nCTR: ${formatPct(selected.ctr)}\nImpressions: ${selected.impressions.toLocaleString(
+                            "de-DE"
+                          )}\nClicks: ${selected.clicks.toLocaleString("de-DE")}`;
+                          navigator.clipboard.writeText(txt);
+                        }}
+                      >
+                        Copy
                       </Button>
-                    )}
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => {
-                        const txt = `${selected.primary}\n${selected.secondary ?? ""}\nPosition: ${selected.position.toFixed(
-                          1
-                        )}\nCTR: ${formatPct(selected.ctr)}\nImpressions: ${selected.impressions.toLocaleString(
-                          "de-DE"
-                        )}\nClicks: ${selected.clicks.toLocaleString("de-DE")}`;
-                        navigator.clipboard.writeText(txt);
-                      }}
-                    >
-                      Copy
-                    </Button>
-                    {mode === "page" && (
-                      <div className="pt-3">
-                        <div className="mb-2 text-xs font-semibold text-muted-foreground">
-                          Rankings für diese Seite
-                        </div>
-                        {detailLoading ? (
-                          <Skeleton className="h-24 w-full" />
-                        ) : detailRows.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">Keine Queries gefunden.</p>
-                        ) : (
-                          <div className="max-h-60 overflow-y-auto rounded-md border border-border/60">
-                            <table className="w-full text-xs table-fixed">
-                              <thead className="bg-muted/50">
-                                <tr>
-                                  <th className="px-3 py-2 text-left w-1/2">Query</th>
-                                  <th className="px-2 py-2 text-right w-1/6">Pos</th>
-                                  <th className="px-2 py-2 text-right w-1/6">CTR</th>
-                                  <th className="px-2 py-2 text-right w-1/6">Imp.</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {detailRows.map((r, idx) => (
+                    </div>
+                    <div className="pt-2">
+                      <div className="mb-2 text-xs font-semibold text-muted-foreground">
+                        {mode === "query" ? "URLs für diesen Query" : "Rankings für diese Seite"}
+                      </div>
+                      {detailLoading ? (
+                        <Skeleton className="h-24 w-full" />
+                      ) : detailRows.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          {mode === "query" ? "Keine URLs gefunden." : "Keine Queries gefunden."}
+                        </p>
+                      ) : (
+                        <div className="max-h-52 overflow-y-auto rounded-md border border-border/60">
+                          <table className="w-full text-xs table-fixed">
+                            <thead className="bg-muted/50 sticky top-0">
+                              <tr>
+                                <th className="px-2 py-1.5 text-left w-[45%]">
+                                  {mode === "query" ? "URL" : "Query"}
+                                </th>
+                                <th className="px-1.5 py-1.5 text-right w-[18%]">Pos</th>
+                                <th className="px-1.5 py-1.5 text-right w-[18%]">CTR</th>
+                                <th className="px-1.5 py-1.5 text-right w-[19%]">Imp.</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {detailRows.map((r, idx) => {
+                                // In query mode: keys[0]=query, keys[1]=page; show page
+                                // In page mode: keys[0]=query, keys[1]=page; show query
+                                const displayCol = mode === "query" ? (r.keys[1] || r.keys[0]) : r.keys[0];
+                                return (
                                   <tr key={idx} className="border-t border-border/40">
-                                    <td className="px-3 py-1.5 truncate" title={r.keys[0]}>
-                                      {r.keys[0]}
+                                    <td className="px-2 py-1.5 truncate" title={displayCol}>
+                                      {displayCol}
                                     </td>
-                                    <td className="px-2 py-1.5 text-right">{r.position.toFixed(1)}</td>
-                                    <td className="px-2 py-1.5 text-right">{formatPct(r.ctr)}</td>
-                                    <td className="px-2 py-1.5 text-right">
+                                    <td className="px-1.5 py-1.5 text-right">{r.position.toFixed(1)}</td>
+                                    <td className="px-1.5 py-1.5 text-right">{formatPct(r.ctr)}</td>
+                                    <td className="px-1.5 py-1.5 text-right">
                                       {r.impressions.toLocaleString("de-DE")}
                                     </td>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>
