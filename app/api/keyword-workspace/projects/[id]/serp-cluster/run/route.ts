@@ -10,7 +10,11 @@ import { getAccessTokenForUser } from "@/lib/keyword-workspace/service";
 const bodySchema = z.object({
   forceRefetch: z.boolean().optional(),
   minDemand: z.coerce.number().optional(),
-  overlapThreshold: z.coerce.number().optional()
+  overlapThreshold: z.coerce.number().optional(),
+  topResults: z
+    .union([z.literal(7), z.literal(10), z.enum(["7", "10"]).transform((v) => Number(v))])
+    .optional(),
+  clusterAlgorithm: z.enum(["louvain", "agglomerative_single_link"]).optional()
 });
 
 function err(code: string, message: string, details: Record<string, any> = {}, status = 400) {
@@ -48,7 +52,12 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
       projectId,
       status: "pending",
       urlOverlapThreshold: parsed.data.overlapThreshold ?? 0.3,
-      minDemand: parsed.data.minDemand ?? 5
+      minDemand: parsed.data.minDemand ?? 5,
+      topResults: parsed.data.topResults ?? 10,
+      clusterAlgorithm: parsed.data.clusterAlgorithm ?? "louvain",
+      snapshotReuseMode: "reuse_any_fetch_missing",
+      missingSnapshotCount: 0,
+      fetchedMissingCount: 0
     }
   });
 
@@ -64,5 +73,5 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
     console.error("SERP clustering failed:", e);
   });
 
-  return NextResponse.json({ status: "ok", runId });
+  return NextResponse.json({ status: "ok", runId, usedCachedSnapshots: 0, fetchedMissingSnapshots: 0 });
 }

@@ -31,6 +31,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { UploadKeywordsDialog } from "@/components/keyword-workspace/upload-dialog";
 import { ExternalBadge } from "@/components/keyword-workspace/external-badge";
@@ -58,7 +70,31 @@ type SerpParent = {
 type SerpResponse = {
   runId: string | null;
   generatedAt: string | null;
+  topResults?: number;
+  overlapThreshold?: number;
+  clusterAlgorithm?: "louvain" | "agglomerative_single_link";
+  minDemand?: number;
+  missingSnapshotCount?: number;
+  fetchedMissingCount?: number;
+  zyteRequested?: number;
+  zyteCached?: number;
   parents: SerpParent[];
+};
+type SerpRunListItem = {
+  id: string;
+  status: string;
+  startedAt: string;
+  finishedAt: string | null;
+  minDemand: number;
+  urlOverlapThreshold: number;
+  topResults: number;
+  clusterAlgorithm: "louvain" | "agglomerative_single_link";
+  snapshotReuseMode: string | null;
+  missingSnapshotCount: number;
+  fetchedMissingCount: number;
+  zyteRequested: number;
+  zyteCached: number;
+  error?: string | null;
 };
 type ExportScope = "all" | "current";
 type ExportFormat = "xlsx" | "csv";
@@ -175,6 +211,13 @@ function serializeKeywordExportRows(
     }
     return record;
   });
+}
+
+function formatRunLabel(run: SerpRunListItem) {
+  const finished = run.finishedAt ? new Date(run.finishedAt) : new Date(run.startedAt);
+  const dateLabel = finished.toLocaleString();
+  const algoShort = run.clusterAlgorithm === "agglomerative_single_link" ? "agg" : "louvain";
+  return `${dateLabel} · ${run.topResults} | ${run.urlOverlapThreshold.toFixed(2)} | ${algoShort} · min${run.minDemand}`;
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -484,8 +527,11 @@ export default function KeywordWorkspacePage() {
   const [exportScope, setExportScope] = useState<ExportScope>("all");
   const [exportFormat, setExportFormat] = useState<ExportFormat>("xlsx");
   const [selectedOptionalColumns, setSelectedOptionalColumns] = useState<OptionalKeywordExportColumnKey[]>(DEFAULT_OPTIONAL_COLUMN_KEYS);
-  const [minDemand, setMinDemand] = useState(5);
-  const [minDemandInput, setMinDemandInput] = useState("5");
+  const [createMinDemandInput, setCreateMinDemandInput] = useState("5");
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [topResults, setTopResults] = useState<7 | 10>(10);
+  const [overlapThreshold, setOverlapThreshold] = useState(0.3);
+  const [clusterAlgorithm, setClusterAlgorithm] = useState<"louvain" | "agglomerative_single_link">("louvain");
   const [selectedParent, setSelectedParent] = useState<string | null>(null);
   const [clickFeedbackParentId, setClickFeedbackParentId] = useState<string | null>(null);
   const [revealSubclusters, setRevealSubclusters] = useState(false);
@@ -496,18 +542,73 @@ export default function KeywordWorkspacePage() {
   const [dockTarget, setDockTarget] = useState<{ x: number; y: number } | null>(null);
   const selectTimerRef = useRef<number | null>(null);
 
-  const { data: serpData, mutate: mutateSerp } = useSWR<SerpResponse>(
-    projectId ? `/api/keyword-workspace/projects/${projectId}/serp-cluster?minDemand=${minDemand}` : null,
+  const createMinDemand = useMemo(() => {
+    const parsed = Number(createMinDemandInput);
+    return Number.isFinite(parsed) ? parsed : 5;
+  }, [createMinDemandInput]);
+
+  const { data: runList, mutate: mutateRunList } = useSWR<SerpRunListItem[]>(
+    projectId ? `/api/keyword-workspace/projects/${projectId}/serp-cluster/runs` : null,
     fetchJson
   );
 
-  const { data: statusData, mutate: mutateStatus } = useSWR<any>(
-    projectId ? `/api/keyword-workspace/projects/${projectId}/serp-cluster/status` : null,
-    fetchJson,
-    { refreshInterval: pollInterval }
+  const selectedRunMeta = useMemo(
+    () => (runList ?? []).find((run) => run.id === selectedRunId) ?? null,
+    [runList, selectedRunId]
   );
 
+  const handleRunChange = useCallback(
+    (runId: string) => {
+      setSelectedRunId(runId);
+      setSelectedParent(null);
+      setRevealSubclusters(false);
+      mutateSerp();
+      mutateStatus();
+    },
+    [mutateSerp, mutateStatus]
+  );
+
+  const serpUrl = useMemo(() => {
+    if (!projectId) return null;
+    const params = new URLSearchParams();
+    if (selectedRunId) params.set("runId", selectedRunId);
+    if (selectedRunMeta?.minDemand !== undefined) params.set("minDemand", String(selectedRunMeta.minDemand));
+    const qs = params.toString();
+    return `/api/keyword-workspace/projects/${projectId}/serp-cluster${qs ? `?${qs}` : ""}`;
+  }, [projectId, selectedRunId, selectedRunMeta]);
+
+  const statusUrl = useMemo(() => {
+    if (!projectId) return null;
+    const params = new URLSearchParams();
+    if (selectedRunId) params.set("runId", selectedRunId);
+    const qs = params.toString();
+    return `/api/keyword-workspace/projects/${projectId}/serp-cluster/status${qs ? `?${qs}` : ""}`;
+  }, [projectId, selectedRunId]);
+
+  const { data: serpData, mutate: mutateSerp } = useSWR<SerpResponse>(serpUrl, fetchJson);
+
+  const { data: statusData, mutate: mutateStatus } = useSWR<any>(statusUrl, fetchJson, { refreshInterval: pollInterval });
+
   const isRunning = !!statusData?.status && ACTIVE_STATUSES.includes(statusData.status);
+
+  useEffect(() => {
+    if (!selectedRunId) {
+      if (serpData?.runId) {
+        setSelectedRunId(serpData.runId);
+      } else if (runList?.length) {
+        const latestCompleted = runList.find((r) => r.status === "completed");
+        setSelectedRunId((latestCompleted ?? runList[0]).id);
+      }
+    }
+  }, [selectedRunId, serpData?.runId, runList]);
+
+  useEffect(() => {
+    if (!selectedRunMeta) return;
+    setTopResults(selectedRunMeta.topResults === 7 ? 7 : 10);
+    setOverlapThreshold(selectedRunMeta.urlOverlapThreshold ?? 0.3);
+    setClusterAlgorithm(selectedRunMeta.clusterAlgorithm ?? "louvain");
+    setCreateMinDemandInput(String(selectedRunMeta.minDemand ?? 5));
+  }, [selectedRunMeta]);
 
   const updateDockTarget = useCallback(() => {
     if (!flowRef.current || !canvasRef.current) return;
@@ -536,12 +637,13 @@ export default function KeywordWorkspacePage() {
       wasRunningRef.current = false;
       if (statusData.status === "completed") {
         mutateSerp();
+        mutateRunList();
         toast.success("Clustering abgeschlossen!");
       } else if (statusData.status === "failed") {
         toast.error(`Clustering fehlgeschlagen: ${statusData.error ?? "Unbekannter Fehler"}`);
       }
     }
-  }, [isRunning, statusData?.status, mutateSerp]);
+  }, [isRunning, statusData?.status, statusData?.error, mutateSerp, mutateRunList]);
 
   useEffect(() => {
     if (!SERP_DEBUG) return;
@@ -553,6 +655,10 @@ export default function KeywordWorkspacePage() {
       zyteCached: statusData?.zyteCached,
       minDemand: statusData?.minDemand,
       urlOverlapThreshold: statusData?.urlOverlapThreshold,
+      topResults: statusData?.topResults,
+      clusterAlgorithm: statusData?.clusterAlgorithm,
+      missingSnapshotCount: statusData?.missingSnapshotCount,
+      fetchedMissingCount: statusData?.fetchedMissingCount,
       runId: statusData?.id,
       startedAt: statusData?.startedAt,
       finishedAt: statusData?.finishedAt
@@ -566,6 +672,11 @@ export default function KeywordWorkspacePage() {
     console.debug({
       runId: serpData?.runId,
       generatedAt: serpData?.generatedAt,
+      topResults: serpData?.topResults,
+      overlapThreshold: serpData?.overlapThreshold,
+      clusterAlgorithm: serpData?.clusterAlgorithm,
+      minDemand: serpData?.minDemand,
+      fetchedMissingCount: serpData?.fetchedMissingCount,
       parents: serpData?.parents?.map((p) => ({
         id: p.id,
         name: p.name,
@@ -578,26 +689,30 @@ export default function KeywordWorkspacePage() {
     console.groupEnd();
   }, [serpData, selectedParent]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const parsed = Number(minDemandInput);
-      if (!Number.isNaN(parsed)) setMinDemand(parsed);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [minDemandInput]);
-
   async function triggerRun() {
     if (!projectId) return;
     try {
       if (SERP_DEBUG) {
         console.groupCollapsed("[SERP][run-trigger]");
-        console.debug({ projectId, minDemand, overlapThreshold: undefined, ts: new Date().toISOString() });
+        console.debug({
+          projectId,
+          minDemand: createMinDemand,
+          overlapThreshold,
+          topResults,
+          clusterAlgorithm,
+          ts: new Date().toISOString()
+        });
         console.groupEnd();
       }
       const res = await fetch(`/api/keyword-workspace/projects/${projectId}/serp-cluster/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ minDemand })
+        body: JSON.stringify({
+          minDemand: createMinDemand,
+          overlapThreshold,
+          topResults,
+          clusterAlgorithm
+        })
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -605,7 +720,9 @@ export default function KeywordWorkspacePage() {
       }
       if (SERP_DEBUG) console.info("[SERP][run-trigger] accepted run start");
       toast.success("SERP-Clustering gestartet");
-      await mutateStatus();
+      setSelectedRunId((await res.json())?.runId ?? null);
+      setPollInterval(2000);
+      await Promise.all([mutateStatus(), mutateRunList()]);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Fehler beim Start");
       if (SERP_DEBUG) console.error("[SERP][run-trigger] failed", e);
@@ -805,7 +922,15 @@ export default function KeywordWorkspacePage() {
     <div ref={canvasRef} className="relative h-full w-full overflow-hidden bg-card">
       {serpData?.generatedAt ? (
         <div className="absolute top-3 left-3 text-[11px] text-muted-foreground z-10">
-          Stand {new Date(serpData.generatedAt).toLocaleString()}
+          <div>Stand {new Date(serpData.generatedAt).toLocaleString()}</div>
+          <div className="mt-0.5">
+            Run {serpData.runId?.slice(0, 8) ?? "n/a"} · {serpData.topResults ?? 10} |{" "}
+            {(serpData.overlapThreshold ?? 0.3).toFixed(2)} | {serpData.clusterAlgorithm ?? "louvain"} · min{" "}
+            {serpData.minDemand ?? 5}
+          </div>
+          {serpData.fetchedMissingCount ? (
+            <div className="text-green-600 dark:text-green-400">Fehlende SERPs nachgeladen: {serpData.fetchedMissingCount}</div>
+          ) : null}
         </div>
       ) : null}
 
@@ -839,7 +964,7 @@ export default function KeywordWorkspacePage() {
           >
             <DropdownMenuItem
               className="cursor-pointer rounded-lg px-3 py-2 text-sm font-medium"
-              onClick={() => toast.info("Settings folgt als Nächstes.")}
+              onClick={() => toast.info("Settings findest du im Dock (Zahnrad unten).")}
             >
               <Settings2 className="mr-2 h-4 w-4 text-muted-foreground" />
               Settings
@@ -899,11 +1024,80 @@ export default function KeywordWorkspacePage() {
 
       <div className="pointer-events-none absolute inset-0 flex items-end justify-center pb-3">
         <div className="pointer-events-auto bg-card/90 backdrop-blur-sm border rounded-full shadow-lg px-3 py-2 flex items-center gap-2 text-xs">
+          <Select value={selectedRunId ?? ""} onValueChange={handleRunChange} disabled={!runList?.length}>
+            <SelectTrigger className="h-8 w-72 text-xs">
+              <SelectValue placeholder="Run-Historie" />
+            </SelectTrigger>
+            <SelectContent>
+              {runList?.map((run) => (
+                <SelectItem key={run.id} value={run.id} className="text-xs">
+                  {formatRunLabel(run)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 rounded-full"
+                aria-label="Clustering-Settings"
+              >
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 space-y-4" align="end">
+              <div className="space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Top Results</div>
+                <div className="flex gap-2">
+                  {[7, 10].map((v) => (
+                    <Button key={v} size="sm" variant={topResults === v ? "default" : "outline"} onClick={() => setTopResults(v as 7 | 10)}>
+                      Top {v}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Overlap</div>
+                <div className="flex gap-2">
+                  {[0.3, 0.4].map((v) => (
+                    <Button key={v} size="sm" variant={overlapThreshold === v ? "default" : "outline"} onClick={() => setOverlapThreshold(v)}>
+                      {v.toFixed(2)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Algorithmus</div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant={clusterAlgorithm === "louvain" ? "default" : "outline"}
+                    onClick={() => setClusterAlgorithm("louvain")}
+                  >
+                    Louvain
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={clusterAlgorithm === "agglomerative_single_link" ? "default" : "outline"}
+                    onClick={() => setClusterAlgorithm("agglomerative_single_link")}
+                  >
+                    Agglomerative
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Einstellungen gelten für den nächsten Run. Bestehende Runs bleiben unverändert.</p>
+            </PopoverContent>
+          </Popover>
+
           <Input
             type="number"
             className="w-24 h-8 text-xs"
-            value={minDemandInput}
-            onChange={(e) => setMinDemandInput(e.target.value)}
+            value={createMinDemandInput}
+            onChange={(e) => setCreateMinDemandInput(e.target.value)}
             placeholder="Min Impr."
           />
           <Button size="sm" className="h-8 gap-1" onClick={triggerRun} disabled={isRunning || !projectId}>
@@ -924,7 +1118,7 @@ export default function KeywordWorkspacePage() {
             size="sm"
             variant="outline"
             className="h-8 gap-1"
-            onClick={() => Promise.all([mutateSerp(), mutateStatus()])}
+            onClick={() => Promise.all([mutateSerp(), mutateStatus(), mutateRunList()])}
             disabled={isRunning}
           >
             <RefreshCw className="h-3 w-3" />
@@ -942,6 +1136,13 @@ export default function KeywordWorkspacePage() {
             </DialogTitle>
             <DialogDescription>
               Exportiere Keyword-Daten aus dem Clustering als strukturierte Tabelle. Die Spalten sind fix und einfach erweiterbar.
+              {serpData?.runId ? (
+                <div className="mt-1 text-[11px] text-muted-foreground">
+                  Aktiver Run: {serpData.runId.slice(0, 8)} · {serpData.topResults ?? 10} |{" "}
+                  {(serpData.overlapThreshold ?? 0.3).toFixed(2)} | {serpData.clusterAlgorithm ?? "louvain"} · min{" "}
+                  {serpData.minDemand ?? 5}
+                </div>
+              ) : null}
             </DialogDescription>
           </DialogHeader>
 

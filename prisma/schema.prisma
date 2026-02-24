@@ -289,6 +289,11 @@ model SerpClusterRun {
   finishedAt         DateTime?
   urlOverlapThreshold Float   @default(0.3)
   minDemand          Float    @default(0)
+  topResults         Int      @default(10)
+  clusterAlgorithm   String   @default("louvain")
+  snapshotReuseMode  String   @default("reuse_any_fetch_missing")
+  missingSnapshotCount Int    @default(0)
+  fetchedMissingCount Int     @default(0)
   zyteRequested      Int      @default(0)
   zyteSucceeded      Int      @default(0)
   zyteCached         Int      @default(0)

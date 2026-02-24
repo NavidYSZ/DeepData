@@ -52,7 +52,6 @@ type ParentJson = {
   parents: { name: string; subclusterIds: string[]; rationale?: string }[];
 };
 
-const ZYTE_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_CONCURRENCY = 5;
 const GSC_DAYS = 180;
 const DEFAULT_MODEL = "gpt-4o";
@@ -84,6 +83,15 @@ function normalizeSerpUrl(raw: string): NormalizedUrl | null {
   } catch {
     return null;
   }
+}
+
+function takeTopResults(urls: SerpTopUrl[], topResults: number): NormalizedUrl[] {
+  return urls
+    .slice()
+    .sort((a, b) => (a.position ?? 999) - (b.position ?? 999))
+    .slice(0, topResults)
+    .map((u) => normalizeSerpUrl(u.url))
+    .filter((u): u is NormalizedUrl => Boolean(u));
 }
 
 function topFromCounts(map: Map<string, number>, limit = 5) {
@@ -269,6 +277,90 @@ function clusterGraph(
   });
 }
 
+function connectedComponents(graph: Graph) {
+  const visited = new Set<string>();
+  const components: string[][] = [];
+  graph.forEachNode((node) => {
+    if (visited.has(node)) return;
+    const stack = [node];
+    const comp: string[] = [];
+    while (stack.length) {
+      const n = stack.pop()!;
+      if (visited.has(n)) continue;
+      visited.add(n);
+      comp.push(n);
+      graph.forEachNeighbor(n, (neighbor) => {
+        if (!visited.has(neighbor)) stack.push(neighbor);
+      });
+    }
+    components.push(comp);
+  });
+  return components;
+}
+
+function clusterGraphAgglomerative(
+  graph: Graph,
+  keywords: KeywordLite[],
+  urlHosts: Record<string, Set<string>>,
+  keywordUrls: Record<string, Set<string>>
+) {
+  const components = connectedComponents(graph);
+  return components.map((memberIds, idx) => {
+    const members = memberIds
+      .map((id) => keywords.find((k) => k.id === id))
+      .filter((k): k is KeywordLite => Boolean(k));
+
+    let bestId = memberIds[0];
+    let bestScore = -1;
+    for (const id of memberIds) {
+      const hosts = urlHosts[id] ?? new Set<string>();
+      let sum = 0;
+      for (const other of memberIds) {
+        if (other === id) continue;
+        const hostsB = urlHosts[other] ?? new Set<string>();
+        sum += jaccard(hosts, hostsB);
+      }
+      const avg = memberIds.length > 1 ? sum / (memberIds.length - 1) : 1;
+      if (avg > bestScore) {
+        bestScore = avg;
+        bestId = id;
+      }
+    }
+    const labelKw = members.find((m) => m.id === bestId) ?? members[0];
+    const totalDemand = members.reduce((s, m) => s + (m.demandMonthly || 0), 0);
+
+    const domainCounts = new Map<string, number>();
+    const urlCounts = new Map<string, number>();
+    memberIds.forEach((id) => {
+      urlHosts[id]?.forEach((d) => domainCounts.set(d, (domainCounts.get(d) ?? 0) + 1));
+      keywordUrls[id]?.forEach((u) => urlCounts.set(u, (urlCounts.get(u) ?? 0) + 1));
+    });
+
+    let pairCount = 0;
+    let overlapSum = 0;
+    for (let i = 0; i < memberIds.length; i++) {
+      for (let j = i + 1; j < memberIds.length; j++) {
+        const a = urlHosts[memberIds[i]] ?? new Set<string>();
+        const b = urlHosts[memberIds[j]] ?? new Set<string>();
+        overlapSum += jaccard(a, b);
+        pairCount += 1;
+      }
+    }
+
+    return {
+      id: String(idx),
+      label: labelKw.kwRaw,
+      keywordIds: memberIds,
+      members,
+      totalDemand,
+      keywordCount: memberIds.length,
+      topDomains: topFromCounts(domainCounts),
+      topUrls: topFromCounts(urlCounts, 10),
+      overlapScore: memberIds.length > 1 ? overlapSum / pairCount : 1
+    } satisfies ClusteredSubcluster;
+  });
+}
+
 function fallbackParents(subclusters: ClusteredSubcluster[], reason: string) {
   return subclusters.map((s) => ({
     name: s.topDomains?.[0] ?? s.label,
@@ -354,9 +446,24 @@ export async function runSerpClustering(params: {
   gscSiteUrl?: string;
   minDemand?: number;
   overlapThreshold?: number;
+  topResults?: number;
+  clusterAlgorithm?: "louvain" | "agglomerative_single_link";
+  snapshotReuseMode?: "reuse_any_fetch_missing";
   forceRefetch?: boolean;
 }) {
-  const { runId, projectId, userId, accessToken, gscSiteUrl, minDemand = 5, overlapThreshold = 0.3, forceRefetch = false } = params;
+  const {
+    runId,
+    projectId,
+    userId,
+    accessToken,
+    gscSiteUrl,
+    minDemand = 5,
+    overlapThreshold = 0.3,
+    topResults = 10,
+    clusterAlgorithm = "louvain",
+    snapshotReuseMode = "reuse_any_fetch_missing",
+    forceRefetch = false
+  } = params;
 
   async function updateStatus(status: string, extra?: Record<string, any>) {
     await prisma.serpClusterRun.update({
@@ -368,6 +475,8 @@ export async function runSerpClustering(params: {
   let zyteRequested = 0;
   let zyteSucceeded = 0;
   let zyteCached = 0;
+  let missingSnapshotCount = 0;
+  let fetchedMissingCount = 0;
   let promptModel: string | null = process.env.OPENAI_API_KEY ? DEFAULT_MODEL : null;
 
   try {
@@ -434,23 +543,21 @@ export async function runSerpClustering(params: {
           where: { projectId, keywordId: kw.id },
           orderBy: { fetchedAt: "desc" }
         });
-        const fresh = existing && Date.now() - existing.fetchedAt.getTime() < ZYTE_TTL_MS;
-        if (fresh && !forceRefetch) {
+        const hasExisting = !!existing;
+        if (hasExisting && !forceRefetch) {
           zyteCached += 1;
           const urls: SerpTopUrl[] = existing.topUrlsJson ? (JSON.parse(existing.topUrlsJson) as SerpTopUrl[]) : [];
-          const normalized = urls
-            .map((u) => normalizeSerpUrl(u.url))
-            .filter(Boolean) as NormalizedUrl[];
+          const normalized = takeTopResults(urls, topResults);
           urlHosts[kw.id] = new Set(normalized.map((u) => u.host));
           keywordUrls[kw.id] = new Set(normalized.map((u) => u.url));
           return;
         }
+        if (!hasExisting) missingSnapshotCount += 1;
         zyteRequested += 1;
         const res = await fetchZyteSerp(kw.kwRaw);
         if (!res.error && res.urls.length) zyteSucceeded += 1;
-        const normalized = res.urls
-          .map((u) => normalizeSerpUrl(u.url))
-          .filter(Boolean) as NormalizedUrl[];
+        if (!hasExisting) fetchedMissingCount += 1;
+        const normalized = takeTopResults(res.urls, topResults);
 
         urlHosts[kw.id] = new Set(normalized.map((u) => u.host));
         keywordUrls[kw.id] = new Set(normalized.map((u) => u.url));
@@ -490,7 +597,10 @@ export async function runSerpClustering(params: {
 
     const graph = buildOverlapGraph(keywordLite, urlHosts, overlapThreshold);
 
-    const clustered = clusterGraph(graph, keywordLite, urlHosts, keywordUrls);
+    const clustered =
+      clusterAlgorithm === "agglomerative_single_link"
+        ? clusterGraphAgglomerative(graph, keywordLite, urlHosts, keywordUrls)
+        : clusterGraph(graph, keywordLite, urlHosts, keywordUrls);
 
     const subclusters: ClusteredSubcluster[] = clustered.map((s) => ({ ...s, id: nanoid() }));
 
@@ -501,11 +611,6 @@ export async function runSerpClustering(params: {
 
     // ── Phase 6: Persist results ──
     await prisma.$transaction(async (tx) => {
-      await tx.serpSubclusterMember.deleteMany({ where: { subcluster: { projectId } } });
-      await tx.serpParentToSubcluster.deleteMany({ where: { parent: { projectId } } });
-      await tx.serpParentCluster.deleteMany({ where: { projectId } });
-      await tx.serpSubcluster.deleteMany({ where: { projectId } });
-
       for (const sub of subclusters) {
         await tx.serpSubcluster.create({
           data: {
@@ -565,6 +670,11 @@ export async function runSerpClustering(params: {
         data: {
           status: "completed",
           finishedAt: new Date(),
+          topResults,
+          clusterAlgorithm,
+          snapshotReuseMode,
+          missingSnapshotCount,
+          fetchedMissingCount,
           zyteRequested,
           zyteSucceeded,
           zyteCached,
@@ -573,11 +683,35 @@ export async function runSerpClustering(params: {
       });
     });
 
+    // Retention: keep last 50 completed runs per project
+    const oldRuns = await prisma.serpClusterRun.findMany({
+      where: { projectId, status: "completed" },
+      orderBy: { finishedAt: "desc" },
+      skip: 50,
+      select: { id: true }
+    });
+    if (oldRuns.length) {
+      await prisma.serpClusterRun.deleteMany({ where: { id: { in: oldRuns.map((r) => r.id) } } });
+    }
+
     return { runId, counts: { zyteRequested, zyteSucceeded, zyteCached }, parents, subclusters };
   } catch (e) {
     await prisma.serpClusterRun.update({
       where: { id: runId },
-      data: { status: "failed", finishedAt: new Date(), error: e instanceof Error ? e.message : String(e), zyteRequested, zyteSucceeded, zyteCached, promptModel }
+      data: {
+        status: "failed",
+        finishedAt: new Date(),
+        error: e instanceof Error ? e.message : String(e),
+        zyteRequested,
+        zyteSucceeded,
+        zyteCached,
+        topResults,
+        clusterAlgorithm,
+        snapshotReuseMode,
+        missingSnapshotCount,
+        fetchedMissingCount,
+        promptModel
+      }
     }).catch(() => {});
     throw e;
   }
@@ -589,9 +723,18 @@ export async function getLatestSerpClusters(projectId: string, minDemand = 5) {
     orderBy: { finishedAt: "desc" }
   });
   if (!run) return null;
+  return getSerpClusters(run.id, minDemand);
+}
+
+export async function getSerpClusters(runId: string, minDemand?: number, projectId?: string) {
+  const run = await prisma.serpClusterRun.findFirst({
+    where: { id: runId, ...(projectId ? { projectId } : {}) }
+  });
+  if (!run) return null;
+  const effectiveMinDemand = minDemand ?? run.minDemand ?? 5;
 
   const parents = await prisma.serpParentCluster.findMany({
-    where: { projectId, runId: run.id, totalDemand: { gte: minDemand } },
+    where: { projectId: run.projectId, runId: run.id, totalDemand: { gte: effectiveMinDemand } },
     include: {
       subclusters: {
         include: {
@@ -623,6 +766,14 @@ export async function getLatestSerpClusters(projectId: string, minDemand = 5) {
   return {
     runId: run.id,
     generatedAt: run.finishedAt ?? run.startedAt,
+    topResults: run.topResults ?? 10,
+    overlapThreshold: run.urlOverlapThreshold ?? 0.3,
+    clusterAlgorithm: (run.clusterAlgorithm as any) ?? "louvain",
+    minDemand: effectiveMinDemand,
+    missingSnapshotCount: run.missingSnapshotCount ?? 0,
+    fetchedMissingCount: run.fetchedMissingCount ?? 0,
+    zyteRequested: run.zyteRequested ?? 0,
+    zyteCached: run.zyteCached ?? 0,
     parents: parents.map((p) => ({
       id: p.id,
       name: p.name,
@@ -660,11 +811,21 @@ export async function getLatestSerpClusters(projectId: string, minDemand = 5) {
   };
 }
 
-export async function getLatestSerpStatus(projectId: string) {
-  const run = await prisma.serpClusterRun.findFirst({
-    where: { projectId },
-    orderBy: { startedAt: "desc" }
-  });
+export async function getLatestSerpStatus(projectId: string, runId?: string) {
+  const run = runId
+    ? await prisma.serpClusterRun.findFirst({ where: { id: runId, projectId } })
+    : await prisma.serpClusterRun.findFirst({
+        where: { projectId },
+        orderBy: { startedAt: "desc" }
+      });
   if (!run) return null;
   return run;
+}
+
+export async function listSerpClusterRuns(projectId: string, limit = 50) {
+  return prisma.serpClusterRun.findMany({
+    where: { projectId },
+    orderBy: [{ startedAt: "desc" }],
+    take: limit
+  });
 }
