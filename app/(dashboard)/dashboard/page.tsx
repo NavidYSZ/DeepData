@@ -118,7 +118,16 @@ function buildPerformanceSeries(rows: DateMetricRow[], startDate: string, endDat
   });
 
   const start = new Date(`${startDate}T00:00:00Z`).getTime();
-  const end = new Date(`${endDate}T00:00:00Z`).getTime();
+  const requestedEnd = new Date(`${endDate}T00:00:00Z`).getTime();
+
+  // Letzten Tag mit echten Daten finden, damit Tage ohne Daten am Ende nicht als 0 erscheinen
+  let lastDataDate = start;
+  for (const key of byDate.keys()) {
+    const ts = new Date(`${key}T00:00:00Z`).getTime();
+    if (ts > lastDataDate) lastDataDate = ts;
+  }
+  const end = byDate.size > 0 ? Math.min(requestedEnd, lastDataDate) : requestedEnd;
+
   const result: PerformancePoint[] = [];
 
   for (let ts = start; ts <= end; ts += ONE_DAY_MS) {
