@@ -48,13 +48,27 @@ type SerpFetchResult = {
   error?: string;
 };
 
+type SnapshotLite = {
+  status: string;
+  httpStatus: number | null;
+  topUrlsJson: string | null;
+};
+
 type ParentJson = {
   parents: { name: string; subclusterIds: string[]; rationale?: string }[];
 };
 
-const MAX_CONCURRENCY = 15;
+const MAX_CONCURRENCY = 8;
+const MAX_FETCH_WAVES = 3;
+const SNAPSHOT_SCAN_LIMIT = 5;
 const GSC_DAYS = 180;
 const DEFAULT_MODEL = "gpt-4o";
+const FETCH_MAX_ATTEMPTS = 4;
+const FETCH_TIMEOUT_MS = 25_000;
+const FETCH_BASE_BACKOFF_MS = 1_500;
+const FETCH_BACKOFF_FACTOR = 2;
+const FETCH_JITTER_RATIO = 0.3;
+const FETCH_RATE_LIMIT_MIN_BACKOFF_MS = 5_000;
 
 function createLimiter(limit: number) {
   let active = 0;
@@ -111,6 +125,55 @@ function jaccard(a: Set<string>, b: Set<string>) {
   return inter.size / union.size;
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function withJitter(ms: number, ratio = FETCH_JITTER_RATIO) {
+  const delta = ms * ratio;
+  const jitter = (Math.random() * 2 - 1) * delta;
+  return Math.max(0, Math.round(ms + jitter));
+}
+
+function retryDelayMs(attempt: number, status?: number) {
+  const exp = Math.max(0, attempt - 1);
+  const base = FETCH_BASE_BACKOFF_MS * Math.pow(FETCH_BACKOFF_FACTOR, exp);
+  const withRateLimit = status === 429 ? Math.max(base, FETCH_RATE_LIMIT_MIN_BACKOFF_MS) : base;
+  return withJitter(withRateLimit);
+}
+
+function parseTopUrlsJson(topUrlsJson: string | null): SerpTopUrl[] {
+  if (!topUrlsJson) return [];
+  try {
+    const parsed = JSON.parse(topUrlsJson);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((item) =>
+        item && typeof item.url === "string"
+          ? {
+              url: item.url,
+              position: typeof item.position === "number" ? item.position : undefined
+            }
+          : null
+      )
+      .filter((item): item is SerpTopUrl => Boolean(item));
+  } catch {
+    return [];
+  }
+}
+
+function hasUsableHosts(urls: SerpTopUrl[], topResults: number) {
+  return takeTopResults(urls, topResults).length > 0;
+}
+
+function isReusableSnapshot(snapshot: SnapshotLite, topResults: number) {
+  if (snapshot.status !== "ok") return false;
+  const status = snapshot.httpStatus ?? 0;
+  if (status < 200 || status >= 300) return false;
+  const urls = parseTopUrlsJson(snapshot.topUrlsJson);
+  return hasUsableHosts(urls, topResults);
+}
+
 async function fetchZyteSerp(keyword: string): Promise<SerpFetchResult> {
   const apiKey = process.env.ZYTE_API_KEY;
   if (!apiKey) {
@@ -126,9 +189,11 @@ async function fetchZyteSerp(keyword: string): Promise<SerpFetchResult> {
     followRedirect: true
   };
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 1; attempt <= FETCH_MAX_ATTEMPTS; attempt++) {
     const started = Date.now();
-    let res: Response;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    let res: Response | null = null;
     try {
       res = await fetch("https://api.zyte.com/v1/extract", {
         method: "POST",
@@ -136,24 +201,24 @@ async function fetchZyteSerp(keyword: string): Promise<SerpFetchResult> {
           Authorization: `Basic ${Buffer.from(apiKey + ":").toString("base64")}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: controller.signal
       });
     } catch (e) {
-      if (attempt === 0) {
-        await new Promise((r) => setTimeout(r, 2000));
+      clearTimeout(timeout);
+      const durationMs = Date.now() - started;
+      if (attempt < FETCH_MAX_ATTEMPTS) {
+        await sleep(retryDelayMs(attempt));
         continue;
       }
-      return { urls: [], status: 0, durationMs: Date.now() - started, error: `network_error: ${String(e)}` };
+      const reason = e instanceof Error && e.name === "AbortError" ? "timeout" : "network_error";
+      return { urls: [], status: 0, durationMs, error: `${reason}: ${String(e)}` };
+    } finally {
+      clearTimeout(timeout);
     }
 
     const durationMs = Date.now() - started;
     const status = res.status;
-
-    // Retry on server errors or rate limits
-    if ((status >= 500 || status === 429) && attempt === 0) {
-      await new Promise((r) => setTimeout(r, status === 429 ? 5000 : 2000));
-      continue;
-    }
 
     let json: any = null;
     try {
@@ -168,12 +233,26 @@ async function fetchZyteSerp(keyword: string): Promise<SerpFetchResult> {
       .slice(0, 10)
       .map((r: any) => ({ url: r.url, position: r.rank ?? 0 }));
 
+    const hasParseableUrls = hasUsableHosts(urls, 10);
+    const retryableStatus = status === 429 || status >= 500;
+    const retryableEmptyResult = status >= 200 && status < 300 && !hasParseableUrls;
+    const shouldRetry = (retryableStatus || retryableEmptyResult) && attempt < FETCH_MAX_ATTEMPTS;
+    if (shouldRetry) {
+      await sleep(retryDelayMs(attempt, status));
+      continue;
+    }
+
     return {
       urls,
       status,
       durationMs,
       raw: json,
-      error: status >= 400 ? json?.message ?? `fetch_failed_${status}` : undefined
+      error:
+        status >= 400
+          ? json?.message ?? `fetch_failed_${status}`
+          : !hasParseableUrls
+            ? "no_parseable_urls"
+            : undefined
     };
   }
 
@@ -477,10 +556,19 @@ export async function runSerpClustering(params: {
   let zyteCached = 0;
   let missingSnapshotCount = 0;
   let fetchedMissingCount = 0;
+  let eligibleKeywordCount = 0;
+  let resolvedKeywordCount = 0;
+  let usedKeywordCount = 0;
+  let waveCount = 0;
   let promptModel: string | null = process.env.OPENAI_API_KEY ? DEFAULT_MODEL : null;
 
   try {
-    await updateStatus("running");
+    await updateStatus("running", {
+      eligibleKeywordCount,
+      resolvedKeywordCount,
+      usedKeywordCount,
+      waveCount
+    });
     // ── Phase 1: Auto-import GSC data if needed ──
     const kwCount = await prisma.keyword.count({
       where: { projectId, demand: { demandMonthly: { gte: minDemand } } }
@@ -524,76 +612,140 @@ export async function runSerpClustering(params: {
     }
 
     // ── Phase 2: Query keywords ──
-    await updateStatus("fetching_serps");
-
-    const keywords = await prisma.keyword.findMany({
+    const eligibleKeywords = await prisma.keyword.findMany({
       where: { projectId, demand: { demandMonthly: { gte: minDemand } } },
       include: { demand: true }
     });
-    if (!keywords.length) throw new Error("NO_KEYWORDS");
+    if (!eligibleKeywords.length) throw new Error("NO_KEYWORDS");
+    eligibleKeywordCount = eligibleKeywords.length;
+    await updateStatus("fetching_serps", {
+      eligibleKeywordCount,
+      resolvedKeywordCount,
+      usedKeywordCount,
+      waveCount
+    });
 
-    // ── Phase 3: Fetch SERPs ──
+    // ── Phase 3: Fetch SERPs (with wave retries until full coverage) ──
     const limit = createLimiter(MAX_CONCURRENCY);
     const urlHosts: Record<string, Set<string>> = {};
     const keywordUrls: Record<string, Set<string>> = {};
 
-    const tasks = keywords.map((kw) =>
-      limit(async () => {
-        const existing = await prisma.serpSnapshot.findFirst({
-          where: { projectId, keywordId: kw.id },
-          orderBy: { fetchedAt: "desc" }
-        });
-        const hasExisting = !!existing;
-        if (hasExisting && !forceRefetch) {
-          zyteCached += 1;
-          const urls: SerpTopUrl[] = existing.topUrlsJson ? (JSON.parse(existing.topUrlsJson) as SerpTopUrl[]) : [];
-          const normalized = takeTopResults(urls, topResults);
+    const unresolvedKeywordIds = new Set(eligibleKeywords.map((k) => k.id));
+
+    for (let wave = 1; wave <= MAX_FETCH_WAVES && unresolvedKeywordIds.size > 0; wave++) {
+      const unresolvedKeywords = eligibleKeywords.filter((kw) => unresolvedKeywordIds.has(kw.id));
+      const tasks = unresolvedKeywords.map((kw) =>
+        limit(async () => {
+          const snapshots = await prisma.serpSnapshot.findMany({
+            where: { projectId, keywordId: kw.id },
+            orderBy: { fetchedAt: "desc" },
+            take: SNAPSHOT_SCAN_LIMIT,
+            select: {
+              id: true,
+              status: true,
+              httpStatus: true,
+              topUrlsJson: true
+            }
+          });
+
+          const reusable =
+            forceRefetch
+              ? null
+              : snapshots.find((snapshot) => isReusableSnapshot(snapshot, topResults)) ?? null;
+
+          if (reusable) {
+            zyteCached += 1;
+            const urls = parseTopUrlsJson(reusable.topUrlsJson);
+            const normalized = takeTopResults(urls, topResults);
+            if (normalized.length) {
+              urlHosts[kw.id] = new Set(normalized.map((u) => u.host));
+              keywordUrls[kw.id] = new Set(normalized.map((u) => u.url));
+            }
+            return;
+          }
+
+          if (!snapshots.length) missingSnapshotCount += 1;
+          zyteRequested += 1;
+          const res = await fetchZyteSerp(kw.kwRaw);
+          const normalized = takeTopResults(res.urls, topResults);
+          const hasUsableHosts = normalized.length > 0;
+
+          if (!res.error && hasUsableHosts) zyteSucceeded += 1;
+          if (!snapshots.length) fetchedMissingCount += 1;
+
           urlHosts[kw.id] = new Set(normalized.map((u) => u.host));
           keywordUrls[kw.id] = new Set(normalized.map((u) => u.url));
-          return;
+
+          await prisma.serpSnapshot.create({
+            data: {
+              id: nanoid(),
+              projectId,
+              keywordId: kw.id,
+              fetchedAt: new Date(),
+              status: res.error ? "error" : "ok",
+              httpStatus: res.status,
+              durationMs: res.durationMs,
+              topUrlsJson: JSON.stringify(
+                res.urls
+                  .map((u) => ({ ...u, url: normalizeSerpUrl(u.url)?.url ?? u.url }))
+                  .slice(0, 20)
+              ),
+              rawJson: res.raw ? JSON.stringify(res.raw).slice(0, 9000) : null,
+              hash: null,
+              error: res.error ?? null
+            }
+          });
+        })
+      );
+
+      await Promise.all(tasks);
+      waveCount = wave;
+
+      for (const keyword of eligibleKeywords) {
+        if ((urlHosts[keyword.id]?.size ?? 0) > 0) {
+          unresolvedKeywordIds.delete(keyword.id);
         }
-        if (!hasExisting) missingSnapshotCount += 1;
-        zyteRequested += 1;
-        const res = await fetchZyteSerp(kw.kwRaw);
-        if (!res.error && res.urls.length) zyteSucceeded += 1;
-        if (!hasExisting) fetchedMissingCount += 1;
-        const normalized = takeTopResults(res.urls, topResults);
+      }
 
-        urlHosts[kw.id] = new Set(normalized.map((u) => u.host));
-        keywordUrls[kw.id] = new Set(normalized.map((u) => u.url));
-        await prisma.serpSnapshot.create({
-          data: {
-            id: nanoid(),
-            projectId,
-            keywordId: kw.id,
-            fetchedAt: new Date(),
-            status: res.error ? "error" : "ok",
-            httpStatus: res.status,
-            durationMs: res.durationMs,
-            topUrlsJson: JSON.stringify(
-              res.urls
-                .map((u) => ({ ...u, url: normalizeSerpUrl(u.url)?.url ?? u.url }))
-                .slice(0, 20)
-            ),
-            rawJson: res.raw ? JSON.stringify(res.raw).slice(0, 9000) : null,
-            hash: null,
-            error: res.error ?? null
-          }
-        });
-      })
-    );
-    await Promise.all(tasks);
+      resolvedKeywordCount = eligibleKeywordCount - unresolvedKeywordIds.size;
+      await updateStatus("fetching_serps", {
+        zyteRequested,
+        zyteSucceeded,
+        zyteCached,
+        missingSnapshotCount,
+        fetchedMissingCount,
+        eligibleKeywordCount,
+        resolvedKeywordCount,
+        usedKeywordCount,
+        waveCount
+      });
+    }
 
-    const usableKeywords = keywords.filter((k) => (urlHosts[k.id]?.size ?? 0) > 0);
-    if (!usableKeywords.length) {
-      await updateStatus("failed", { finishedAt: new Date(), error: "NO_SERPS", zyteRequested, zyteSucceeded, zyteCached });
+    if (resolvedKeywordCount === 0) {
       throw new Error("NO_SERPS");
     }
 
-    // ── Phase 4: Build graph + cluster ──
-    await updateStatus("clustering", { zyteRequested, zyteSucceeded, zyteCached });
+    if (resolvedKeywordCount < eligibleKeywordCount) {
+      const missing = eligibleKeywordCount - resolvedKeywordCount;
+      usedKeywordCount = resolvedKeywordCount;
+      throw new Error(`INCOMPLETE_SERP_COVERAGE:${missing}/${eligibleKeywordCount}`);
+    }
 
-    const keywordLite = usableKeywords.map((k) => ({ id: k.id, kwRaw: k.kwRaw, demandMonthly: k.demand?.demandMonthly ?? 0 }));
+    // ── Phase 4: Build graph + cluster ──
+    usedKeywordCount = eligibleKeywordCount;
+    await updateStatus("clustering", {
+      zyteRequested,
+      zyteSucceeded,
+      zyteCached,
+      missingSnapshotCount,
+      fetchedMissingCount,
+      eligibleKeywordCount,
+      resolvedKeywordCount,
+      usedKeywordCount,
+      waveCount
+    });
+
+    const keywordLite = eligibleKeywords.map((k) => ({ id: k.id, kwRaw: k.kwRaw, demandMonthly: k.demand?.demandMonthly ?? 0 }));
 
     const graph = buildOverlapGraph(keywordLite, urlHosts, overlapThreshold);
 
@@ -605,7 +757,17 @@ export async function runSerpClustering(params: {
     const subclusters: ClusteredSubcluster[] = clustered.map((s) => ({ ...s, id: nanoid() }));
 
     // ── Phase 5: Map parents with LLM ──
-    await updateStatus("mapping_parents");
+    await updateStatus("mapping_parents", {
+      zyteRequested,
+      zyteSucceeded,
+      zyteCached,
+      missingSnapshotCount,
+      fetchedMissingCount,
+      eligibleKeywordCount,
+      resolvedKeywordCount,
+      usedKeywordCount,
+      waveCount
+    });
     const parents = await mapParentsWithLlm(subclusters);
     promptModel = process.env.OPENAI_API_KEY ? DEFAULT_MODEL : null;
 
@@ -678,7 +840,11 @@ export async function runSerpClustering(params: {
           zyteRequested,
           zyteSucceeded,
           zyteCached,
-          promptModel
+          promptModel,
+          eligibleKeywordCount,
+          resolvedKeywordCount,
+          usedKeywordCount,
+          waveCount
         }
       });
     });
@@ -710,7 +876,11 @@ export async function runSerpClustering(params: {
         snapshotReuseMode,
         missingSnapshotCount,
         fetchedMissingCount,
-        promptModel
+        promptModel,
+        eligibleKeywordCount,
+        resolvedKeywordCount,
+        usedKeywordCount,
+        waveCount
       }
     }).catch(() => {});
     throw e;
@@ -732,6 +902,11 @@ export async function getSerpClusters(runId: string, minDemand?: number, project
   });
   if (!run) return null;
   const effectiveMinDemand = minDemand ?? run.minDemand ?? 5;
+  const found = run.eligibleKeywordCount ?? 0;
+  const resolved = run.resolvedKeywordCount ?? 0;
+  const used = run.usedKeywordCount ?? 0;
+  const missing = Math.max(found - resolved, 0);
+  const complete = found > 0 && used >= found && missing === 0 && run.status === "completed";
 
   const parents = await prisma.serpParentCluster.findMany({
     where: { projectId: run.projectId, runId: run.id, totalDemand: { gte: effectiveMinDemand } },
@@ -774,6 +949,13 @@ export async function getSerpClusters(runId: string, minDemand?: number, project
     fetchedMissingCount: run.fetchedMissingCount ?? 0,
     zyteRequested: run.zyteRequested ?? 0,
     zyteCached: run.zyteCached ?? 0,
+    keywordCoverage: {
+      found,
+      resolved,
+      used,
+      missing,
+      complete
+    },
     parents: parents.map((p) => ({
       id: p.id,
       name: p.name,

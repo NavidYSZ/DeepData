@@ -16,6 +16,12 @@ export async function GET(req: Request, ctx: { params: { id: string } }) {
   const runId = new URL(req.url).searchParams.get("runId") ?? undefined;
   const run = await getLatestSerpStatus(ctx.params.id, runId ?? undefined);
   if (!run) return NextResponse.json({ status: "none" });
+  const found = run.eligibleKeywordCount ?? 0;
+  const resolved = run.resolvedKeywordCount ?? 0;
+  const used = run.usedKeywordCount ?? 0;
+  const missing = Math.max(found - resolved, 0);
+  const complete = found > 0 && used >= found && missing === 0 && run.status === "completed";
+
   return NextResponse.json({
     id: run.id,
     status: run.status,
@@ -31,6 +37,17 @@ export async function GET(req: Request, ctx: { params: { id: string } }) {
     zyteRequested: run.zyteRequested,
     zyteSucceeded: run.zyteSucceeded,
     zyteCached: run.zyteCached,
+    eligibleKeywordCount: run.eligibleKeywordCount,
+    resolvedKeywordCount: run.resolvedKeywordCount,
+    usedKeywordCount: run.usedKeywordCount,
+    waveCount: run.waveCount,
+    keywordCoverage: {
+      found,
+      resolved,
+      used,
+      missing,
+      complete
+    },
     error: run.error
   });
 }

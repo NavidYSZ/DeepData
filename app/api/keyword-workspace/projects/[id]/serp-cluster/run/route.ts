@@ -57,7 +57,11 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
       clusterAlgorithm: parsed.data.clusterAlgorithm ?? "louvain",
       snapshotReuseMode: "reuse_any_fetch_missing",
       missingSnapshotCount: 0,
-      fetchedMissingCount: 0
+      fetchedMissingCount: 0,
+      eligibleKeywordCount: 0,
+      resolvedKeywordCount: 0,
+      usedKeywordCount: 0,
+      waveCount: 0
     }
   });
 

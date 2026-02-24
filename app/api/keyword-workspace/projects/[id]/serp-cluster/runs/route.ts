@@ -42,6 +42,10 @@ export async function GET(req: Request, ctx: { params: { id: string } }) {
       zyteRequested: run.zyteRequested,
       zyteSucceeded: run.zyteSucceeded,
       zyteCached: run.zyteCached,
+      eligibleKeywordCount: run.eligibleKeywordCount,
+      resolvedKeywordCount: run.resolvedKeywordCount,
+      usedKeywordCount: run.usedKeywordCount,
+      waveCount: run.waveCount,
       error: run.error
     }))
   );

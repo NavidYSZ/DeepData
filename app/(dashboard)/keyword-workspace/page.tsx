@@ -67,6 +67,13 @@ type SerpParent = {
   topDomains: string[];
   subclusters: SerpSubcluster[];
 };
+type SerpKeywordCoverage = {
+  found: number;
+  resolved: number;
+  used: number;
+  missing: number;
+  complete: boolean;
+};
 type SerpResponse = {
   runId: string | null;
   generatedAt: string | null;
@@ -78,6 +85,7 @@ type SerpResponse = {
   fetchedMissingCount?: number;
   zyteRequested?: number;
   zyteCached?: number;
+  keywordCoverage?: SerpKeywordCoverage;
   parents: SerpParent[];
 };
 type SerpRunListItem = {
@@ -94,6 +102,32 @@ type SerpRunListItem = {
   fetchedMissingCount: number;
   zyteRequested: number;
   zyteCached: number;
+  eligibleKeywordCount?: number;
+  resolvedKeywordCount?: number;
+  usedKeywordCount?: number;
+  waveCount?: number;
+  error?: string | null;
+};
+type SerpStatusResponse = {
+  id?: string;
+  status: string;
+  startedAt?: string;
+  finishedAt?: string | null;
+  minDemand?: number;
+  urlOverlapThreshold?: number;
+  topResults?: number;
+  clusterAlgorithm?: "louvain" | "agglomerative_single_link";
+  snapshotReuseMode?: string | null;
+  missingSnapshotCount?: number;
+  fetchedMissingCount?: number;
+  zyteRequested?: number;
+  zyteSucceeded?: number;
+  zyteCached?: number;
+  eligibleKeywordCount?: number;
+  resolvedKeywordCount?: number;
+  usedKeywordCount?: number;
+  waveCount?: number;
+  keywordCoverage?: SerpKeywordCoverage;
   error?: string | null;
 };
 type ExportScope = "all" | "current";
@@ -576,7 +610,9 @@ export default function KeywordWorkspacePage() {
 
   const { data: serpData, mutate: mutateSerp } = useSWR<SerpResponse>(serpUrl, fetchJson);
 
-  const { data: statusData, mutate: mutateStatus } = useSWR<any>(statusUrl, fetchJson, { refreshInterval: pollInterval });
+  const { data: statusData, mutate: mutateStatus } = useSWR<SerpStatusResponse>(statusUrl, fetchJson, {
+    refreshInterval: pollInterval
+  });
 
   const handleRunChange = useCallback(
     (runId: string) => {
@@ -659,6 +695,11 @@ export default function KeywordWorkspacePage() {
       clusterAlgorithm: statusData?.clusterAlgorithm,
       missingSnapshotCount: statusData?.missingSnapshotCount,
       fetchedMissingCount: statusData?.fetchedMissingCount,
+      eligibleKeywordCount: statusData?.eligibleKeywordCount,
+      resolvedKeywordCount: statusData?.resolvedKeywordCount,
+      usedKeywordCount: statusData?.usedKeywordCount,
+      waveCount: statusData?.waveCount,
+      keywordCoverage: statusData?.keywordCoverage,
       runId: statusData?.id,
       startedAt: statusData?.startedAt,
       finishedAt: statusData?.finishedAt
@@ -677,6 +718,7 @@ export default function KeywordWorkspacePage() {
       clusterAlgorithm: serpData?.clusterAlgorithm,
       minDemand: serpData?.minDemand,
       fetchedMissingCount: serpData?.fetchedMissingCount,
+      keywordCoverage: serpData?.keywordCoverage,
       parents: serpData?.parents?.map((p) => ({
         id: p.id,
         name: p.name,
@@ -751,6 +793,18 @@ export default function KeywordWorkspacePage() {
     selectedOptionalColumnCount === 0
       ? "Keine Zusatzspalten"
       : `${selectedOptionalColumnCount} von ${OPTIONAL_KEYWORD_EXPORT_COLUMNS.length} Zusatzspalten`;
+  const activeCoverage = isRunning
+    ? (statusData?.keywordCoverage ?? serpData?.keywordCoverage)
+    : (serpData?.keywordCoverage ?? statusData?.keywordCoverage);
+  const coverageFound = activeCoverage?.found ?? 0;
+  const coverageResolved = activeCoverage?.resolved ?? 0;
+  const coverageUsed = activeCoverage?.used ?? 0;
+  const coverageMissing = activeCoverage?.missing ?? Math.max(coverageFound - coverageResolved, 0);
+  const incompleteCoverageError =
+    statusData?.status === "failed" && typeof statusData?.error === "string"
+      ? statusData.error.includes("INCOMPLETE_SERP_COVERAGE")
+      : false;
+  const showTopLeftMeta = Boolean(serpData?.generatedAt || (statusData?.status && statusData.status !== "none"));
   const exportStats = useMemo(() => {
     const clusterCount = scopedParentsForExport.reduce((sum, parent) => sum + parent.subclusters.length, 0);
     return {
@@ -920,16 +974,40 @@ export default function KeywordWorkspacePage() {
 
   return (
     <div ref={canvasRef} className="relative h-full w-full overflow-hidden bg-card">
-      {serpData?.generatedAt ? (
+      {showTopLeftMeta ? (
         <div className="absolute top-3 left-3 text-[11px] text-muted-foreground z-10">
-          <div>Stand {new Date(serpData.generatedAt).toLocaleString()}</div>
-          <div className="mt-0.5">
-            Run {serpData.runId?.slice(0, 8) ?? "n/a"} · {serpData.topResults ?? 10} |{" "}
-            {(serpData.overlapThreshold ?? 0.3).toFixed(2)} | {serpData.clusterAlgorithm ?? "louvain"} · min{" "}
-            {serpData.minDemand ?? 5}
+          <div>
+            Stand{" "}
+            {new Date(
+              serpData?.generatedAt ??
+                statusData?.finishedAt ??
+                statusData?.startedAt ??
+                new Date().toISOString()
+            ).toLocaleString()}
           </div>
-          {serpData.fetchedMissingCount ? (
-            <div className="text-green-600 dark:text-green-400">Fehlende SERPs nachgeladen: {serpData.fetchedMissingCount}</div>
+          <div className="mt-0.5">
+            Run {(serpData?.runId ?? statusData?.id)?.slice(0, 8) ?? "n/a"} · {(serpData?.topResults ?? statusData?.topResults ?? 10)} |{" "}
+            {(serpData?.overlapThreshold ?? statusData?.urlOverlapThreshold ?? 0.3).toFixed(2)} |{" "}
+            {(serpData?.clusterAlgorithm ?? statusData?.clusterAlgorithm ?? "louvain")} · min{" "}
+            {(serpData?.minDemand ?? statusData?.minDemand ?? 5)}
+          </div>
+          <div className="mt-0.5">
+            Keywords verwendet/gefunden: {coverageUsed}/{coverageFound}
+          </div>
+          {isRunning ? (
+            <div className="mt-0.5">
+              SERP-Progress: {coverageResolved}/{coverageFound}
+            </div>
+          ) : null}
+          {(serpData?.fetchedMissingCount ?? statusData?.fetchedMissingCount) ? (
+            <div className="text-green-600 dark:text-green-400">
+              Fehlende SERPs nachgeladen: {serpData?.fetchedMissingCount ?? statusData?.fetchedMissingCount}
+            </div>
+          ) : null}
+          {incompleteCoverageError ? (
+            <div className="text-red-600 dark:text-red-400">
+              Unvollständige SERP-Coverage: {coverageMissing} Keyword(s) ohne verwertbare Hosts.
+            </div>
           ) : null}
         </div>
       ) : null}
