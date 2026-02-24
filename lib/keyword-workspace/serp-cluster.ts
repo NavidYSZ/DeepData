@@ -147,16 +147,15 @@ function parseTopUrlsJson(topUrlsJson: string | null): SerpTopUrl[] {
   try {
     const parsed = JSON.parse(topUrlsJson);
     if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((item) =>
-        item && typeof item.url === "string"
-          ? {
-              url: item.url,
-              position: typeof item.position === "number" ? item.position : undefined
-            }
-          : null
-      )
-      .filter((item): item is SerpTopUrl => Boolean(item));
+    const urls: SerpTopUrl[] = [];
+    for (const item of parsed) {
+      if (!item || typeof item.url !== "string") continue;
+      urls.push({
+        url: item.url,
+        position: typeof item.position === "number" ? item.position : undefined
+      });
+    }
+    return urls;
   } catch {
     return [];
   }
