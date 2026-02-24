@@ -557,17 +557,6 @@ export default function KeywordWorkspacePage() {
     [runList, selectedRunId]
   );
 
-  const handleRunChange = useCallback(
-    (runId: string) => {
-      setSelectedRunId(runId);
-      setSelectedParent(null);
-      setRevealSubclusters(false);
-      mutateSerp();
-      mutateStatus();
-    },
-    [mutateSerp, mutateStatus]
-  );
-
   const serpUrl = useMemo(() => {
     if (!projectId) return null;
     const params = new URLSearchParams();
@@ -588,6 +577,17 @@ export default function KeywordWorkspacePage() {
   const { data: serpData, mutate: mutateSerp } = useSWR<SerpResponse>(serpUrl, fetchJson);
 
   const { data: statusData, mutate: mutateStatus } = useSWR<any>(statusUrl, fetchJson, { refreshInterval: pollInterval });
+
+  const handleRunChange = useCallback(
+    (runId: string) => {
+      setSelectedRunId(runId);
+      setSelectedParent(null);
+      setRevealSubclusters(false);
+      mutateSerp();
+      mutateStatus();
+    },
+    [mutateSerp, mutateStatus]
+  );
 
   const isRunning = !!statusData?.status && ACTIVE_STATUSES.includes(statusData.status);
 
