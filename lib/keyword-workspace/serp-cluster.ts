@@ -52,7 +52,7 @@ type ParentJson = {
   parents: { name: string; subclusterIds: string[]; rationale?: string }[];
 };
 
-const MAX_CONCURRENCY = 5;
+const MAX_CONCURRENCY = 15;
 const GSC_DAYS = 180;
 const DEFAULT_MODEL = "gpt-4o";
 
