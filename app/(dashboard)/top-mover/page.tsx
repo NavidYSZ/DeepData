@@ -92,6 +92,18 @@ function splitRange(startDate: string, endDate: string) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+function toSlug(url: string) {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url.replace(/^https?:\/\/[^/]+/, "");
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  MoverList sub-component                                            */
 /* ------------------------------------------------------------------ */
 
@@ -119,13 +131,16 @@ function MoverList({
       <table className="w-full table-fixed text-sm">
         <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm">
           <tr>
-            <th className="w-[50%] px-2 py-1.5 text-left font-medium">
+            <th className="w-[30%] px-2 py-1.5 text-left font-medium">
               {mode === "query" ? "Query" : "Page"}
             </th>
-            <th className="w-[16%] px-1.5 py-1.5 text-right font-medium">
+            <th className="w-[28%] px-2 py-1.5 text-left font-medium text-muted-foreground">
+              {mode === "query" ? "Page" : "Query"}
+            </th>
+            <th className="w-[12%] px-1.5 py-1.5 text-right font-medium">
               Pos P1
             </th>
-            <th className="w-[16%] px-1.5 py-1.5 text-right font-medium">
+            <th className="w-[12%] px-1.5 py-1.5 text-right font-medium">
               Pos P2
             </th>
             <th className="w-[18%] px-1.5 py-1.5 text-right font-medium">
@@ -142,6 +157,12 @@ function MoverList({
             >
               <td className="truncate px-2 py-1.5" title={item.label}>
                 {item.label}
+              </td>
+              <td
+                className="truncate px-2 py-1.5 text-muted-foreground"
+                title={mode === "query" ? item.page : item.query}
+              >
+                {mode === "query" ? toSlug(item.page) : item.query}
               </td>
               <td className="px-1.5 py-1.5 text-right tabular-nums">
                 {item.avgPos1.toFixed(1)}
@@ -488,12 +509,12 @@ export default function TopMoverPage() {
       {error && !notConnected && <ErrorState>{error}</ErrorState>}
 
       {loading ? (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-4">
           <Skeleton className="h-[520px] w-full" />
           <Skeleton className="h-[520px] w-full" />
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-green-600">Top Winner</CardTitle>
