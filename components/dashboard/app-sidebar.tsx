@@ -8,6 +8,7 @@ import {
   Database,
   Sparkles,
   GitMerge,
+  ArrowUpDown,
   MessageSquare,
   Settings,
   Network
@@ -44,6 +45,7 @@ const navGroups = [
     items: [
       { href: "/seo-bubble", label: "Position vs CTR", icon: Sparkles },
       { href: "/kannibalisierung", label: "Kannibalisierung", icon: GitMerge },
+      { href: "/top-mover", label: "Top Mover", icon: ArrowUpDown },
       { href: "/chat-agent", label: "Chat Agent", icon: MessageSquare }
     ]
   },
