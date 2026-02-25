@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -104,8 +104,59 @@ function toSlug(url: string) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Resizable column header                                            */
+/* ------------------------------------------------------------------ */
+
+function ResizableTh({
+  width,
+  onResize,
+  children,
+  className
+}: {
+  width: number;
+  onResize: (w: number) => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const startX = useRef(0);
+  const startW = useRef(0);
+
+  const onMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      startX.current = e.clientX;
+      startW.current = width;
+
+      const onMouseMove = (ev: MouseEvent) => {
+        const delta = ev.clientX - startX.current;
+        onResize(Math.max(40, startW.current + delta));
+      };
+      const onMouseUp = () => {
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+      };
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [width, onResize]
+  );
+
+  return (
+    <th style={{ width }} className={cn("relative", className)}>
+      {children}
+      <span
+        onMouseDown={onMouseDown}
+        className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-border"
+      />
+    </th>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  MoverList sub-component                                            */
 /* ------------------------------------------------------------------ */
+
+const DEFAULT_WIDTHS = [300, 280, 100, 100, 120];
 
 function MoverList({
   items,
@@ -118,6 +169,16 @@ function MoverList({
   onClick: (item: MoverRow) => void;
   mode: Mode;
 }) {
+  const [colWidths, setColWidths] = useState(DEFAULT_WIDTHS);
+
+  const resize = useCallback((idx: number, w: number) => {
+    setColWidths((prev) => {
+      const next = [...prev];
+      next[idx] = w;
+      return next;
+    });
+  }, []);
+
   if (!items.length) {
     return (
       <p className="py-6 text-center text-sm text-muted-foreground">
@@ -127,25 +188,45 @@ function MoverList({
   }
 
   return (
-    <div className="max-h-[520px] overflow-y-auto">
-      <table className="w-full table-fixed text-sm">
+    <div className="max-h-[520px] overflow-x-auto overflow-y-auto">
+      <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
         <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm">
           <tr>
-            <th className="w-[30%] px-2 py-1.5 text-left font-medium">
+            <ResizableTh
+              width={colWidths[0]}
+              onResize={(w) => resize(0, w)}
+              className="px-2 py-1.5 text-left font-medium"
+            >
               {mode === "query" ? "Query" : "Page"}
-            </th>
-            <th className="w-[28%] px-2 py-1.5 text-left font-medium text-muted-foreground">
+            </ResizableTh>
+            <ResizableTh
+              width={colWidths[1]}
+              onResize={(w) => resize(1, w)}
+              className="px-2 py-1.5 text-left font-medium text-muted-foreground"
+            >
               {mode === "query" ? "Page" : "Query"}
-            </th>
-            <th className="w-[12%] px-1.5 py-1.5 text-right font-medium">
+            </ResizableTh>
+            <ResizableTh
+              width={colWidths[2]}
+              onResize={(w) => resize(2, w)}
+              className="px-1.5 py-1.5 text-right font-medium"
+            >
               Pos P1
-            </th>
-            <th className="w-[12%] px-1.5 py-1.5 text-right font-medium">
+            </ResizableTh>
+            <ResizableTh
+              width={colWidths[3]}
+              onResize={(w) => resize(3, w)}
+              className="px-1.5 py-1.5 text-right font-medium"
+            >
               Pos P2
-            </th>
-            <th className="w-[18%] px-1.5 py-1.5 text-right font-medium">
+            </ResizableTh>
+            <ResizableTh
+              width={colWidths[4]}
+              onResize={(w) => resize(4, w)}
+              className="px-1.5 py-1.5 text-right font-medium"
+            >
               Delta
-            </th>
+            </ResizableTh>
           </tr>
         </thead>
         <tbody>
