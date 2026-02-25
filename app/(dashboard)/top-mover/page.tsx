@@ -184,9 +184,15 @@ export default function TopMoverPage() {
 
   // Modal state
   const [selectedMover, setSelectedMover] = useState<MoverRow | null>(null);
+  const [modalRange, setModalRange] = useState<DateRange | undefined>(range);
   const [modalSeries, setModalSeries] = useState<SeriesPoint[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
   const [showTrend, setShowTrend] = useState(false);
+
+  const { startDate: modalStartDate, endDate: modalEndDate } = useMemo(
+    () => rangeToIso(modalRange, 28),
+    [modalRange]
+  );
 
   const toasted = useRef(false);
 
@@ -323,18 +329,16 @@ export default function TopMoverPage() {
 
   /* ---------- modal detail fetch ---------- */
 
-  async function loadMoverDetail(mover: MoverRow) {
-    setSelectedMover(mover);
+  async function fetchModalData(mover: MoverRow, sd: string, ed: string) {
     setModalLoading(true);
-    setShowTrend(false);
     try {
       const res = await fetch("/api/gsc/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           siteUrl: site,
-          startDate,
-          endDate,
+          startDate: sd,
+          endDate: ed,
           dimensions: ["date", "query", "page"],
           filters: [
             {
@@ -363,6 +367,20 @@ export default function TopMoverPage() {
       setModalLoading(false);
     }
   }
+
+  function loadMoverDetail(mover: MoverRow) {
+    setSelectedMover(mover);
+    setModalRange(range);
+    setShowTrend(false);
+    fetchModalData(mover, startDate, endDate);
+  }
+
+  // Refetch when modal date range changes
+  useEffect(() => {
+    if (selectedMover) {
+      fetchModalData(selectedMover, modalStartDate, modalEndDate);
+    }
+  }, [modalStartDate, modalEndDate]);
 
   /* ---------- modal chart data ---------- */
 
@@ -515,6 +533,12 @@ export default function TopMoverPage() {
             <Skeleton className="h-[60vh] w-full" />
           ) : (
             <div className="space-y-4 p-2">
+              <div className="flex flex-wrap items-end gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Zeitraum</label>
+                  <DateRangePicker value={modalRange} onChange={setModalRange} />
+                </div>
+              </div>
               <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                 <span>
                   Query: <strong className="text-foreground">{selectedMover.query}</strong>
