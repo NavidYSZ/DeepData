@@ -155,8 +155,8 @@ function MoverList({
                   color === "green" ? "text-green-600" : "text-red-600"
                 )}
               >
-                {item.delta > 0 ? "+" : ""}
-                {item.delta.toFixed(1)}
+                {-item.delta > 0 ? "+" : ""}
+                {(-item.delta).toFixed(1)}
               </td>
             </tr>
           ))}
@@ -546,8 +546,8 @@ export default function TopMoverPage() {
                         : "text-red-600"
                     }
                   >
-                    {selectedMover.delta > 0 ? "+" : ""}
-                    {selectedMover.delta.toFixed(1)}
+                    {-selectedMover.delta > 0 ? "+" : ""}
+                    {(-selectedMover.delta).toFixed(1)}
                   </strong>
                 </span>
               </div>
