@@ -62,7 +62,7 @@ export default function RankTrackerPage() {
           startDate,
           endDate,
           dimensions: ["query"],
-          rowLimit: 1000
+          rowLimit: 25000
         })
       });
     }
