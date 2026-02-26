@@ -66,7 +66,15 @@ export function PropertyMenu({
     }
   }, [data, setSite, site]);
 
-  const options = (data?.sites || []).map((s) => ({ value: s.siteUrl, label: s.siteUrl }));
+  const domainKey = (url: string) =>
+    url.replace(/^(sc-domain:|https?:\/\/)/, "").toLowerCase();
+
+  const options = (data?.sites || [])
+    .map((s) => ({
+      value: s.siteUrl,
+      label: s.siteUrl.replace(/^sc-domain:/, ""),
+    }))
+    .sort((a, b) => domainKey(a.value).localeCompare(domainKey(b.value)));
 
   const scopeError = (error as any)?.code === "insufficient_scope" || (error as any)?.status === 403;
 
