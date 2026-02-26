@@ -473,7 +473,8 @@ async function mapParentsWithLlm(subclusters: ClusteredSubcluster[]) {
 
     const system =
       "You group related keyword subclusters into parent clusters. Return STRICT JSON {\"parents\":[{\"name\":\"\",\"subclusterIds\":[],\"rationale\":\"optional\"}]}. " +
-      "Use only provided subclusterIds. Prefer concise, general names. Combine clearly overlapping topics; otherwise keep separate. Respond with compact parent names.";
+      "Use only provided subclusterIds. Prefer concise, general names. Combine clearly overlapping topics; otherwise keep separate. Respond with compact parent names. " +
+      "IMPORTANT: All parent cluster names MUST be in German (Deutsch). Use natural, concise German terms.";
     const user = `Subclusters:\n${JSON.stringify(payload, null, 2)}`;
 
     try {

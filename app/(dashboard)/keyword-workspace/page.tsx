@@ -5,7 +5,7 @@ import useSWR from "swr";
 import ReactFlow, { Background, Controls, Edge, Node, NodeProps, ReactFlowInstance } from "reactflow";
 import "reactflow/dist/style.css";
 import * as XLSX from "xlsx";
-import { ChevronDown, Columns3, Download, FileSpreadsheet, FileText, LayoutGrid, Loader2, Menu, Play, RefreshCw, Settings2, Upload } from "lucide-react";
+import { ChevronDown, Columns3, Download, FileSpreadsheet, FileText, LayoutGrid, Loader2, Menu, Play, RefreshCw, Search, Settings2, Upload, X } from "lucide-react";
 import dagre from "dagre";
 import { useSite } from "@/components/dashboard/site-context";
 import { Button } from "@/components/ui/button";
@@ -575,6 +575,8 @@ export default function KeywordWorkspacePage() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const [dockTarget, setDockTarget] = useState<{ x: number; y: number } | null>(null);
   const selectTimerRef = useRef<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const createMinDemand = useMemo(() => {
     const parsed = Number(createMinDemandInput);
@@ -781,6 +783,22 @@ export default function KeywordWorkspacePage() {
     return [currentParent];
   }, [exportScope, currentParent, parents]);
   const scopedExportRows = useMemo(() => buildKeywordExportRows(scopedParentsForExport), [scopedParentsForExport]);
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    const results: Array<{ parent: SerpParent; subcluster: SerpSubcluster; matchingKeywords: SerpKeyword[] }> = [];
+    for (const parent of parents) {
+      for (const sub of parent.subclusters) {
+        const matching = sub.keywords.filter((k) => k.kwRaw.toLowerCase().includes(q));
+        if (matching.length > 0) {
+          results.push({ parent, subcluster: sub, matchingKeywords: matching });
+        }
+      }
+    }
+    return results;
+  }, [searchQuery, parents]);
+
   const activeExportColumns = useMemo<KeywordExportColumn[]>(
     () => [
       ...FIXED_KEYWORD_EXPORT_COLUMNS,
@@ -1011,6 +1029,82 @@ export default function KeywordWorkspacePage() {
           ) : null}
         </div>
       ) : null}
+
+      {/* ── Search bar ── */}
+      {!isRunning && parents.length > 0 && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center w-full max-w-lg px-4">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Keyword suchen…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-9 h-10 rounded-full border-border/70 bg-card/95 shadow-lg backdrop-blur-md text-sm"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(""); searchInputRef.current?.focus(); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          {searchQuery.trim() && (
+            <div className="mt-2 w-full max-h-[60vh] overflow-y-auto rounded-xl border border-border/70 bg-card/95 shadow-2xl backdrop-blur-md">
+              {searchResults.length === 0 ? (
+                <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                  Kein Keyword gefunden für &ldquo;{searchQuery.trim()}&rdquo;
+                </div>
+              ) : (
+                <div className="divide-y divide-border/50">
+                  {searchResults.map(({ parent, subcluster }) => (
+                    <div
+                      key={`${parent.id}-${subcluster.id}`}
+                      className="px-4 py-3 hover:bg-muted/30 cursor-pointer transition-colors"
+                      onClick={() => {
+                        setSearchQuery("");
+                        handleSelect(parent.id);
+                      }}
+                    >
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                        <span className="font-medium text-foreground">{parent.name}</span>
+                        <span>›</span>
+                        <span>{subcluster.name}</span>
+                        <span className="ml-auto tabular-nums">{subcluster.keywordCount} KW</span>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                        {subcluster.keywords.map((k) => {
+                          const q = searchQuery.trim().toLowerCase();
+                          const isMatch = k.kwRaw.toLowerCase().includes(q);
+                          if (isMatch) {
+                            const idx = k.kwRaw.toLowerCase().indexOf(q);
+                            const before = k.kwRaw.slice(0, idx);
+                            const match = k.kwRaw.slice(idx, idx + q.length);
+                            const after = k.kwRaw.slice(idx + q.length);
+                            return (
+                              <span key={k.id} className="font-semibold text-foreground">
+                                {before}<span className="bg-yellow-200 dark:bg-yellow-800 rounded-sm px-0.5">{match}</span>{after}
+                              </span>
+                            );
+                          }
+                          return <span key={k.id}>{k.kwRaw}</span>;
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="px-4 py-2 text-[11px] text-muted-foreground text-center">
+                    {searchResults.length} Cluster · {searchResults.reduce((s, r) => s + r.matchingKeywords.length, 0)} Treffer
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="absolute top-4 right-4 z-20 flex gap-2">
         {selectedParent && !isRunning && parents.length > 0 ? (
