@@ -27,6 +27,7 @@ import { toast } from "sonner";
 /* ------------------------------------------------------------------ */
 
 type Mode = "query" | "page";
+type CompareMode = "periods" | "days";
 
 interface MoverRow {
   label: string;
@@ -162,12 +163,16 @@ function MoverList({
   items,
   color,
   onClick,
-  mode
+  mode,
+  posLabel1 = "Pos P1",
+  posLabel2 = "Pos P2"
 }: {
   items: MoverRow[];
   color: "green" | "red";
   onClick: (item: MoverRow) => void;
   mode: Mode;
+  posLabel1?: string;
+  posLabel2?: string;
 }) {
   const [colWidths, setColWidths] = useState(DEFAULT_WIDTHS);
 
@@ -211,14 +216,14 @@ function MoverList({
               onResize={(w) => resize(2, w)}
               className="px-1.5 py-1.5 text-right font-medium"
             >
-              Pos P1
+              {posLabel1}
             </ResizableTh>
             <ResizableTh
               width={colWidths[3]}
               onResize={(w) => resize(3, w)}
               className="px-1.5 py-1.5 text-right font-medium"
             >
-              Pos P2
+              {posLabel2}
             </ResizableTh>
             <ResizableTh
               width={colWidths[4]}
@@ -272,9 +277,21 @@ function MoverList({
 /*  Page component                                                     */
 /* ------------------------------------------------------------------ */
 
+function defaultDayB() {
+  return toIsoDate(new Date());
+}
+function defaultDayA(offsetDays = 7) {
+  const d = new Date();
+  d.setDate(d.getDate() - offsetDays);
+  return toIsoDate(d);
+}
+
 export default function TopMoverPage() {
   const { site } = useSite();
   const [mode, setMode] = useState<Mode>("query");
+  const [compareMode, setCompareMode] = useState<CompareMode>("periods");
+  const [dayA, setDayA] = useState(defaultDayA);
+  const [dayB, setDayB] = useState(defaultDayB);
   const [range, setRange] = useState<DateRange | undefined>(
     getLastNDaysRange(28)
   );
@@ -300,10 +317,12 @@ export default function TopMoverPage() {
 
   const { startDate, endDate } = useMemo(() => rangeToIso(range, 28), [range]);
 
-  const periods = useMemo(
-    () => splitRange(startDate, endDate),
-    [startDate, endDate]
-  );
+  const periods = useMemo(() => {
+    if (compareMode === "days") {
+      return { p1Start: dayA, p1End: dayA, p2Start: dayB, p2End: dayB };
+    }
+    return splitRange(startDate, endDate);
+  }, [compareMode, dayA, dayB, startDate, endDate]);
 
   /* ---------- main data fetch ---------- */
 
@@ -551,7 +570,7 @@ export default function TopMoverPage() {
         </SectionCard>
       )}
 
-      <FilterBar className="md:grid-cols-2 md:items-end">
+      <FilterBar className="md:grid-cols-3 md:items-end">
         <div className="space-y-2">
           <label className="text-sm font-medium">Mode</label>
           <div className="flex gap-1">
@@ -568,21 +587,101 @@ export default function TopMoverPage() {
           </div>
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium">Zeitraum</label>
-          <DateRangePicker value={range} onChange={setRange} />
+          <label className="text-sm font-medium">Vergleich</label>
+          <div className="flex gap-1">
+            {(["periods", "days"] as const).map((cm) => (
+              <Button
+                key={cm}
+                variant={compareMode === cm ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setCompareMode(cm)}
+              >
+                {cm === "periods" ? "Perioden" : "Tage"}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">
+            {compareMode === "periods" ? "Zeitraum" : "Tagesvergleich"}
+          </label>
+          {compareMode === "periods" ? (
+            <DateRangePicker value={range} onChange={setRange} />
+          ) : (
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 md:flex-1">
+                <label className="flex h-9 items-center gap-2 rounded-md border border-input bg-card px-3 text-sm">
+                  <span className="shrink-0 text-xs font-medium text-muted-foreground">Tag A</span>
+                  <input
+                    type="date"
+                    value={dayA}
+                    onChange={(e) => setDayA(e.target.value)}
+                    className="w-full bg-transparent text-sm outline-none"
+                  />
+                </label>
+                <label className="flex h-9 items-center gap-2 rounded-md border border-input bg-card px-3 text-sm">
+                  <span className="shrink-0 text-xs font-medium text-muted-foreground">Tag B</span>
+                  <input
+                    type="date"
+                    value={dayB}
+                    onChange={(e) => setDayB(e.target.value)}
+                    className="w-full bg-transparent text-sm outline-none"
+                  />
+                </label>
+              </div>
+              <div className="inline-flex h-9 shrink-0 overflow-hidden rounded-md border border-input bg-card">
+                {[
+                  { label: "-7 Tage", days: 7 },
+                  { label: "-14 Tage", days: 14 },
+                  { label: "-30 Tage", days: 30 }
+                ].map((preset, idx) => {
+                  const isActive =
+                    dayB === defaultDayB() && dayA === defaultDayA(preset.days);
+                  return (
+                    <button
+                      key={preset.days}
+                      type="button"
+                      onClick={() => {
+                        setDayB(defaultDayB());
+                        setDayA(defaultDayA(preset.days));
+                      }}
+                      className={cn(
+                        "px-3 text-xs font-medium transition-colors",
+                        idx > 0 && "border-l border-input",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-card text-foreground hover:bg-accent"
+                      )}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </FilterBar>
 
       <StatsRow>
-        <Badge variant="secondary">
-          Zeitraum: {formatRange(range, 28)}
-        </Badge>
-        <Badge variant="secondary">
-          P1: {periods.p1Start} – {periods.p1End}
-        </Badge>
-        <Badge variant="secondary">
-          P2: {periods.p2Start} – {periods.p2End}
-        </Badge>
+        {compareMode === "periods" ? (
+          <>
+            <Badge variant="secondary">
+              Zeitraum: {formatRange(range, 28)}
+            </Badge>
+            <Badge variant="secondary">
+              P1: {periods.p1Start} – {periods.p1End}
+            </Badge>
+            <Badge variant="secondary">
+              P2: {periods.p2Start} – {periods.p2End}
+            </Badge>
+          </>
+        ) : (
+          <>
+            <Badge variant="secondary">Tag A: {dayA}</Badge>
+            <Badge variant="secondary">Tag B: {dayB}</Badge>
+          </>
+        )}
         <Badge variant="secondary">Winner: {winners.length}</Badge>
         <Badge variant="secondary">Loser: {losers.length}</Badge>
       </StatsRow>
@@ -606,6 +705,8 @@ export default function TopMoverPage() {
                 color="green"
                 onClick={loadMoverDetail}
                 mode={mode}
+                posLabel1={compareMode === "days" ? "Pos Tag A" : "Pos P1"}
+                posLabel2={compareMode === "days" ? "Pos Tag B" : "Pos P2"}
               />
             </CardContent>
           </Card>
@@ -620,6 +721,8 @@ export default function TopMoverPage() {
                 color="red"
                 onClick={loadMoverDetail}
                 mode={mode}
+                posLabel1={compareMode === "days" ? "Pos Tag A" : "Pos P1"}
+                posLabel2={compareMode === "days" ? "Pos Tag B" : "Pos P2"}
               />
             </CardContent>
           </Card>
@@ -652,13 +755,13 @@ export default function TopMoverPage() {
                   </strong>
                 </span>
                 <span>
-                  Pos P1:{" "}
+                  {compareMode === "days" ? "Pos Tag A" : "Pos P1"}:{" "}
                   <strong className="text-foreground">
                     {selectedMover.avgPos1.toFixed(1)}
                   </strong>
                 </span>
                 <span>
-                  Pos P2:{" "}
+                  {compareMode === "days" ? "Pos Tag B" : "Pos P2"}:{" "}
                   <strong className="text-foreground">
                     {selectedMover.avgPos2.toFixed(1)}
                   </strong>
