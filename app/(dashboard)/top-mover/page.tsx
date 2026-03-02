@@ -16,11 +16,16 @@ import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashb
 import { ErrorState } from "@/components/dashboard/states";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
 import { formatRange, getLastNDaysRange, rangeToIso } from "@/lib/date-range";
 import type { QueryRow } from "@/components/dashboard/queries-table";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { CalendarIcon, Download } from "lucide-react";
+import { format } from "date-fns";
+import * as XLSX from "xlsx";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -278,12 +283,12 @@ function MoverList({
 /* ------------------------------------------------------------------ */
 
 function defaultDayB() {
-  return toIsoDate(new Date());
+  return new Date();
 }
 function defaultDayA(offsetDays = 7) {
   const d = new Date();
   d.setDate(d.getDate() - offsetDays);
-  return toIsoDate(d);
+  return d;
 }
 
 export default function TopMoverPage() {
@@ -317,12 +322,15 @@ export default function TopMoverPage() {
 
   const { startDate, endDate } = useMemo(() => rangeToIso(range, 28), [range]);
 
+  const dayAIso = useMemo(() => toIsoDate(dayA), [dayA]);
+  const dayBIso = useMemo(() => toIsoDate(dayB), [dayB]);
+
   const periods = useMemo(() => {
     if (compareMode === "days") {
-      return { p1Start: dayA, p1End: dayA, p2Start: dayB, p2End: dayB };
+      return { p1Start: dayAIso, p1End: dayAIso, p2Start: dayBIso, p2End: dayBIso };
     }
     return splitRange(startDate, endDate);
-  }, [compareMode, dayA, dayB, startDate, endDate]);
+  }, [compareMode, dayAIso, dayBIso, startDate, endDate]);
 
   /* ---------- main data fetch ---------- */
 
@@ -541,6 +549,49 @@ export default function TopMoverPage() {
     }
   }, [notConnected]);
 
+  /* ---------- export ---------- */
+
+  const exportTopMover = useCallback(() => {
+    if (!winners.length && !losers.length) {
+      toast.error("Keine Daten zum Export vorhanden.");
+      return;
+    }
+
+    const domain = site
+      ? (() => { try { return new URL(site).hostname; } catch { return site; } })()
+      : "unknown";
+    const zeitraum =
+      compareMode === "days"
+        ? `${dayAIso}_vs_${dayBIso}`
+        : `${periods.p1Start}_bis_${periods.p2End}`;
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+    const filename = `top-mover-${domain}-${zeitraum}-${timestamp}.xlsx`;
+
+    const posLabel1 = compareMode === "days" ? "Pos Tag A" : "Pos P1";
+    const posLabel2 = compareMode === "days" ? "Pos Tag B" : "Pos P2";
+
+    const toSheetRows = (items: MoverRow[]) =>
+      items.map((r) => ({
+        [mode === "query" ? "Query" : "Page"]: r.label,
+        [mode === "query" ? "Page" : "Query"]: mode === "query" ? r.page : r.query,
+        [posLabel1]: Number(r.avgPos1.toFixed(1)),
+        [posLabel2]: Number(r.avgPos2.toFixed(1)),
+        Delta: Number((-r.delta).toFixed(1))
+      }));
+
+    const wb = XLSX.utils.book_new();
+    const wsWinners = XLSX.utils.json_to_sheet(toSheetRows(winners));
+    wsWinners["!cols"] = [{ wch: 40 }, { wch: 50 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, wsWinners, "Top Winner");
+
+    const wsLosers = XLSX.utils.json_to_sheet(toSheetRows(losers));
+    wsLosers["!cols"] = [{ wch: 40 }, { wch: 50 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, wsLosers, "Top Loser");
+
+    XLSX.writeFile(wb, filename, { compression: true });
+    toast.success(`Export erstellt: ${winners.length + losers.length} Einträge.`);
+  }, [winners, losers, site, compareMode, dayAIso, dayBIso, periods, mode]);
+
   /* ---------- render ---------- */
 
   return (
@@ -610,24 +661,40 @@ export default function TopMoverPage() {
           ) : (
             <div className="flex flex-col gap-2 md:flex-row md:items-center">
               <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 md:flex-1">
-                <label className="flex h-9 items-center gap-2 rounded-md border border-input bg-card px-3 text-sm">
-                  <span className="shrink-0 text-xs font-medium text-muted-foreground">Tag A</span>
-                  <input
-                    type="date"
-                    value={dayA}
-                    onChange={(e) => setDayA(e.target.value)}
-                    className="w-full bg-transparent text-sm outline-none"
-                  />
-                </label>
-                <label className="flex h-9 items-center gap-2 rounded-md border border-input bg-card px-3 text-sm">
-                  <span className="shrink-0 text-xs font-medium text-muted-foreground">Tag B</span>
-                  <input
-                    type="date"
-                    value={dayB}
-                    onChange={(e) => setDayB(e.target.value)}
-                    className="w-full bg-transparent text-sm outline-none"
-                  />
-                </label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-9 justify-start gap-2 bg-card text-sm font-normal">
+                      <span className="shrink-0 text-xs font-medium text-muted-foreground">Tag A</span>
+                      <span>{format(dayA, "dd.MM.yyyy")}</span>
+                      <CalendarIcon className="ml-auto h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dayA}
+                      onSelect={(d) => d && setDayA(d)}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-9 justify-start gap-2 bg-card text-sm font-normal">
+                      <span className="shrink-0 text-xs font-medium text-muted-foreground">Tag B</span>
+                      <span>{format(dayB, "dd.MM.yyyy")}</span>
+                      <CalendarIcon className="ml-auto h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dayB}
+                      onSelect={(d) => d && setDayB(d)}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="inline-flex h-9 shrink-0 overflow-hidden rounded-md border border-input bg-card">
                 {[
@@ -636,7 +703,7 @@ export default function TopMoverPage() {
                   { label: "-30 Tage", days: 30 }
                 ].map((preset, idx) => {
                   const isActive =
-                    dayB === defaultDayB() && dayA === defaultDayA(preset.days);
+                    dayBIso === toIsoDate(new Date()) && dayAIso === toIsoDate(defaultDayA(preset.days));
                   return (
                     <button
                       key={preset.days}
@@ -678,12 +745,22 @@ export default function TopMoverPage() {
           </>
         ) : (
           <>
-            <Badge variant="secondary">Tag A: {dayA}</Badge>
-            <Badge variant="secondary">Tag B: {dayB}</Badge>
+            <Badge variant="secondary">Tag A: {format(dayA, "dd.MM.yyyy")}</Badge>
+            <Badge variant="secondary">Tag B: {format(dayB, "dd.MM.yyyy")}</Badge>
           </>
         )}
         <Badge variant="secondary">Winner: {winners.length}</Badge>
         <Badge variant="secondary">Loser: {losers.length}</Badge>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={exportTopMover}
+          disabled={loading || (!winners.length && !losers.length)}
+          className="ml-auto"
+        >
+          <Download className="mr-1.5 h-4 w-4" />
+          Export
+        </Button>
       </StatsRow>
 
       {error && !notConnected && <ErrorState>{error}</ErrorState>}
