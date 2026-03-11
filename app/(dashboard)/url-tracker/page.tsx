@@ -11,7 +11,6 @@ import { TableContainer } from "@/components/ui/table-container";
 import { useSite } from "@/components/dashboard/site-context";
 import { QueriesTable, type QueryRow } from "@/components/dashboard/queries-table";
 import { QueryMultiSelect } from "@/components/dashboard/query-multiselect";
-import { cn } from "@/lib/utils";
 import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
 import {
   RankCharts,
@@ -22,9 +21,9 @@ import {
 import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashboard/page-shell";
 import { SortableHeader, type SortDirection } from "@/components/dashboard/sortable-header";
 import { EmptyState } from "@/components/dashboard/states";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { MonthPresetRangePicker } from "@/components/ui/month-preset-range-picker";
 import type { DateRange } from "react-day-picker";
-import { formatRange, getLastNDaysRange, rangeToIso } from "@/lib/date-range";
+import { formatRange, getLastNMonthsRange, rangeToIso } from "@/lib/date-range";
 import { toast } from "sonner";
 
 interface QueryResponse {
@@ -101,7 +100,7 @@ function buildTrendData(series: SeriesPoint[]): TrendPoint[] {
 
 export default function UrlTrackerPage() {
   const { site } = useSite();
-  const [range, setRange] = useState<DateRange | undefined>(getLastNDaysRange(28));
+  const [range, setRange] = useState<DateRange | undefined>(getLastNMonthsRange(3));
   const [search, setSearch] = useState("");
   const [minImpr, setMinImpr] = useState(0);
   const [minClicks, setMinClicks] = useState(0);
@@ -130,7 +129,7 @@ export default function UrlTrackerPage() {
     }
   }
 
-  const { startDate, endDate } = useMemo(() => rangeToIso(range, 28), [range]);
+  const { startDate, endDate } = useMemo(() => rangeToIso(range, 90), [range]);
 
   const { data, error, isLoading } = useSWR<QueryResponse>(
     site ? ["/api/gsc/query", site, startDate, endDate, "page-query"] : null,
@@ -407,7 +406,7 @@ export default function UrlTrackerPage() {
         <FilterBar className="md:grid-cols-2 lg:grid-cols-12 lg:items-end">
           <div className="space-y-2 md:col-span-2 lg:col-span-5">
             <label className="text-sm font-medium">Zeitraum</label>
-            <DateRangePicker value={range} onChange={setRange} />
+            <MonthPresetRangePicker value={range} onChange={setRange} />
           </div>
           <div className="space-y-2 md:col-span-2 lg:col-span-3">
             <label className="text-sm font-medium">Suche (URL/Keyword)</label>
@@ -441,7 +440,7 @@ export default function UrlTrackerPage() {
 
       {!notConnected && (
         <StatsRow>
-          <Badge variant="secondary">Zeitraum: {formatRange(range, 28)}</Badge>
+          <Badge variant="secondary">Zeitraum: {formatRange(range, 90)}</Badge>
           {search ? <Badge variant="secondary">Suche: {search}</Badge> : null}
           {minImpr > 0 ? <Badge variant="secondary">Min Impr: {minImpr}</Badge> : null}
           {minClicks > 0 ? <Badge variant="secondary">Min Clicks: {minClicks}</Badge> : null}
@@ -607,38 +606,14 @@ export default function UrlTrackerPage() {
             </div>
 
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              <Badge variant="secondary">Zeitraum: {formatRange(range, 28)}</Badge>
+              <Badge variant="secondary">Zeitraum: {formatRange(range, 90)}</Badge>
               <Badge variant="secondary">Top 15 Keywords (nach Impr.)</Badge>
               <Badge variant="secondary">
                 {detailSelectedQueries.length || allDetailQueries.length} Keywords aktiv
               </Badge>
             </div>
 
-            <div className="inline-flex h-9 overflow-hidden rounded-md border border-input bg-card">
-              {[7, 30, 90].map((days, idx) => (
-                <button
-                  key={days}
-                  type="button"
-                  onClick={() => setRange(getLastNDaysRange(days))}
-                  className={cn(
-                    "px-3 text-xs font-medium transition-colors",
-                    idx > 0 && "border-l border-input",
-                    range && range.from && range.to
-                      ? (() => {
-                          const diff =
-                            (new Date(range.to).setHours(0, 0, 0, 0) -
-                              new Date(range.from).setHours(0, 0, 0, 0)) /
-                              (1000 * 60 * 60 * 24) +
-                            1;
-                          return diff === days ? "bg-primary text-primary-foreground" : "bg-card text-foreground hover:bg-accent";
-                        })()
-                      : "bg-card text-foreground hover:bg-accent"
-                  )}
-                >
-                  {days === 7 ? "7 Tage" : days === 30 ? "1 Monat" : "3 Monate"}
-                </button>
-              ))}
-            </div>
+            <MonthPresetRangePicker value={range} onChange={setRange} fullWidth={false} />
 
             <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
               <div className="space-y-3">

@@ -1,9 +1,15 @@
-import { addDays, format, startOfDay } from "date-fns";
+import { addDays, format, startOfDay, subMonths } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
 export function getLastNDaysRange(days: number): DateRange {
   const to = startOfDay(new Date());
   const from = startOfDay(addDays(to, -days + 1));
+  return { from, to };
+}
+
+export function getLastNMonthsRange(months: number): DateRange {
+  const to = startOfDay(new Date());
+  const from = startOfDay(subMonths(to, months));
   return { from, to };
 }
 

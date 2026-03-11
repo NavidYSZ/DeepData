@@ -16,9 +16,9 @@ import { QueryMultiSelect } from "@/components/dashboard/query-multiselect";
 import { useSite } from "@/components/dashboard/site-context";
 import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashboard/page-shell";
 import { ErrorState } from "@/components/dashboard/states";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { MonthPresetRangePicker } from "@/components/ui/month-preset-range-picker";
 import type { DateRange } from "react-day-picker";
-import { formatRange, getLastNDaysRange, rangeToIso } from "@/lib/date-range";
+import { formatRange, getLastNMonthsRange, rangeToIso } from "@/lib/date-range";
 import { toast } from "sonner";
 
 interface QueryResponse {
@@ -37,7 +37,7 @@ const fetcher = async (url: string, body?: any) => {
 
 export default function RankTrackerPage() {
   const { site } = useSite();
-  const [range, setRange] = useState<DateRange | undefined>(getLastNDaysRange(28));
+  const [range, setRange] = useState<DateRange | undefined>(getLastNMonthsRange(3));
   const [selectedQueries, setSelectedQueries] = useState<string[]>([]);
   const autoSelectedSite = useRef<string | null>(null);
   const [series, setSeries] = useState<SeriesPoint[]>([]);
@@ -47,7 +47,7 @@ export default function RankTrackerPage() {
   const [axisMode, setAxisMode] = useState<"fixed" | "dynamic">("fixed");
   const toasted = useRef(false);
 
-  const { startDate, endDate } = useMemo(() => rangeToIso(range, 28), [range]);
+  const { startDate, endDate } = useMemo(() => rangeToIso(range, 90), [range]);
 
   const { data: topQueries, isLoading: topLoading, error: topError, mutate } = useSWR<QueryResponse>(
     site
@@ -226,7 +226,7 @@ export default function RankTrackerPage() {
       <FilterBar className="gap-4 md:grid-cols-[minmax(0,1fr)_minmax(260px,360px)] md:items-end">
         <div className="min-w-0 space-y-2">
           <label className="text-sm font-medium">Zeitraum</label>
-          <DateRangePicker value={range} onChange={setRange} />
+          <MonthPresetRangePicker value={range} onChange={setRange} />
         </div>
         <div className="min-w-0 space-y-2 md:justify-self-end md:w-full">
           <label className="text-sm font-medium">Keywords</label>
@@ -245,7 +245,7 @@ export default function RankTrackerPage() {
       </FilterBar>
 
       <StatsRow>
-        <Badge variant="secondary">Zeitraum: {formatRange(range, 28)}</Badge>
+        <Badge variant="secondary">Zeitraum: {formatRange(range, 90)}</Badge>
       </StatsRow>
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">

@@ -14,16 +14,14 @@ import {
 import { useSite } from "@/components/dashboard/site-context";
 import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashboard/page-shell";
 import { ErrorState } from "@/components/dashboard/states";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { MonthPresetRangePicker } from "@/components/ui/month-preset-range-picker";
 import { FullscreenOverlay } from "@/components/ui/fullscreen-overlay";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import type { DateRange } from "react-day-picker";
-import { formatRange, getLastNDaysRange, rangeToIso } from "@/lib/date-range";
+import { formatRange, getLastNMonthsRange, rangeToIso } from "@/lib/date-range";
 import type { QueryRow } from "@/components/dashboard/queries-table";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { CalendarIcon, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
 
@@ -282,24 +280,14 @@ function MoverList({
 /*  Page component                                                     */
 /* ------------------------------------------------------------------ */
 
-function defaultDayB() {
-  return new Date();
-}
-function defaultDayA(offsetDays = 7) {
-  const d = new Date();
-  d.setDate(d.getDate() - offsetDays);
-  return d;
-}
-
 export default function TopMoverPage() {
   const { site } = useSite();
   const [mode, setMode] = useState<Mode>("query");
   const [compareMode, setCompareMode] = useState<CompareMode>("periods");
-  const [dayA, setDayA] = useState(defaultDayA);
-  const [dayB, setDayB] = useState(defaultDayB);
   const [range, setRange] = useState<DateRange | undefined>(
-    getLastNDaysRange(28)
+    getLastNMonthsRange(3)
   );
+  const [dayRange, setDayRange] = useState<DateRange | undefined>(getLastNMonthsRange(3));
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -308,22 +296,22 @@ export default function TopMoverPage() {
 
   // Modal state
   const [selectedMover, setSelectedMover] = useState<MoverRow | null>(null);
-  const [modalRange, setModalRange] = useState<DateRange | undefined>(range);
+  const [modalRange, setModalRange] = useState<DateRange | undefined>(getLastNMonthsRange(3));
   const [modalSeries, setModalSeries] = useState<SeriesPoint[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
   const [showTrend, setShowTrend] = useState(false);
 
   const { startDate: modalStartDate, endDate: modalEndDate } = useMemo(
-    () => rangeToIso(modalRange, 28),
+    () => rangeToIso(modalRange, 90),
     [modalRange]
   );
 
   const toasted = useRef(false);
 
-  const { startDate, endDate } = useMemo(() => rangeToIso(range, 28), [range]);
-
-  const dayAIso = useMemo(() => toIsoDate(dayA), [dayA]);
-  const dayBIso = useMemo(() => toIsoDate(dayB), [dayB]);
+  const { startDate, endDate } = useMemo(() => rangeToIso(range, 90), [range]);
+  const { startDate: dayAIso, endDate: dayBIso } = useMemo(() => rangeToIso(dayRange, 90), [dayRange]);
+  const dayA = useMemo(() => new Date(`${dayAIso}T00:00:00`), [dayAIso]);
+  const dayB = useMemo(() => new Date(`${dayBIso}T00:00:00`), [dayBIso]);
 
   const periods = useMemo(() => {
     if (compareMode === "days") {
@@ -498,10 +486,12 @@ export default function TopMoverPage() {
   }
 
   function loadMoverDetail(mover: MoverRow) {
+    const activeRange = compareMode === "days" ? dayRange : range;
+    const { startDate: activeStartDate, endDate: activeEndDate } = rangeToIso(activeRange, 90);
     setSelectedMover(mover);
-    setModalRange(range);
+    setModalRange(activeRange);
     setShowTrend(false);
-    fetchModalData(mover, startDate, endDate);
+    fetchModalData(mover, activeStartDate, activeEndDate);
   }
 
   // Refetch when modal date range changes
@@ -657,75 +647,9 @@ export default function TopMoverPage() {
             {compareMode === "periods" ? "Zeitraum" : "Tagesvergleich"}
           </label>
           {compareMode === "periods" ? (
-            <DateRangePicker value={range} onChange={setRange} />
+            <MonthPresetRangePicker value={range} onChange={setRange} />
           ) : (
-            <div className="flex flex-col gap-2 md:flex-row md:items-center">
-              <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 md:flex-1">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 justify-start gap-2 bg-card text-sm font-normal">
-                      <span className="shrink-0 text-xs font-medium text-muted-foreground">Tag A</span>
-                      <span>{format(dayA, "dd.MM.yyyy")}</span>
-                      <CalendarIcon className="ml-auto h-4 w-4 text-muted-foreground" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dayA}
-                      onSelect={(d) => d && setDayA(d)}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 justify-start gap-2 bg-card text-sm font-normal">
-                      <span className="shrink-0 text-xs font-medium text-muted-foreground">Tag B</span>
-                      <span>{format(dayB, "dd.MM.yyyy")}</span>
-                      <CalendarIcon className="ml-auto h-4 w-4 text-muted-foreground" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dayB}
-                      onSelect={(d) => d && setDayB(d)}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="inline-flex h-9 shrink-0 overflow-hidden rounded-md border border-input bg-card">
-                {[
-                  { label: "-7 Tage", days: 7 },
-                  { label: "-14 Tage", days: 14 },
-                  { label: "-30 Tage", days: 30 }
-                ].map((preset, idx) => {
-                  const isActive =
-                    dayBIso === toIsoDate(new Date()) && dayAIso === toIsoDate(defaultDayA(preset.days));
-                  return (
-                    <button
-                      key={preset.days}
-                      type="button"
-                      onClick={() => {
-                        setDayB(defaultDayB());
-                        setDayA(defaultDayA(preset.days));
-                      }}
-                      className={cn(
-                        "px-3 text-xs font-medium transition-colors",
-                        idx > 0 && "border-l border-input",
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-card text-foreground hover:bg-accent"
-                      )}
-                    >
-                      {preset.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <MonthPresetRangePicker value={dayRange} onChange={setDayRange} />
           )}
         </div>
       </FilterBar>
@@ -734,7 +658,7 @@ export default function TopMoverPage() {
         {compareMode === "periods" ? (
           <>
             <Badge variant="secondary">
-              Zeitraum: {formatRange(range, 28)}
+              Zeitraum: {formatRange(range, 90)}
             </Badge>
             <Badge variant="secondary">
               P1: {periods.p1Start} – {periods.p1End}
@@ -818,7 +742,7 @@ export default function TopMoverPage() {
               <div className="flex flex-wrap items-end gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-medium text-muted-foreground">Zeitraum</label>
-                  <DateRangePicker value={modalRange} onChange={setModalRange} />
+                  <MonthPresetRangePicker value={modalRange} onChange={setModalRange} fullWidth={false} />
                 </div>
               </div>
               <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">

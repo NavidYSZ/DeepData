@@ -15,12 +15,14 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MonthPresetRangePicker } from "@/components/ui/month-preset-range-picker";
 import { useSite } from "@/components/dashboard/site-context";
 import { PageHeader, SectionCard } from "@/components/dashboard/page-shell";
 import { ErrorState } from "@/components/dashboard/states";
-import { rangeToIso, getLastNDaysRange } from "@/lib/date-range";
+import { rangeToIso, getLastNMonthsRange } from "@/lib/date-range";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import type { DateRange } from "react-day-picker";
 
 interface SitesResponse {
   sites: { siteUrl: string; permissionLevel: string }[];
@@ -51,11 +53,6 @@ type MetricVisibility = Record<MetricKey, boolean>;
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const METRIC_ORDER: MetricKey[] = ["clicks", "impressions", "ctr"];
-const PRESETS = [
-  { days: 28, label: "28 Tage" },
-  { days: 90, label: "3 Monate" },
-  { days: 180, label: "6 Monate" }
-] as const;
 
 const METRIC_META: Record<
   MetricKey,
@@ -150,7 +147,7 @@ function buildPerformanceSeries(rows: DateMetricRow[], startDate: string, endDat
 export default function DashboardPage() {
   const { data: sites, error: sitesError } = useSWR<SitesResponse>("/api/gsc/sites", fetcher);
   const { site, setSite } = useSite();
-  const [timePreset, setTimePreset] = useState<28 | 90 | 180>(90);
+  const [range, setRange] = useState<DateRange | undefined>(getLastNMonthsRange(3));
   const [metricVisibility, setMetricVisibility] = useState<MetricVisibility>({
     clicks: true,
     impressions: true,
@@ -161,10 +158,7 @@ export default function DashboardPage() {
   const [queryError, setQueryError] = useState<string | null>(null);
   const toasted = useRef(false);
 
-  const { startDate, endDate } = useMemo(
-    () => rangeToIso(getLastNDaysRange(timePreset), timePreset),
-    [timePreset]
-  );
+  const { startDate, endDate } = useMemo(() => rangeToIso(range, 90), [range]);
 
   useEffect(() => {
     if (!site && sites?.sites?.length) {
@@ -284,24 +278,7 @@ export default function DashboardPage() {
       />
 
       <SectionCard contentClassName="py-3">
-        <div className="inline-flex overflow-hidden rounded-md border border-input">
-          {PRESETS.map((preset, idx) => (
-            <button
-              key={preset.days}
-              type="button"
-              onClick={() => setTimePreset(preset.days)}
-              className={cn(
-                "px-3 py-1.5 text-xs font-medium transition-colors",
-                idx > 0 && "border-l border-input",
-                timePreset === preset.days
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-card hover:bg-accent"
-              )}
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
+        <MonthPresetRangePicker value={range} onChange={setRange} fullWidth={false} />
       </SectionCard>
 
       <Card>

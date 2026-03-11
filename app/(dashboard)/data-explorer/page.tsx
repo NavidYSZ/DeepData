@@ -11,10 +11,10 @@ import { DataExplorerTable } from "@/components/dashboard/data-explorer-table";
 import { type QueryRow } from "@/components/dashboard/queries-table";
 import { FilterBar, PageHeader, SectionCard, StatsRow } from "@/components/dashboard/page-shell";
 import { ErrorState } from "@/components/dashboard/states";
-import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { MonthPresetRangePicker } from "@/components/ui/month-preset-range-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { DateRange } from "react-day-picker";
-import { formatRange, getLastNDaysRange, rangeToIso } from "@/lib/date-range";
+import { formatRange, getLastNMonthsRange, rangeToIso } from "@/lib/date-range";
 import { toast } from "sonner";
 
 interface SitesResponse {
@@ -39,7 +39,7 @@ export default function DataExplorerPage() {
   const { site, setSite } = useSite();
   const { data: sites, error: sitesError } = useSWR<SitesResponse>("/api/gsc/sites", fetcher);
 
-  const [range, setRange] = useState<DateRange | undefined>(getLastNDaysRange(28));
+  const [range, setRange] = useState<DateRange | undefined>(getLastNMonthsRange(3));
   const [rows, setRows] = useState<QueryRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export default function DataExplorerPage() {
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
   const toasted = useRef(false);
 
-  const { startDate, endDate } = useMemo(() => rangeToIso(range, 28), [range]);
+  const { startDate, endDate } = useMemo(() => rangeToIso(range, 90), [range]);
 
   useEffect(() => {
     if (!site && sites?.sites?.length) {
@@ -178,7 +178,7 @@ export default function DataExplorerPage() {
         <FilterBar className="md:grid-cols-2 lg:grid-cols-12 lg:items-end">
           <div className="space-y-2 md:col-span-2 lg:col-span-5">
             <label className="text-sm font-medium">Zeitraum</label>
-            <DateRangePicker value={range} onChange={setRange} />
+            <MonthPresetRangePicker value={range} onChange={setRange} />
           </div>
           <div className="space-y-2 md:col-span-2 lg:col-span-5">
             <label className="text-sm font-medium">Suche</label>
@@ -251,7 +251,7 @@ export default function DataExplorerPage() {
 
       {!notConnected && (
         <StatsRow>
-          <Badge variant="secondary">Zeitraum: {formatRange(range, 28)}</Badge>
+          <Badge variant="secondary">Zeitraum: {formatRange(range, 90)}</Badge>
           <Badge variant="secondary">Keywords: {stats?.keywords ?? 0}</Badge>
           <Badge variant="secondary">Impressions: {(stats?.impressions ?? 0).toLocaleString("de-DE")}</Badge>
           <Badge variant="secondary">Clicks: {(stats?.clicks ?? 0).toLocaleString("de-DE")}</Badge>
