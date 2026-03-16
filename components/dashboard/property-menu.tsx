@@ -1,18 +1,14 @@
 "use client";
 
 import useSWR from "swr";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSite } from "@/components/dashboard/site-context";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+import { Check, ChevronsUpDown, Search } from "lucide-react";
 
 interface SitesResponse {
   sites: { siteUrl: string; permissionLevel: string }[];
@@ -44,6 +40,8 @@ export function PropertyMenu({
   const { site, setSite } = useSite();
   const sidebar = useSidebar();
   const forcedOpenRef = useRef(false);
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const accountId =
     typeof document !== "undefined"
       ? document.cookie
@@ -109,12 +107,13 @@ export function PropertyMenu({
           )}
         </div>
       ) : (
-        <Select
-          value={site ?? ""}
-          onValueChange={(val) => setSite(val || null)}
-          onOpenChange={(open) => {
+        <Popover
+          open={open}
+          onOpenChange={(o) => {
+            setOpen(o);
+            if (!o) setSearch("");
             if (!sidebar) return;
-            if (open) {
+            if (o) {
               if (sidebar.pinMode === "hover") {
                 sidebar.setPinMode("open");
                 forcedOpenRef.current = true;
@@ -125,17 +124,75 @@ export function PropertyMenu({
             }
           }}
         >
-          <SelectTrigger className={triggerClassName}>
-            <SelectValue placeholder="Property wählen" />
-          </SelectTrigger>
-          <SelectContent>
-            {options.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={open}
+              className={cn(triggerClassName, "justify-between font-normal")}
+            >
+              <span className="truncate">
+                {site
+                  ? options.find((o) => o.value === site)?.label ?? site
+                  : "Property wählen"}
+              </span>
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            className="p-0"
+            style={{ width: "var(--radix-popover-trigger-width)" }}
+            align="start"
+            sideOffset={4}
+          >
+            <div className="flex items-center border-b px-3 py-2 gap-2">
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <input
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                placeholder="Domain suchen…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="max-h-60 overflow-y-auto py-1">
+              {options
+                .filter((opt) =>
+                  opt.label.toLowerCase().includes(search.toLowerCase())
+                )
+                .map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={cn(
+                      "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground",
+                      site === opt.value && "bg-accent/50"
+                    )}
+                    onClick={() => {
+                      setSite(opt.value);
+                      setOpen(false);
+                      setSearch("");
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "h-4 w-4 shrink-0",
+                        site === opt.value ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <span className="truncate">{opt.label}</span>
+                  </button>
+                ))}
+              {options.filter((opt) =>
+                opt.label.toLowerCase().includes(search.toLowerCase())
+              ).length === 0 && (
+                <p className="px-3 py-2 text-sm text-muted-foreground">
+                  Keine Ergebnisse
+                </p>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
       )}
     </div>
   );
