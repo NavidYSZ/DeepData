@@ -1,9 +1,8 @@
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { decrypt } from "@/lib/crypto";
-import { refreshAccessToken } from "@/lib/google-oauth";
 import { normalizeKeyword } from "@/lib/keyword-workspace/normalize";
 import { runPrecluster } from "@/lib/keyword-workspace/precluster";
+import { getAccessTokenForUser as getResolvedAccessTokenForUser } from "@/lib/gsc-access";
 
 type MetricInput = {
   kwRaw: string;
@@ -40,17 +39,10 @@ function impressionsToMonthly(impressions: number, dateFrom?: Date | null, dateT
   return impressions / Math.max(months, 1 / MONTH_DAYS);
 }
 
-export async function getAccessTokenForUser(userId: string) {
+export async function getAccessTokenForUser(userId: string, siteUrl?: string | null) {
   const cookieStore = cookies();
-  const accountId = cookieStore.get("accountId")?.value;
-  const account = accountId
-    ? await prisma.gscAccount.findFirst({ where: { id: accountId, userId } })
-    : await prisma.gscAccount.findFirst({ where: { userId }, orderBy: { created_at: "asc" } });
-  if (!account?.refresh_token) {
-    throw new Error("Not connected");
-  }
-  const tokens = await refreshAccessToken(decrypt(account.refresh_token));
-  return tokens.access_token;
+  const preferredAccountId = cookieStore.get("accountId")?.value;
+  return getResolvedAccessTokenForUser(userId, { siteUrl, preferredAccountId });
 }
 
 export async function ensureWorkspaceProject(userId: string, siteUrl: string) {

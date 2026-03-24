@@ -55,7 +55,7 @@ export async function POST(req: Request) {
 
   let rows;
   try {
-    const token = await getAccessTokenForUser(userId);
+    const token = await getAccessTokenForUser(userId, body.siteUrl);
     const { from, to } = getRange(body.days);
     rows = await searchAnalyticsQuery(token, body.siteUrl, {
       startDate: toIso(from),

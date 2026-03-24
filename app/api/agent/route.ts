@@ -11,9 +11,8 @@ import { createTextStreamResponse, stepCountIs, streamText, tool } from "ai";
 import { ChatSession } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { decrypt } from "@/lib/crypto";
-import { refreshAccessToken } from "@/lib/google-oauth";
-import { listSites, searchAnalyticsQuery } from "@/lib/gsc";
+import { searchAnalyticsQuery } from "@/lib/gsc";
+import { listSitesForUser, resolveUserSiteAccess } from "@/lib/gsc-access";
 import { stringify } from "csv-stringify/sync";
 import { resolveDateRanges, resolveSite } from "@/lib/agent/context";
 import { RUNBOOKS, runAudit, runCannibalization, runContentDecay, runQuickWins, runTopPages, runTopQueries } from "@/lib/agent/runbooks";
@@ -95,13 +94,8 @@ async function ensureDir(dir: string) {
   await mkdir(dir, { recursive: true });
 }
 
-async function getUserAccount(userId: string) {
-  const cookieStore = cookies();
-  const accountId = cookieStore.get("accountId")?.value;
-  const account = accountId
-    ? await prisma.gscAccount.findFirst({ where: { id: accountId, userId } })
-    : await prisma.gscAccount.findFirst({ where: { userId }, orderBy: { created_at: "asc" } });
-  return account;
+function getPreferredAccountId() {
+  return cookies().get("accountId")?.value;
 }
 
 function summarizeRows(
@@ -155,13 +149,6 @@ function summarizeRows(
       position: agg.pos.max
     }
   };
-}
-
-async function getAccessToken(userId: string) {
-  const account = await getUserAccount(userId);
-  if (!account?.refresh_token) throw new Error("Not connected");
-  const tokens = await refreshAccessToken(decrypt(account.refresh_token));
-  return tokens.access_token;
 }
 
 async function persistUserMessage(sessionId: string, userId: string, content: any) {
@@ -231,9 +218,12 @@ export async function POST(req: Request) {
   let resolvedSite: string | null = null;
   let accessToken: string | null = null;
   try {
-    accessToken = await getAccessToken(userId);
-    const sites = await listSites(accessToken);
+    const preferredAccountId = getPreferredAccountId();
+    const sites = await listSitesForUser(userId, preferredAccountId);
     resolvedSite = resolveSite(sites, siteHint);
+    if (resolvedSite) {
+      accessToken = (await resolveUserSiteAccess(userId, resolvedSite, preferredAccountId)).accessToken;
+    }
   } catch (err) {
     console.error("[agent] resolve site error", err);
   }
@@ -329,8 +319,7 @@ export async function POST(req: Request) {
       inputSchema: z.object({}),
       execute: async () => {
         console.log("[agent] tool:listSites start", { userId });
-        const token = await getAccessToken(userId);
-        const sites = await listSites(token);
+        const sites = await listSitesForUser(userId, getPreferredAccountId());
         console.log("[agent] tool:listSites done", { count: sites.length });
         return {
           type: "data",
@@ -356,8 +345,8 @@ export async function POST(req: Request) {
           return { type: "error", code: "validation_error", message: "siteUrl, dates und dimensions sind erforderlich." };
         }
         try {
-          const token = await getAccessToken(userId);
-          const rows = await searchAnalyticsQuery(token, siteUrl, {
+          const access = await resolveUserSiteAccess(userId, siteUrl, getPreferredAccountId());
+          const rows = await searchAnalyticsQuery(access.accessToken, siteUrl, {
             startDate: input.startDate,
             endDate: input.endDate,
             dimensions: input.dimensions,

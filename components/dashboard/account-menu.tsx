@@ -70,13 +70,8 @@ export function AccountMenu({ className, compact = false }: AccountMenuProps) {
       setSelecting(null);
       return;
     }
-    try {
-      localStorage.removeItem("gsc-site");
-    } catch (e) {
-      // ignore storage errors (e.g. during SSR)
-    }
     mutateGlobal(
-      (key: unknown) => Array.isArray(key) && key[0] === "/api/gsc/sites",
+      (key: unknown) => key === "/api/gsc/sites" || (Array.isArray(key) && key[0] === "/api/gsc/sites"),
       undefined,
       { revalidate: false }
     );

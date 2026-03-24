@@ -39,7 +39,7 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
   // Get access token while we still have request context (cookies)
   let accessToken: string | undefined;
   try {
-    accessToken = await getAccessTokenForUser(userId);
+    accessToken = await getAccessTokenForUser(userId, project.gscSiteUrl);
   } catch {
     /* GSC not connected — clustering will still work if keywords exist */
   }

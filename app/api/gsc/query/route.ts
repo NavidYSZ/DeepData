@@ -2,11 +2,9 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { prisma } from "@/lib/db";
-import { refreshAccessToken } from "@/lib/google-oauth";
 import { searchAnalyticsQuery } from "@/lib/gsc";
 import { authOptions } from "@/lib/auth";
-import { decrypt } from "@/lib/crypto";
+import { resolveUserSiteAccess } from "@/lib/gsc-access";
 
 const filterSchema = z.object({
   dimension: z.string(),
@@ -30,19 +28,6 @@ export async function POST(request: Request) {
   const userId = (session?.user as any)?.id;
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const cookieStore = cookies();
-  const accountId = cookieStore.get("accountId")?.value;
-  const account = accountId
-    ? await prisma.gscAccount.findFirst({ where: { id: accountId, userId } })
-    : await prisma.gscAccount.findFirst({ where: { userId }, orderBy: { created_at: "asc" } });
-
-  if (!account?.refresh_token) {
-    if (process.env.NODE_ENV !== "production") {
-      console.info("[GSC][query] missing_refresh_token", { userId, accountId, accountFound: !!account });
-    }
-    return NextResponse.json({ error: "Not connected", code: "missing_refresh_token" }, { status: 401 });
-  }
-
   let body: z.infer<typeof bodySchema>;
   try {
     const json = await request.json();
@@ -51,9 +36,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
+  const preferredAccountId = cookies().get("accountId")?.value;
+
   try {
-    const tokens = await refreshAccessToken(decrypt(account.refresh_token));
-    const rows = await searchAnalyticsQuery(tokens.access_token, body.siteUrl, {
+    const access = await resolveUserSiteAccess(userId, body.siteUrl, preferredAccountId);
+    const rows = await searchAnalyticsQuery(access.accessToken, body.siteUrl, {
       startDate: body.startDate,
       endDate: body.endDate,
       dimensions: body.dimensions,
@@ -77,8 +64,8 @@ export async function POST(request: Request) {
     if (process.env.NODE_ENV !== "production") {
       console.info("[GSC][query] success", {
         userId,
-        accountId: account.id,
-        email: account.email,
+        accountId: access.accountId,
+        email: access.accountEmail,
         siteUrl: body.siteUrl,
         rowCount: rows.length
       });
@@ -87,14 +74,21 @@ export async function POST(request: Request) {
   } catch (err: any) {
     const message = err?.message ?? "Server error";
     const invalidGrant = /invalid_grant|token revoked|token_expired/i.test(message);
+    const missingRefreshToken = err?.code === "missing_refresh_token";
+    const siteNotFound = err?.code === "site_not_found";
     if (process.env.NODE_ENV !== "production") {
       console.error("[GSC][query] error", {
         userId,
-        accountId: account.id,
-        email: account.email,
+        preferredAccountId,
         siteUrl: body.siteUrl,
         message
       });
+    }
+    if (missingRefreshToken) {
+      return NextResponse.json({ error: message, code: "missing_refresh_token" }, { status: 401 });
+    }
+    if (siteNotFound) {
+      return NextResponse.json({ error: message, code: "site_not_found" }, { status: 404 });
     }
     if (invalidGrant) {
       return NextResponse.json({ error: message, code: "refresh_invalid" }, { status: 401 });

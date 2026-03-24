@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Check, ChevronsUpDown, Search } from "lucide-react";
 
 interface SitesResponse {
-  sites: { siteUrl: string; permissionLevel: string }[];
+  sites: { siteUrl: string; permissionLevel: string; accountId: string; accountEmail: string | null }[];
   error?: string;
   code?: string;
 }
@@ -42,15 +42,7 @@ export function PropertyMenu({
   const forcedOpenRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const accountId =
-    typeof document !== "undefined"
-      ? document.cookie
-          .split(";")
-          .map((c) => c.trim())
-          .find((c) => c.startsWith("accountId="))
-          ?.split("=")[1] ?? ""
-      : "";
-  const { data, error, isLoading } = useSWR<SitesResponse>(["/api/gsc/sites", accountId], ([url]) => fetcher(url));
+  const { data, error, isLoading } = useSWR<SitesResponse>("/api/gsc/sites", fetcher);
 
   useEffect(() => {
     if (!data?.sites?.length) return;
@@ -71,8 +63,16 @@ export function PropertyMenu({
     .map((s) => ({
       value: s.siteUrl,
       label: s.siteUrl.replace(/^sc-domain:/, ""),
+      accountEmail: s.accountEmail,
     }))
     .sort((a, b) => domainKey(a.value).localeCompare(domainKey(b.value)));
+
+  const normalizedSearch = search.toLowerCase();
+  const filteredOptions = options.filter(
+    (opt) =>
+      opt.label.toLowerCase().includes(normalizedSearch) ||
+      opt.accountEmail?.toLowerCase().includes(normalizedSearch)
+  );
 
   const scopeError = (error as any)?.code === "insufficient_scope" || (error as any)?.status === 403;
 
@@ -156,11 +156,7 @@ export function PropertyMenu({
               />
             </div>
             <div className="max-h-60 overflow-y-auto py-1">
-              {options
-                .filter((opt) =>
-                  opt.label.toLowerCase().includes(search.toLowerCase())
-                )
-                .map((opt) => (
+              {filteredOptions.map((opt) => (
                   <button
                     key={opt.value}
                     type="button"
@@ -180,12 +176,17 @@ export function PropertyMenu({
                         site === opt.value ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    <span className="truncate">{opt.label}</span>
+                    <span className="min-w-0 flex-1 text-left">
+                      <span className="block truncate">{opt.label}</span>
+                      {opt.accountEmail ? (
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {opt.accountEmail}
+                        </span>
+                      ) : null}
+                    </span>
                   </button>
                 ))}
-              {options.filter((opt) =>
-                opt.label.toLowerCase().includes(search.toLowerCase())
-              ).length === 0 && (
+              {filteredOptions.length === 0 && (
                 <p className="px-3 py-2 text-sm text-muted-foreground">
                   Keine Ergebnisse
                 </p>
