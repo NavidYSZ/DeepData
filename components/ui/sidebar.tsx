@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
-import { Menu, PanelLeft, PanelRight } from "lucide-react";
+import { Menu } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -10,20 +10,16 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
-type SidebarPinMode = "hover" | "open" | "closed";
-
 interface SidebarContextValue {
   open: boolean;
   setOpen: (value: boolean) => void;
   isMobile: boolean;
   hovered: boolean;
   setHovered: (value: boolean) => void;
-  pinMode: SidebarPinMode;
-  setPinMode: (value: SidebarPinMode) => void;
+  desktopLockedOpen: boolean;
+  setDesktopLockedOpen: (value: boolean) => void;
   desktopExpanded: boolean;
   collapsed: boolean;
-  setCollapsed: (value: boolean) => void;
-  toggleCollapsed: () => void;
 }
 
 const SidebarContext = React.createContext<SidebarContextValue | null>(null);
@@ -40,25 +36,9 @@ function SidebarProvider({ children, defaultOpen = false }: { children: React.Re
   const isMobile = useMediaQuery("(max-width: 768px)");
   const [open, setOpen] = React.useState(defaultOpen);
   const [hovered, setHovered] = React.useState(false);
-  const [pinMode, setPinMode] = React.useState<SidebarPinMode>("hover");
-  const desktopExpanded = pinMode === "open" || (pinMode === "hover" && hovered);
+  const [desktopLockedOpen, setDesktopLockedOpen] = React.useState(false);
+  const desktopExpanded = hovered || desktopLockedOpen;
   const collapsed = isMobile ? false : !desktopExpanded;
-
-  function setCollapsed(value: boolean) {
-    if (isMobile) return;
-    setHovered(false);
-    setPinMode(value ? "closed" : "open");
-  }
-
-  function toggleCollapsed() {
-    if (isMobile) return;
-    setHovered(false);
-    setPinMode((prev) => {
-      if (prev === "hover") return "open";
-      if (prev === "open") return "closed";
-      return "hover";
-    });
-  }
 
   return (
     <SidebarContext.Provider
@@ -68,12 +48,10 @@ function SidebarProvider({ children, defaultOpen = false }: { children: React.Re
         isMobile,
         hovered,
         setHovered,
-        pinMode,
-        setPinMode,
+        desktopLockedOpen,
+        setDesktopLockedOpen,
         desktopExpanded,
-        collapsed,
-        setCollapsed,
-        toggleCollapsed
+        collapsed
       }}
     >
       {children}
@@ -83,7 +61,7 @@ function SidebarProvider({ children, defaultOpen = false }: { children: React.Re
 
 const Sidebar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement>>(
   ({ className, children, onMouseEnter, onMouseLeave, ...props }, ref) => {
-    const { open, setOpen, isMobile, collapsed, pinMode, setHovered, desktopExpanded } = useSidebar();
+    const { open, setOpen, isMobile, collapsed, setHovered, desktopExpanded } = useSidebar();
 
     if (isMobile) {
       return (
@@ -110,11 +88,11 @@ const Sidebar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement>>
           )}
           onMouseEnter={(event) => {
             onMouseEnter?.(event);
-            if (pinMode === "hover") setHovered(true);
+            setHovered(true);
           }}
           onMouseLeave={(event) => {
             onMouseLeave?.(event);
-            if (pinMode === "hover") setHovered(false);
+            setHovered(false);
           }}
           {...props}
         >
@@ -135,7 +113,7 @@ SidebarInset.displayName = "SidebarInset";
 
 const SidebarTrigger = React.forwardRef<HTMLButtonElement, React.ComponentPropsWithoutRef<typeof Button>>(
   ({ className, onClick, ...props }, ref) => {
-    const { open, setOpen, isMobile, toggleCollapsed } = useSidebar();
+    const { open, setOpen, isMobile } = useSidebar();
     return (
       <Button
         ref={ref}
@@ -146,9 +124,7 @@ const SidebarTrigger = React.forwardRef<HTMLButtonElement, React.ComponentPropsW
           onClick?.(event);
           if (isMobile) {
             setOpen(!open);
-            return;
           }
-          toggleCollapsed();
         }}
         {...props}
       >
@@ -159,26 +135,6 @@ const SidebarTrigger = React.forwardRef<HTMLButtonElement, React.ComponentPropsW
   }
 );
 SidebarTrigger.displayName = "SidebarTrigger";
-
-const SidebarRail = React.forwardRef<HTMLButtonElement, React.ComponentPropsWithoutRef<typeof Button>>(
-  ({ className, ...props }, ref) => {
-    const { collapsed, toggleCollapsed } = useSidebar();
-    return (
-      <Button
-        ref={ref}
-        variant="ghost"
-        size="icon"
-        className={cn("ml-auto h-8 w-8", className)}
-        onClick={toggleCollapsed}
-        {...props}
-      >
-        {collapsed ? <PanelRight className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
-        <span className="sr-only">Sidebar umschalten</span>
-      </Button>
-    );
-  }
-);
-SidebarRail.displayName = "SidebarRail";
 
 const SidebarHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => {
@@ -306,6 +262,5 @@ export {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarRail,
   useSidebar
 };

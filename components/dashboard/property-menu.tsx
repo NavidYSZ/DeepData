@@ -114,12 +114,10 @@ export function PropertyMenu({
             if (!o) setSearch("");
             if (!sidebar) return;
             if (o) {
-              if (sidebar.pinMode === "hover") {
-                sidebar.setPinMode("open");
-                forcedOpenRef.current = true;
-              }
+              sidebar.setDesktopLockedOpen(true);
+              forcedOpenRef.current = true;
             } else if (forcedOpenRef.current) {
-              sidebar.setPinMode("hover");
+              sidebar.setDesktopLockedOpen(false);
               forcedOpenRef.current = false;
             }
           }}

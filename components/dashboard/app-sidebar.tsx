@@ -24,8 +24,7 @@ import {
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarTrigger
+  SidebarMenuItem
 } from "@/components/ui/sidebar";
 import { PropertyMenu } from "@/components/dashboard/property-menu";
 
@@ -63,7 +62,9 @@ export function AppSidebar({ pathname }: { pathname: string }) {
     <Sidebar>
       <SidebarHeader className="gap-3">
         <div className="flex w-full items-center gap-2">
-          <SidebarTrigger className="h-8 w-8 shrink-0" />
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
+            D
+          </div>
           <span className={["text-sm font-semibold tracking-tight", collapsibleTextClass].join(" ")}>
             DeepData
           </span>
