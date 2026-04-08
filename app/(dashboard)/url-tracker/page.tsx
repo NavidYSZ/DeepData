@@ -618,7 +618,7 @@ export default function UrlTrackerPage() {
             <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
               <div className="space-y-3">
                 {detailSeriesLoading ? (
-                  <Skeleton className="h-[520px] w-full" />
+                  <Skeleton className="h-[300px] md:h-[520px] w-full" />
                 ) : detailSeriesError ? (
                   <p className="text-sm text-destructive">Fehler beim Laden der Zeitreihen</p>
                 ) : (

@@ -21,6 +21,7 @@ import {
   DEFAULT_CHART_LINE_WIDTH,
   readChartLineWidth
 } from "@/lib/ui-settings";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 export interface SeriesPoint {
   date: string;
@@ -160,6 +161,7 @@ function SeriesChart({
   const sortedData = useMemo(() => [...data], [data]);
   const regressionLine = useMemo(() => buildRegressionLine(trend, sortedData), [trend, sortedData]);
   const lineWidth = useChartLineWidth();
+  const isMobile = useMediaQuery("(max-width: 768px)");
 
   const domain = fixed ? [1, 100] : ["auto", "auto"];
   const ticks = fixed ? Array.from({ length: 10 }, (_, i) => i * 10 + 1).concat(100) : undefined;
@@ -181,9 +183,9 @@ function SeriesChart({
   if (!sortedData.length) {
     return (
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <CardTitle>{title}</CardTitle>
-          <div className="ml-auto flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:ml-auto">
             {onToggleAxisMode ? (
               <Button type="button" variant="outline" size="sm" onClick={onToggleAxisMode} className="h-8">
                 {axisLabel}
@@ -194,7 +196,7 @@ function SeriesChart({
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="h-[450px] flex items-center justify-center text-sm text-muted-foreground">
+        <CardContent className="h-[300px] md:h-[450px] flex items-center justify-center text-sm text-muted-foreground">
           Keine Daten für die aktuelle Auswahl
         </CardContent>
       </Card>
@@ -203,9 +205,9 @@ function SeriesChart({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+      <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between">
         <CardTitle>{title}</CardTitle>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:ml-auto">
           {onToggleAxisMode ? (
             <Button type="button" variant="outline" size="sm" onClick={onToggleAxisMode} className="h-8">
               {axisLabel}
@@ -219,24 +221,28 @@ function SeriesChart({
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="h-[450px]">
+      <CardContent className="h-[300px] md:h-[450px]">
         <ChartContainer config={config} className="h-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={sortedData} margin={{ top: 10, right: 20, left: 0, bottom: 28 }}>
+            <LineChart
+              data={sortedData}
+              margin={isMobile ? { top: 5, right: 8, left: -10, bottom: 20 } : { top: 10, right: 20, left: 0, bottom: 28 }}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis
                 type="number"
                 dataKey="dateNum"
                 domain={["dataMin", "dataMax"]}
                 tickFormatter={(ts) => new Date(ts).toISOString().slice(5, 10)}
-                tick={{ fontSize: 11, dy: 6 }}
+                tick={{ fontSize: isMobile ? 9 : 11, dy: 6 }}
               />
               <YAxis
                 domain={domain}
                 reversed
-                tick={{ fontSize: 11, dx: -4 }}
+                tick={{ fontSize: isMobile ? 9 : 11, dx: -4 }}
                 ticks={ticks}
                 tickCount={fixed ? undefined : 10}
+                width={isMobile ? 35 : undefined}
               />
               <Tooltip content={<ChartTooltipContent />} labelFormatter={(value) => new Date(Number(value)).toISOString().slice(0, 10)} />
               <Legend content={(props) => <CustomLegend {...props} />} />

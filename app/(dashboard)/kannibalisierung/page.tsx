@@ -458,7 +458,7 @@ export default function KannibalisierungPage() {
           </CardHeader>
           <CardContent className="space-y-4 py-4">
             <div className="grid gap-4 lg:grid-cols-3">
-              <div className="lg:col-span-2 h-[520px]">
+              <div className="lg:col-span-2 h-[350px] md:h-[520px]">
                 <BubbleScatter
                   data={filteredBubbleData}
                   onSelect={(query) => {
@@ -467,7 +467,7 @@ export default function KannibalisierungPage() {
                   }}
                 />
               </div>
-              <Card className="h-[520px]">
+              <Card className="h-auto md:h-[520px]">
                 <CardContent className="py-3 space-y-2 text-sm">
                   {!selectedBubble && <p className="text-muted-foreground">Klicke eine Bubble für Details.</p>}
                   {selectedBubble && (
@@ -508,7 +508,7 @@ export default function KannibalisierungPage() {
               </Card>
             </div>
 
-            <div className="h-[380px]">
+            <div className="h-[280px] md:h-[380px]">
               <DumbbellChart data={dumbbellData} />
             </div>
           </CardContent>
@@ -517,7 +517,7 @@ export default function KannibalisierungPage() {
 
       {fullscreen && (
         <FullscreenOverlay title="Bubble: Top Share vs Spread" onClose={() => setFullscreen(false)}>
-          <div className="h-[75vh] min-h-[480px]">
+          <div className="h-[75vh] min-h-[300px] md:min-h-[480px]">
             <BubbleScatter
               data={filteredBubbleData}
               onSelect={(query) => {

@@ -196,7 +196,7 @@ function MoverList({
   }
 
   return (
-    <div className="max-h-[520px] overflow-x-auto overflow-y-auto">
+    <div className="max-h-[350px] md:max-h-[520px] overflow-x-auto overflow-y-auto">
       <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
         <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm">
           <tr>
@@ -781,7 +781,7 @@ export default function TopMoverPage() {
                   </strong>
                 </span>
               </div>
-              <div className="h-[55vh] min-h-[400px]">
+              <div className="h-[55vh] min-h-[280px] md:min-h-[400px]">
                 <RankCharts
                   chartData={modalChartData}
                   queries={[selectedMover.query]}
