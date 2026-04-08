@@ -328,7 +328,7 @@ export default function KannibalisierungPage() {
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-72 space-y-3 p-3">
+              <PopoverContent align="end" className="w-[min(18rem,calc(100vw-2rem))] space-y-3 p-3">
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-muted-foreground">Query enthält</label>
                   <Input placeholder="z.B. kaufen" value={contains} onChange={(e) => setContains(e.target.value)} />

@@ -57,7 +57,7 @@ export function BubbleScatter({
   onSelect: (query: string) => void;
   labelTopN?: number;
 }) {
-  const isMobile = useMediaQuery("(max-width: 768px)");
+  const isMobile = useMediaQuery("(max-width: 767px)");
   const maxY = Math.max(30, Math.ceil(Math.max(0, ...data.map((d) => d.y || 0))));
   const topN = [...data].sort((a, b) => b.priority - a.priority).slice(0, labelTopN).map((d) => d.query);
 
@@ -169,7 +169,7 @@ interface DumbbellPoint {
 }
 
 export function DumbbellChart({ data }: { data: DumbbellPoint[] }) {
-  const isMobile = useMediaQuery("(max-width: 768px)");
+  const isMobile = useMediaQuery("(max-width: 767px)");
   const sorted = [...data].sort((a, b) => b.priority - a.priority).slice(0, 20);
   return (
     <Card>

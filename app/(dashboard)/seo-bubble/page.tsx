@@ -132,7 +132,7 @@ export default function SeoBubblePage() {
   const [activeSegment, setActiveSegment] = useState<ActiveSegment>("all");
   const [fullscreen, setFullscreen] = useState(false);
 
-  const isMobile = useMediaQuery("(max-width: 768px)");
+  const isMobile = useMediaQuery("(max-width: 767px)");
 
   // Brand keyword filter
   const [brandKeywords, setBrandKeywords] = useState<string[]>(() => {
@@ -475,7 +475,7 @@ export default function SeoBubblePage() {
       <FilterBar className="md:grid-cols-2 xl:grid-cols-6">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium">Mode</span>
-            <div className="flex gap-1">
+            <div className="flex flex-wrap gap-1">
               {["query", "page"].map((m) => (
                 <Button
                   key={m}
@@ -578,7 +578,7 @@ export default function SeoBubblePage() {
 
       {fullscreen && (
         <FullscreenOverlay title="Position vs CTR" onClose={() => setFullscreen(false)}>
-          {renderChart("h-[75vh] min-h-[500px]")}
+          {renderChart("h-[70vh] min-h-[360px] sm:min-h-[500px]")}
         </FullscreenOverlay>
       )}
       {notConnected && (
@@ -600,7 +600,7 @@ export default function SeoBubblePage() {
       <Card>
         <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <CardTitle>Position vs CTR</CardTitle>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2">
             {([
               { key: "all" as const, label: "Alle" },
               { key: "quickwins" as const, label: "Quick Wins" },
@@ -738,7 +738,7 @@ export default function SeoBubblePage() {
                       <div>Impressions: {selected.impressions.toLocaleString("de-DE")}</div>
                       <div>Clicks: {selected.clicks.toLocaleString("de-DE")}</div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {mode === "page" && selected.primary.startsWith("http") && (
                         <Button variant="outline" size="sm" onClick={() => window.open(selected.primary, "_blank")}>
                           Seite öffnen

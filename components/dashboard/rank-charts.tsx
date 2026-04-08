@@ -161,7 +161,7 @@ function SeriesChart({
   const sortedData = useMemo(() => [...data], [data]);
   const regressionLine = useMemo(() => buildRegressionLine(trend, sortedData), [trend, sortedData]);
   const lineWidth = useChartLineWidth();
-  const isMobile = useMediaQuery("(max-width: 768px)");
+  const isMobile = useMediaQuery("(max-width: 767px)");
 
   const domain = fixed ? [1, 100] : ["auto", "auto"];
   const ticks = fixed ? Array.from({ length: 10 }, (_, i) => i * 10 + 1).concat(100) : undefined;

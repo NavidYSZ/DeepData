@@ -21,7 +21,7 @@ export interface ChartPoint {
 }
 
 export function TrafficChart({ data }: { data: ChartPoint[] }) {
-  const isMobile = useMediaQuery("(max-width: 768px)");
+  const isMobile = useMediaQuery("(max-width: 767px)");
   const config = {
     clicks: { label: "Clicks", color: "hsl(var(--chart-1))" },
     impressions: { label: "Impressions", color: "hsl(var(--chart-2))" }

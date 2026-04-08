@@ -28,20 +28,20 @@ export function FullscreenOverlay({ children, onClose, title, className }: Fulls
   }, [onClose]);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-background/80 backdrop-blur-sm md:items-center">
       <div
         className={cn(
-          "relative w-[98vw] max-w-[1800px] max-h-[96vh] overflow-hidden rounded-xl border bg-card shadow-2xl",
+          "relative h-[100dvh] w-full max-w-[1800px] overflow-hidden rounded-none border bg-card shadow-2xl md:h-auto md:w-[98vw] md:max-h-[96vh] md:rounded-xl",
           className
         )}
       >
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <div className="text-sm font-semibold">{title}</div>
+        <div className="flex items-center justify-between border-b px-3 py-3 sm:px-4">
+          <div className="min-w-0 pr-2 text-sm font-semibold">{title}</div>
           <Button variant="ghost" size="icon" aria-label="Schließen" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="p-3 overflow-auto">{children}</div>
+        <div className="h-[calc(100dvh-57px)] overflow-auto p-3 sm:p-4 md:h-auto">{children}</div>
       </div>
     </div>,
     document.body

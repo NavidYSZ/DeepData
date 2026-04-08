@@ -71,7 +71,7 @@ export function DataTable<TData, TValue>({
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         {searchKey ? (
-          <div className="relative sm:max-w-xs">
+          <div className="relative w-full sm:max-w-xs">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder={searchPlaceholder}
@@ -83,7 +83,7 @@ export function DataTable<TData, TValue>({
         ) : null}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="ml-auto">
+            <Button variant="outline" size="sm" className="self-start sm:ml-auto">
               Columns
               <ChevronDown className="ml-2 h-4 w-4" />
             </Button>
@@ -110,7 +110,7 @@ export function DataTable<TData, TValue>({
 
       <div className="rounded-md border">
         <TableContainer>
-          <Table>
+          <Table className="min-w-[620px]">
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
@@ -147,11 +147,11 @@ export function DataTable<TData, TValue>({
         </TableContainer>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-xs text-muted-foreground">
           {table.getFilteredRowModel().rows.length} Ergebnisse
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-start sm:self-auto">
           <Button
             variant="outline"
             size="sm"

@@ -232,7 +232,7 @@ export default function DashboardPage() {
     return { clicks, impressions, ctr };
   }, [series]);
 
-  const isMobile = useMediaQuery("(max-width: 768px)");
+  const isMobile = useMediaQuery("(max-width: 767px)");
 
   const activeMetrics = useMemo(
     () => METRIC_ORDER.filter((metric) => metricVisibility[metric]),

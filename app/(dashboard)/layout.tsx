@@ -30,16 +30,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <SiteProvider>
       <SidebarProvider>
-        <div className="flex min-h-screen w-full">
+        <div className="flex min-h-screen w-full min-w-0">
           <AppSidebar pathname={pathname} />
 
-          <SidebarInset className={cn(isKeywordWorkspace && "overflow-hidden")}>
+          <SidebarInset className={cn("overflow-x-hidden", isKeywordWorkspace && "overflow-hidden")}>
             {!isKeywordWorkspace ? <SiteHeader pageTitle={pageTitle} /> : null}
             <main
               className={cn(
                 isKeywordWorkspace
                   ? "flex-1 min-h-0 w-full max-w-none overflow-hidden p-0"
-                  : "container max-w-screen-2xl space-y-6 px-4 py-6 md:px-6"
+                  : "container min-w-0 max-w-screen-2xl space-y-6 overflow-x-hidden px-4 py-5 sm:px-5 md:px-6 md:py-6"
               )}
             >
               {children}

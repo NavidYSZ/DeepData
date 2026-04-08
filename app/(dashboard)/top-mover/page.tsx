@@ -614,13 +614,14 @@ export default function TopMoverPage() {
       <FilterBar className="md:grid-cols-3 md:items-end">
         <div className="space-y-2">
           <label className="text-sm font-medium">Mode</label>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {(["query", "page"] as const).map((m) => (
               <Button
                 key={m}
                 variant={mode === m ? "secondary" : "outline"}
                 size="sm"
                 onClick={() => setMode(m)}
+                className="flex-1 sm:flex-none"
               >
                 {m === "query" ? "Query" : "Page"}
               </Button>
@@ -629,13 +630,14 @@ export default function TopMoverPage() {
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium">Vergleich</label>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {(["periods", "days"] as const).map((cm) => (
               <Button
                 key={cm}
                 variant={compareMode === cm ? "secondary" : "outline"}
                 size="sm"
                 onClick={() => setCompareMode(cm)}
+                className="flex-1 sm:flex-none"
               >
                 {cm === "periods" ? "Perioden" : "Tage"}
               </Button>
@@ -680,7 +682,7 @@ export default function TopMoverPage() {
           size="sm"
           onClick={exportTopMover}
           disabled={loading || (!winners.length && !losers.length)}
-          className="ml-auto"
+          className="w-full sm:ml-auto sm:w-auto"
         >
           <Download className="mr-1.5 h-4 w-4" />
           Export
