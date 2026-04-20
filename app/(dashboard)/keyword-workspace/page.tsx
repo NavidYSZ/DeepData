@@ -44,7 +44,10 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { UploadKeywordsDialog } from "@/components/keyword-workspace/upload-dialog";
+import {
+  UploadKeywordsDialog,
+  type UploadImportCompletePayload
+} from "@/components/keyword-workspace/upload-dialog";
 import { ExternalBadge } from "@/components/keyword-workspace/external-badge";
 
 type SerpKeyword = { id: string; kwRaw: string; demandMonthly: number; demandSource?: string; difficultyScore?: number | null };
@@ -147,6 +150,7 @@ type KeywordClusterExportRow = {
 };
 type KeywordExportColumn = { key: keyof KeywordClusterExportRow; header: string; width: number };
 type OptionalKeywordExportColumnKey = Exclude<keyof KeywordClusterExportRow, "topicalCluster" | "cluster" | "keyword">;
+type KeywordScopeMode = "project" | "upload_source";
 
 const ACTIVE_STATUSES = ["pending", "importing_gsc", "fetching_serps", "clustering", "mapping_parents", "running"];
 const SERP_DEBUG = true;
@@ -195,6 +199,7 @@ const OPTIONAL_KEYWORD_EXPORT_COLUMNS: Array<KeywordExportColumn & { key: Option
   { key: "overlapScore", header: "Overlap Score", width: 14 }
 ];
 const DEFAULT_OPTIONAL_COLUMN_KEYS: OptionalKeywordExportColumnKey[] = OPTIONAL_KEYWORD_EXPORT_COLUMNS.map((column) => column.key);
+const RUN_SCOPE_STORAGE_PREFIX = "keyword-workspace:run-scope:";
 
 function slugifyFilenamePart(value: string): string {
   return value
@@ -577,11 +582,53 @@ export default function KeywordWorkspacePage() {
   const selectTimerRef = useRef<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [keywordScopeMode, setKeywordScopeMode] = useState<KeywordScopeMode>("project");
+  const [uploadScopeSourceId, setUploadScopeSourceId] = useState<string | null>(null);
+  const [uploadScopeSourceName, setUploadScopeSourceName] = useState<string | null>(null);
 
   const createMinDemand = useMemo(() => {
     const parsed = Number(createMinDemandInput);
     return Number.isFinite(parsed) ? parsed : 5;
   }, [createMinDemandInput]);
+
+  useEffect(() => {
+    if (!projectId || typeof window === "undefined") return;
+
+    const raw = window.localStorage.getItem(`${RUN_SCOPE_STORAGE_PREFIX}${projectId}`);
+    if (!raw) {
+      setKeywordScopeMode("project");
+      setUploadScopeSourceId(null);
+      setUploadScopeSourceName(null);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as {
+        mode?: KeywordScopeMode;
+        sourceId?: string | null;
+        sourceName?: string | null;
+      };
+      setKeywordScopeMode(parsed.mode === "upload_source" ? "upload_source" : "project");
+      setUploadScopeSourceId(parsed.sourceId ?? null);
+      setUploadScopeSourceName(parsed.sourceName ?? null);
+    } catch {
+      setKeywordScopeMode("project");
+      setUploadScopeSourceId(null);
+      setUploadScopeSourceName(null);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId || typeof window === "undefined") return;
+    window.localStorage.setItem(
+      `${RUN_SCOPE_STORAGE_PREFIX}${projectId}`,
+      JSON.stringify({
+        mode: keywordScopeMode,
+        sourceId: uploadScopeSourceId,
+        sourceName: uploadScopeSourceName
+      })
+    );
+  }, [keywordScopeMode, projectId, uploadScopeSourceId, uploadScopeSourceName]);
 
   const { data: runList, mutate: mutateRunList } = useSWR<SerpRunListItem[]>(
     projectId ? `/api/keyword-workspace/projects/${projectId}/serp-cluster/runs` : null,
@@ -735,6 +782,10 @@ export default function KeywordWorkspacePage() {
 
   async function triggerRun() {
     if (!projectId) return;
+    if (keywordScopeMode === "upload_source" && !uploadScopeSourceId) {
+      toast.error("Für den Upload-Modus fehlt die ausgewählte Import-Datei.");
+      return;
+    }
     try {
       if (SERP_DEBUG) {
         console.groupCollapsed("[SERP][run-trigger]");
@@ -744,6 +795,8 @@ export default function KeywordWorkspacePage() {
           overlapThreshold,
           topResults,
           clusterAlgorithm,
+          keywordScopeMode,
+          uploadScopeSourceId,
           ts: new Date().toISOString()
         });
         console.groupEnd();
@@ -755,7 +808,9 @@ export default function KeywordWorkspacePage() {
           minDemand: createMinDemand,
           overlapThreshold,
           topResults,
-          clusterAlgorithm
+          clusterAlgorithm,
+          keywordScopeMode,
+          uploadSourceId: keywordScopeMode === "upload_source" ? uploadScopeSourceId : undefined
         })
       });
       if (!res.ok) {
@@ -778,6 +833,12 @@ export default function KeywordWorkspacePage() {
     () => (selectedParent ? parents.find((parent) => parent.id === selectedParent) ?? null : null),
     [parents, selectedParent]
   );
+  const keywordScopeLabel =
+    keywordScopeMode === "upload_source"
+      ? uploadScopeSourceName
+        ? `Nur Upload: ${uploadScopeSourceName}`
+        : "Nur Upload"
+      : "GSC + Uploads";
   const scopedParentsForExport = useMemo(() => {
     if (exportScope === "all" || !currentParent) return parents;
     return [currentParent];
@@ -1286,6 +1347,24 @@ export default function KeywordWorkspacePage() {
             <Upload className="h-3 w-3" />
             Import
           </Button>
+          <div className="hidden items-center gap-2 rounded-md border border-border/70 bg-muted/30 px-2.5 py-1.5 text-[11px] text-muted-foreground lg:flex">
+            <span>Keyword-Basis:</span>
+            <span className="max-w-[220px] truncate font-medium text-foreground">{keywordScopeLabel}</span>
+            {keywordScopeMode === "upload_source" && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => {
+                  setKeywordScopeMode("project");
+                  setUploadScopeSourceId(null);
+                  setUploadScopeSourceName(null);
+                }}
+              >
+                Alle nutzen
+              </Button>
+            )}
+          </div>
           <Button
             size="sm"
             variant="outline"
@@ -1482,7 +1561,16 @@ export default function KeywordWorkspacePage() {
           projectId={projectId}
           open={uploadOpen}
           onOpenChange={setUploadOpen}
-          onImportComplete={() => {
+          onImportComplete={(payload: UploadImportCompletePayload) => {
+            if (payload.importMode === "upload_only") {
+              setKeywordScopeMode("upload_source");
+              setUploadScopeSourceId(payload.sourceId);
+              setUploadScopeSourceName(payload.sourceName);
+            } else {
+              setKeywordScopeMode("project");
+              setUploadScopeSourceId(null);
+              setUploadScopeSourceName(null);
+            }
             mutateSerp();
             mutateStatus();
           }}

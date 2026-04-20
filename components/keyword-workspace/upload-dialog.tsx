@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -44,6 +45,7 @@ type DetectedColumns = {
 type UploadResponse = {
   importId: string;
   sourceId: string;
+  sourceName: string;
   headers: string[];
   detectedColumns: DetectedColumns;
   previewRows: Record<string, any>[];
@@ -73,11 +75,20 @@ const COLUMN_LABELS: Record<keyof ColumnMapping, string> = {
   kd: "Keyword Difficulty"
 };
 
+export type UploadImportMode = "merge" | "upload_only";
+
+export type UploadImportCompletePayload = {
+  sourceId: string;
+  sourceName: string;
+  importMode: UploadImportMode;
+  rowCount: number;
+};
+
 type Props = {
   projectId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImportComplete: () => void;
+  onImportComplete: (payload: UploadImportCompletePayload) => void;
 };
 
 export function UploadKeywordsDialog({ projectId, open, onOpenChange, onImportComplete }: Props) {
@@ -94,6 +105,7 @@ export function UploadKeywordsDialog({ projectId, open, onOpenChange, onImportCo
     cpc: SKIP,
     kd: SKIP
   });
+  const [importMode, setImportMode] = useState<UploadImportMode>("merge");
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -102,6 +114,7 @@ export function UploadKeywordsDialog({ projectId, open, onOpenChange, onImportCo
     setUploading(false);
     setUploadData(null);
     setDragOver(false);
+    setImportMode("merge");
     setMapping({
       keyword: SKIP,
       volume: SKIP,
@@ -186,7 +199,8 @@ export function UploadKeywordsDialog({ projectId, open, onOpenChange, onImportCo
     setStep("importing");
     try {
       const body: Record<string, string> = {
-        keywordColumn: mapping.keyword
+        keywordColumn: mapping.keyword,
+        importMode
       };
       if (mapping.volume !== SKIP) body.volumeColumn = mapping.volume;
       if (mapping.impressions !== SKIP) body.impressionsColumn = mapping.impressions;
@@ -209,8 +223,17 @@ export function UploadKeywordsDialog({ projectId, open, onOpenChange, onImportCo
         return;
       }
 
-      toast.success(`${data.rowCount} Keywords importiert`);
-      onImportComplete();
+      toast.success(
+        importMode === "upload_only"
+          ? `${data.rowCount} Keywords importiert. Der nächste Run nutzt nur diesen Upload.`
+          : `${data.rowCount} Keywords importiert und mit den vorhandenen Keywords kombiniert.`
+      );
+      onImportComplete({
+        sourceId: data.sourceId ?? uploadData.sourceId,
+        sourceName: data.sourceName ?? uploadData.sourceName,
+        importMode: data.importMode ?? importMode,
+        rowCount: data.rowCount ?? 0
+      });
       handleOpenChange(false);
     } catch (e) {
       toast.error("Import fehlgeschlagen");
@@ -227,7 +250,8 @@ export function UploadKeywordsDialog({ projectId, open, onOpenChange, onImportCo
         <DialogHeader>
           <DialogTitle>Externe Keywords importieren</DialogTitle>
           <DialogDescription>
-            CSV- oder Excel-Dateien hochladen (z.B. von Sistrix). Keywords werden mit den GSC-Daten zusammengefasst und geclustert.
+            CSV- oder Excel-Dateien hochladen. Du kannst den Upload entweder mit den vorhandenen
+            GSC-Keywords kombinieren oder nur die hochgeladene Liste fürs Clustering verwenden.
           </DialogDescription>
         </DialogHeader>
 
@@ -271,6 +295,57 @@ export function UploadKeywordsDialog({ projectId, open, onOpenChange, onImportCo
 
         {step === "mapping" && (
           <div className="flex flex-col gap-4 min-h-0 flex-1">
+            <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">Import-Modus</Label>
+                <p className="text-xs text-muted-foreground">
+                  Entscheidet, ob der nächste Cluster-Run alle Projekt-Keywords oder nur diesen
+                  Upload verwendet.
+                </p>
+              </div>
+
+              <RadioGroup
+                value={importMode}
+                onValueChange={(value) => setImportMode(value as UploadImportMode)}
+                className="grid gap-3 md:grid-cols-2"
+              >
+                <label
+                  className={[
+                    "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors",
+                    importMode === "merge"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-muted/50"
+                  ].join(" ")}
+                >
+                  <RadioGroupItem value="merge" className="mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Mit vorhandenen Keywords kombinieren</p>
+                    <p className="text-xs text-muted-foreground">
+                      Upload wird zu den bestehenden Search-Console- und Upload-Daten hinzugefügt.
+                    </p>
+                  </div>
+                </label>
+
+                <label
+                  className={[
+                    "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors",
+                    importMode === "upload_only"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-muted/50"
+                  ].join(" ")}
+                >
+                  <RadioGroupItem value="upload_only" className="mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Nur diesen Upload clustern</p>
+                    <p className="text-xs text-muted-foreground">
+                      Ideal für reine Keyword-Listen. Der nächste Run nutzt nur die hochgeladenen
+                      Keywords aus dieser Datei.
+                    </p>
+                  </div>
+                </label>
+              </RadioGroup>
+            </div>
+
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {(Object.keys(COLUMN_LABELS) as (keyof ColumnMapping)[]).map((field) => (
                 <div key={field} className="space-y-1">

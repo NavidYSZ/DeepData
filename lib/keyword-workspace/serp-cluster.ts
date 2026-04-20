@@ -523,6 +523,8 @@ export async function runSerpClustering(params: {
   userId: string;
   accessToken?: string;
   gscSiteUrl?: string;
+  keywordScopeMode?: "project" | "upload_source";
+  uploadSourceId?: string;
   minDemand?: number;
   overlapThreshold?: number;
   topResults?: number;
@@ -536,6 +538,8 @@ export async function runSerpClustering(params: {
     userId,
     accessToken,
     gscSiteUrl,
+    keywordScopeMode = "project",
+    uploadSourceId,
     minDemand = 5,
     overlapThreshold = 0.3,
     topResults = 10,
@@ -562,6 +566,29 @@ export async function runSerpClustering(params: {
   let waveCount = 0;
   let promptModel: string | null = process.env.OPENAI_API_KEY ? DEFAULT_MODEL : null;
 
+  const eligibleKeywordWhere =
+    keywordScopeMode === "upload_source" && uploadSourceId
+      ? {
+          projectId,
+          sourceMetrics: { some: { sourceId: uploadSourceId } },
+          OR: [
+            { demand: { demandMonthly: { gte: minDemand } } },
+            {
+              sourceMetrics: {
+                some: {
+                  sourceId: uploadSourceId,
+                  sistrixVolume: null,
+                  impressions: null
+                }
+              }
+            }
+          ]
+        }
+      : {
+          projectId,
+          demand: { demandMonthly: { gte: minDemand } }
+        };
+
   try {
     await updateStatus("running", {
       eligibleKeywordCount,
@@ -571,10 +598,10 @@ export async function runSerpClustering(params: {
     });
     // ── Phase 1: Auto-import GSC data if needed ──
     const kwCount = await prisma.keyword.count({
-      where: { projectId, demand: { demandMonthly: { gte: minDemand } } }
+      where: eligibleKeywordWhere
     });
 
-    if (kwCount === 0 && accessToken && gscSiteUrl) {
+    if (kwCount === 0 && keywordScopeMode === "project" && accessToken && gscSiteUrl) {
       await updateStatus("importing_gsc");
 
       const to = new Date();
@@ -613,7 +640,7 @@ export async function runSerpClustering(params: {
 
     // ── Phase 2: Query keywords ──
     const eligibleKeywords = await prisma.keyword.findMany({
-      where: { projectId, demand: { demandMonthly: { gte: minDemand } } },
+      where: eligibleKeywordWhere,
       include: { demand: true }
     });
     if (!eligibleKeywords.length) throw new Error("NO_KEYWORDS");
