@@ -11,7 +11,8 @@ import {
   ArrowUpDown,
   MessageSquare,
   Settings,
-  Network
+  Network,
+  Search
 } from "lucide-react";
 
 import {
@@ -125,12 +126,20 @@ export function AppSidebar({ pathname }: { pathname: string }) {
           <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground group-data-[collapsed=true]:sr-only">
             Settings
           </p>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Settings">
-                <Link href="/settings">
-                  <Settings className="h-4 w-4 shrink-0" />
-                  <span className={collapsibleTextClass}>Settings</span>
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild tooltip="Crawl">
+            <Link href="/crawl">
+              <Search className="h-4 w-4 shrink-0" />
+              <span className={collapsibleTextClass}>Crawl</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Settings">
+            <Link href="/settings">
+              <Settings className="h-4 w-4 shrink-0" />
+              <span className={collapsibleTextClass}>Settings</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
