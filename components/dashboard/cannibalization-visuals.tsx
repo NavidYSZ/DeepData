@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import type { CannibalRow } from "@/lib/cannibalization";
 import React from "react";
 import { ChartContainer } from "@/components/ui/chart";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface BubblePoint {
   query: string;
@@ -56,12 +57,13 @@ export function BubbleScatter({
   onSelect: (query: string) => void;
   labelTopN?: number;
 }) {
+  const isMobile = useMediaQuery("(max-width: 767px)");
   const maxY = Math.max(30, Math.ceil(Math.max(0, ...data.map((d) => d.y || 0))));
   const topN = [...data].sort((a, b) => b.priority - a.priority).slice(0, labelTopN).map((d) => d.query);
 
   return (
     <Card className="h-full">
-      <CardHeader className="flex items-center justify-between">
+      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle>Bubble: Top Share vs Spread</CardTitle>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#3b82f6]" /> 2 URLs</span>
@@ -69,10 +71,10 @@ export function BubbleScatter({
           <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#ef4444]" /> 5+ URLs</span>
         </div>
       </CardHeader>
-      <CardContent className="h-[520px]">
+      <CardContent className="h-[350px] md:h-[520px]">
         <ChartContainer config={{}} className="h-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart margin={{ top: 20, right: 30, bottom: 40, left: 10 }}>
+            <ScatterChart margin={isMobile ? { top: 10, right: 10, bottom: 24, left: -5 } : { top: 20, right: 30, bottom: 40, left: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               type="number"
@@ -80,16 +82,17 @@ export function BubbleScatter({
               name="Top Share"
               domain={[0, 100]}
               tickFormatter={(v) => `${v}%`}
-              tick={{ fontSize: 11 }}
-              label={{ value: "Top Share (%)", position: "insideBottom", dy: 18 }}
+              tick={{ fontSize: isMobile ? 9 : 11 }}
+              label={isMobile ? undefined : { value: "Top Share (%)", position: "insideBottom", dy: 18 }}
             />
             <YAxis
               type="number"
               dataKey="y"
               name="Spread"
               domain={[0, maxY]}
-              tick={{ fontSize: 11 }}
-              label={{ value: "Spread (Positions)", angle: -90, position: "insideLeft", dx: -4 }}
+              tick={{ fontSize: isMobile ? 9 : 11 }}
+              width={isMobile ? 30 : undefined}
+              label={isMobile ? undefined : { value: "Spread (Positions)", angle: -90, position: "insideLeft", dx: -4 }}
             />
             <ZAxis dataKey="size" range={[60, 260]} />
 
@@ -166,19 +169,20 @@ interface DumbbellPoint {
 }
 
 export function DumbbellChart({ data }: { data: DumbbellPoint[] }) {
+  const isMobile = useMediaQuery("(max-width: 767px)");
   const sorted = [...data].sort((a, b) => b.priority - a.priority).slice(0, 20);
   return (
     <Card>
       <CardHeader>
         <CardTitle>Top vs 2nd Share</CardTitle>
       </CardHeader>
-      <CardContent className="h-[420px]">
+      <CardContent className="h-[300px] md:h-[420px]">
         <ChartContainer config={{}} className="h-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={sorted} layout="vertical" margin={{ top: 10, right: 20, bottom: 10, left: 80 }}>
+            <ComposedChart data={sorted} layout="vertical" margin={isMobile ? { top: 5, right: 10, bottom: 5, left: 0 } : { top: 10, right: 20, bottom: 10, left: 80 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
-            <YAxis dataKey="query" type="category" width={140} tick={{ fontSize: 11 }} interval={0} />
+            <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: isMobile ? 9 : 11 }} />
+            <YAxis dataKey="query" type="category" width={isMobile ? 70 : 140} tick={{ fontSize: isMobile ? 8 : 11 }} interval={0} />
             <ReTooltip
               content={({ payload }) => {
                 const p = payload?.[0]?.payload as DumbbellPoint | undefined;

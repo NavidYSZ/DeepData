@@ -96,7 +96,7 @@ export function AccountMenu({ className, compact = false }: AccountMenuProps) {
             variant="outline"
             className={cn(
               "min-w-0 justify-between overflow-hidden",
-              compact ? "h-9 w-[220px] max-w-[70vw]" : "w-full"
+              compact ? "h-9 w-[min(220px,58vw)] max-w-[58vw] sm:max-w-[70vw]" : "w-full"
             )}
           >
             <span className="flex min-w-0 items-center gap-2">
@@ -110,7 +110,7 @@ export function AccountMenu({ className, compact = false }: AccountMenuProps) {
             <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-72" align="start">
+        <DropdownMenuContent className="w-[min(18rem,calc(100vw-2rem))]" align="start">
           {accounts.map((acc) => (
             <DropdownMenuItem
               key={acc.id}

@@ -39,6 +39,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useSite } from "@/components/dashboard/site-context";
 import { FilterBar, PageHeader, SectionCard } from "@/components/dashboard/page-shell";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 type Mode = "query" | "page";
 type PositionWindow = "all" | "top10" | "top20" | "top50";
@@ -130,6 +131,8 @@ export default function SeoBubblePage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [activeSegment, setActiveSegment] = useState<ActiveSegment>("all");
   const [fullscreen, setFullscreen] = useState(false);
+
+  const isMobile = useMediaQuery("(max-width: 767px)");
 
   // Brand keyword filter
   const [brandKeywords, setBrandKeywords] = useState<string[]>(() => {
@@ -351,7 +354,10 @@ export default function SeoBubblePage() {
       ) : (
         <ChartContainer config={{}} className="h-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 10 }} onClick={() => setSelected(null)}>
+            <ScatterChart
+              margin={isMobile ? { top: 10, right: 8, bottom: 10, left: -5 } : { top: 20, right: 20, bottom: 20, left: 10 }}
+              onClick={() => setSelected(null)}
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               type="number"
@@ -359,7 +365,7 @@ export default function SeoBubblePage() {
               name="CTR"
               domain={[0, displayMaxCtr || 0.1]}
               tickFormatter={formatPct}
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: isMobile ? 9 : 11 }}
             />
             <YAxis
               type="number"
@@ -367,7 +373,8 @@ export default function SeoBubblePage() {
               name="Position"
               domain={[1, displayYMax || 100]}
               reversed
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: isMobile ? 9 : 11 }}
+              width={isMobile ? 30 : undefined}
               ticks={[1, 3, 10, 20, 50, 100].filter((t) => t <= (displayYMax || 100))}
             />
             <ZAxis dataKey="impressions" range={[60, 800]} type="number" name="Impressions" />
@@ -468,7 +475,7 @@ export default function SeoBubblePage() {
       <FilterBar className="md:grid-cols-2 xl:grid-cols-6">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium">Mode</span>
-            <div className="flex gap-1">
+            <div className="flex flex-wrap gap-1">
               {["query", "page"].map((m) => (
                 <Button
                   key={m}
@@ -571,7 +578,7 @@ export default function SeoBubblePage() {
 
       {fullscreen && (
         <FullscreenOverlay title="Position vs CTR" onClose={() => setFullscreen(false)}>
-          {renderChart("h-[75vh] min-h-[500px]")}
+          {renderChart("h-[70vh] min-h-[360px] sm:min-h-[500px]")}
         </FullscreenOverlay>
       )}
       {notConnected && (
@@ -593,7 +600,7 @@ export default function SeoBubblePage() {
       <Card>
         <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <CardTitle>Position vs CTR</CardTitle>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2">
             {([
               { key: "all" as const, label: "Alle" },
               { key: "quickwins" as const, label: "Quick Wins" },
@@ -661,7 +668,7 @@ export default function SeoBubblePage() {
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-4">
-          <div className="h-[520px] min-w-0 lg:col-span-3">
+          <div className="h-[350px] md:h-[520px] min-w-0 lg:col-span-3">
             {renderChart("h-full")}
           </div>
           <div className="min-w-0 space-y-3 lg:col-span-1">
@@ -678,7 +685,7 @@ export default function SeoBubblePage() {
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden text-sm">
                 {!selected && (
-                  <div className="h-[440px] overflow-y-auto">
+                  <div className="h-[300px] md:h-[440px] overflow-y-auto">
                     {displayPoints.length === 0 ? (
                       <p className="text-muted-foreground">Keine Ergebnisse.</p>
                     ) : (
@@ -731,7 +738,7 @@ export default function SeoBubblePage() {
                       <div>Impressions: {selected.impressions.toLocaleString("de-DE")}</div>
                       <div>Clicks: {selected.clicks.toLocaleString("de-DE")}</div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {mode === "page" && selected.primary.startsWith("http") && (
                         <Button variant="outline" size="sm" onClick={() => window.open(selected.primary, "_blank")}>
                           Seite öffnen

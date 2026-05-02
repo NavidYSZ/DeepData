@@ -86,15 +86,15 @@ export function DataExplorerTable({
 
   return (
     <Card className="h-full">
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle>Data Explorer</CardTitle>
-        <Button variant="outline" size="sm" onClick={exportCsv}>
+        <Button variant="outline" size="sm" onClick={exportCsv} className="w-full sm:w-auto">
           Export (Excel/CSV)
         </Button>
       </CardHeader>
       <CardContent>
         <TableContainer className="max-h-[calc(100vh-260px)] overflow-auto">
-          <Table className="min-w-[760px] text-sm">
+          <Table className="min-w-[680px] text-sm sm:min-w-[760px]">
             <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
                 {selectedKeyword ? (

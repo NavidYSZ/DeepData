@@ -23,6 +23,7 @@ import { rangeToIso, getLastNMonthsRange } from "@/lib/date-range";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { DateRange } from "react-day-picker";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface SitesResponse {
   sites: { siteUrl: string; permissionLevel: string }[];
@@ -231,6 +232,8 @@ export default function DashboardPage() {
     return { clicks, impressions, ctr };
   }, [series]);
 
+  const isMobile = useMediaQuery("(max-width: 767px)");
+
   const activeMetrics = useMemo(
     () => METRIC_ORDER.filter((metric) => metricVisibility[metric]),
     [metricVisibility]
@@ -315,7 +318,7 @@ export default function DashboardPage() {
                     </span>
                     <span className={cn(active ? "text-foreground" : "text-muted-foreground")}>{meta.label}</span>
                   </div>
-                  <div className="mt-2 text-3xl font-semibold leading-none tracking-tight">
+                  <div className="mt-2 text-2xl font-semibold leading-none tracking-tight md:text-3xl">
                     {meta.valueFormatter(value)}
                   </div>
                 </button>
@@ -323,27 +326,31 @@ export default function DashboardPage() {
             })}
           </div>
 
-          <div className="h-[360px] rounded-lg border bg-background px-3 pb-3 pt-2 md:px-4 md:pb-4">
+          <div className="h-[260px] md:h-[360px] rounded-lg border bg-background px-3 pb-3 pt-2 md:px-4 md:pb-4">
             {loading ? (
               <Skeleton className="h-full w-full rounded-md" />
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={series} margin={{ top: 20, right: 24, left: 8, bottom: 6 }}>
+                <LineChart
+                  data={series}
+                  margin={isMobile ? { top: 10, right: 8, left: -10, bottom: 4 } : { top: 20, right: 24, left: 8, bottom: 6 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis
                     type="number"
                     dataKey="dateNum"
                     domain={["dataMin", "dataMax"]}
                     tickFormatter={formatDateShort}
-                    tick={{ fontSize: 11 }}
+                    tick={{ fontSize: isMobile ? 9 : 11 }}
                   />
                   {activeMetrics.map((metric, index) => (
                     <YAxis
                       key={metric}
                       yAxisId={metric}
                       orientation={index === 0 ? "left" : "right"}
-                      hide={index > 1}
-                      tick={{ fontSize: 11 }}
+                      hide={isMobile ? index > 0 : index > 1}
+                      tick={{ fontSize: isMobile ? 9 : 11 }}
+                      width={isMobile ? 40 : undefined}
                       tickFormatter={(value) =>
                         metric === "ctr"
                           ? `${(Number(value) * 100).toFixed(1)}%`

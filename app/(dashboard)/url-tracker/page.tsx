@@ -422,7 +422,7 @@ export default function UrlTrackerPage() {
           </div>
           <div className="space-y-2 lg:col-span-2">
             <label className="text-sm font-medium">Top N</label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {["200", "500", "all"].map((val) => (
                 <Button
                   key={val}
@@ -449,7 +449,7 @@ export default function UrlTrackerPage() {
 
       {notConnected && (
         <SectionCard>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-sm text-muted-foreground">Bitte Google Search Console verbinden.</span>
             <Button onClick={() => (window.location.href = "/api/auth/google")}>Verbinden</Button>
           </div>
@@ -469,7 +469,7 @@ export default function UrlTrackerPage() {
             </div>
           ) : (
             <TableContainer className="mt-3">
-              <Table className="min-w-[760px] text-sm lg:min-w-[920px]">
+              <Table className="min-w-[680px] text-sm sm:min-w-[760px] lg:min-w-[920px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>
@@ -618,7 +618,7 @@ export default function UrlTrackerPage() {
             <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
               <div className="space-y-3">
                 {detailSeriesLoading ? (
-                  <Skeleton className="h-[520px] w-full" />
+                  <Skeleton className="h-[300px] md:h-[520px] w-full" />
                 ) : detailSeriesError ? (
                   <p className="text-sm text-destructive">Fehler beim Laden der Zeitreihen</p>
                 ) : (

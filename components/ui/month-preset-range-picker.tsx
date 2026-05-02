@@ -118,16 +118,16 @@ export function MonthPresetRangePicker({
   ];
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-2", fullWidth && "w-full", className)}>
-      <div className="inline-flex h-9 overflow-hidden rounded-md border border-input bg-card">
+    <div className={cn("flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center", fullWidth && "w-full", className)}>
+      <div className="grid w-full grid-cols-2 divide-x divide-y divide-input overflow-hidden rounded-md border border-input bg-card sm:inline-flex sm:w-auto sm:grid-cols-none sm:divide-y-0">
         {primaryPresets.map((preset, idx) => (
           <button
             key={preset.months}
             type="button"
             onClick={() => setPresetMonths(preset.months)}
             className={cn(
-              "inline-flex items-center px-3 text-xs font-medium transition-colors",
-              idx > 0 && "border-l border-input",
+              "inline-flex min-h-9 items-center justify-center px-3 py-2 text-xs font-medium transition-colors",
+              idx === 2 && "col-span-1",
               matchedPreset === preset.months
                 ? "bg-primary text-primary-foreground"
                 : "bg-card text-foreground hover:bg-accent"
@@ -142,7 +142,7 @@ export function MonthPresetRangePicker({
             <button
               type="button"
               className={cn(
-                "inline-flex items-center gap-1 border-l border-input px-3 text-xs font-medium transition-colors",
+                "inline-flex min-h-9 items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-colors",
                 moreActive
                   ? "bg-primary text-primary-foreground"
                   : "bg-card text-foreground hover:bg-accent"
@@ -152,7 +152,7 @@ export function MonthPresetRangePicker({
               <ChevronDown className="h-3.5 w-3.5" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72 space-y-2 p-2">
+          <DropdownMenuContent align="end" className="w-[min(20rem,calc(100vw-2rem))] space-y-2 p-2">
             <button
               type="button"
               onClick={() => setPresetMonths(12)}

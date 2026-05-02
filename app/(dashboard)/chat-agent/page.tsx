@@ -368,7 +368,7 @@ export default function ChatAgentPage() {
                   key={rb.id}
                   size="sm"
                   variant="outline"
-                  className="h-auto whitespace-normal text-left"
+                  className="h-auto w-full whitespace-normal text-left sm:w-auto"
                   onClick={() => sendMessage("", rb.id)}
                 >
                   <span className="block text-sm font-medium">{rb.label}</span>
@@ -427,7 +427,7 @@ export default function ChatAgentPage() {
                 )}
               </div>
             </div>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <Input
                 placeholder="Frage oder Auftrag eingeben…"
                 value={input}
@@ -440,7 +440,7 @@ export default function ChatAgentPage() {
                 }}
                 disabled={loading}
               />
-              <Button onClick={() => sendMessage(input)} disabled={loading || !input.trim()}>
+              <Button onClick={() => sendMessage(input)} disabled={loading || !input.trim()} className="w-full sm:w-auto">
                 Senden
               </Button>
             </div>

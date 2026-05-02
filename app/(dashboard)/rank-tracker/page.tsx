@@ -251,7 +251,7 @@ export default function RankTrackerPage() {
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
         <div className="min-w-0 space-y-4">
           {loadingSeries ? (
-            <Skeleton className="h-[480px] w-full" />
+            <Skeleton className="h-[300px] md:h-[480px] w-full" />
           ) : (
             <RankCharts
               chartData={chartData}

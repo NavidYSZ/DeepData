@@ -197,7 +197,7 @@ export default function DataExplorerPage() {
                   <span className="text-xs text-muted-foreground">▼</span>
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-72 space-y-3 p-3">
+              <PopoverContent align="end" className="w-[min(18rem,calc(100vw-2rem))] space-y-3 p-3">
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-muted-foreground">Keyword enthält</label>
                   <Input
@@ -258,7 +258,7 @@ export default function DataExplorerPage() {
           <Badge variant="secondary">Ø Position: {stats ? stats.position.toFixed(1) : "-"}</Badge>
           <Badge variant="secondary">Ø CTR: {stats ? stats.ctr.toFixed(1) : "-"}%</Badge>
           {(selectedPage || selectedKeyword) && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary">Filter: {selectedKeyword ?? selectedPage}</Badge>
               <Button
                 size="sm"

@@ -33,7 +33,7 @@ function useSidebar() {
 }
 
 function SidebarProvider({ children, defaultOpen = false }: { children: React.ReactNode; defaultOpen?: boolean }) {
-  const isMobile = useMediaQuery("(max-width: 768px)");
+  const isMobile = useMediaQuery("(max-width: 767px)");
   const [open, setOpen] = React.useState(defaultOpen);
   const [hovered, setHovered] = React.useState(false);
   const [desktopLockedOpen, setDesktopLockedOpen] = React.useState(false);
@@ -66,7 +66,7 @@ const Sidebar = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement>>
     if (isMobile) {
       return (
         <Sheet open={open} onOpenChange={setOpen}>
-          <SheetContent side="left" className={cn("w-72 p-0", className)}>
+          <SheetContent side="left" className={cn("w-[min(20rem,calc(100vw-1rem))] p-0", className)}>
             <aside className="flex h-full w-full flex-col bg-sidebar text-sidebar-foreground" {...props}>
               {children}
             </aside>
@@ -106,7 +106,7 @@ Sidebar.displayName = "Sidebar";
 
 const SidebarInset = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("flex min-h-screen flex-1 flex-col bg-muted/30", className)} {...props} />
+    <div ref={ref} className={cn("flex min-h-screen min-w-0 flex-1 flex-col bg-muted/30", className)} {...props} />
   )
 );
 SidebarInset.displayName = "SidebarInset";

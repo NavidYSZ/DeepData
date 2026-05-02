@@ -57,7 +57,7 @@ export function QueriesTable({ rows }: { rows: QueryRow[] }) {
         accessorKey: "query",
         header: "Query",
         cell: ({ row }) => (
-          <div className="max-w-[240px] truncate" title={row.getValue("query") as string}>
+          <div className="max-w-[180px] truncate sm:max-w-[240px]" title={row.getValue("query") as string}>
             {row.getValue("query")}
           </div>
         )

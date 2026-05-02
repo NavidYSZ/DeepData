@@ -82,15 +82,15 @@ export function CannibalizationTable({ rows, showSwitches }: { rows: CannibalRow
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <CardTitle>Kannibalisierung</CardTitle>
-        <Button variant="outline" size="sm" onClick={exportCsv}>
+        <Button variant="outline" size="sm" onClick={exportCsv} className="w-full sm:w-auto">
           Export (CSV)
         </Button>
       </CardHeader>
       <CardContent>
         <TableContainer className="max-h-[calc(100vh-260px)] overflow-auto">
-          <Table className="min-w-[980px] text-sm">
+          <Table className="min-w-[860px] text-sm sm:min-w-[980px]">
             <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
                 <TableHead>Query</TableHead>

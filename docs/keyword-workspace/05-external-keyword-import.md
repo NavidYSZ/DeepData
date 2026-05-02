@@ -188,165 +188,171 @@ Wenn ein Keyword in GSC UND im Upload vorkommt:
 
 ---
 
-## Offener Bug: Lange Keywords schneiden Demand-Zahl ab
+## Bug-Fix: Lange Keywords schneiden Demand-Zahl ab
 
-**Status:** Analyse fertig, noch nicht implementiert.
+**Status:** Implementiert und nach `main` gepusht.
 
-### Problem
+- **Umsetzung:** Commit `9948c70` (2026-02-23)
+- **Datei:** `app/(dashboard)/keyword-workspace/page.tsx`
+- **Ansatz:** Minimaler, robuster Flex-/Truncate-Fix ohne Änderung an Node-Breiten oder Dagre-Konstanten.
 
-In der Cluster-Visualisierung (ReactFlow) werden Keywords als Zeilen mit `flex justify-between` dargestellt: links der Keyword-Text, rechts die Demand-Zahl. Bei langen Keywords wird die Demand-Zahl nach rechts aus dem sichtbaren Bereich geschoben oder ganz abgeschnitten, weil die Nodes eine **feste Breite** haben.
+### Was genau geändert wurde
 
-### Betroffene Stellen
+#### 1) ParentNode (expanded) Keyword-Zeilen
 
-Alle in `app/(dashboard)/keyword-workspace/page.tsx`:
-
-| Komponente | Zeile (ca.) | CSS-Klasse | Feste Breite |
-|---|---|---|---|
-| **ParentNode** (expanded) | 94 | `w-[360px]` | 360px |
-| **ParentNode** (compact/overview) | 134 | `w-[280px]` | 280px |
-| **SubclusterNode** | 161 | `w-64` | 256px (16rem) |
-
-Zusätzlich nutzt die **Dagre-Layout-Berechnung** (Zeile 281) feste Werte:
-```typescript
-sortedSubclusters.forEach((s) => g.setNode(`sub-${s.id}`, { width: SUB_WIDTH, height: SUB_HEIGHT }));
-```
-`SUB_WIDTH = 260` und `SUB_HEIGHT = 150` sind als Konstanten definiert (Zeile 60-61).
-
-Die **Overview-Grid-Positionen** (Zeile 224-226) berechnen sich ebenfalls aus festen Konstanten:
-```typescript
-x: col * (PARENT_WIDTH + GRID_GAP_X)   // PARENT_WIDTH = 280
-y: row * (PARENT_HEIGHT + GRID_GAP_Y)  // PARENT_HEIGHT = 120
-```
-
-### Ursache im Detail
-
-Die Keyword-Zeilen in beiden Nodes sehen so aus:
+Vorher:
 ```tsx
-<div className="flex justify-between gap-1">
+<div className="flex justify-between gap-2">
   <span className="truncate flex items-center gap-1">
-    {k.demandSource === "upload" && <ExternalBadge />}  // 16px Badge
-    {k.kwRaw}                                            // variabler Text
+    {k.demandSource === "upload" && <ExternalBadge />}
+    {k.kwRaw}
   </span>
-  <span>{Math.round(k.demandMonthly)}</span>             // Demand-Zahl
+  <span>{Math.round(k.demandMonthly)}</span>
 </div>
 ```
 
-Das `truncate` auf dem Keyword-`<span>` setzt `overflow: hidden; text-overflow: ellipsis; white-space: nowrap`. Das funktioniert grundsätzlich. **Aber:** Der `<span>` für die Demand-Zahl hat kein `shrink-0` — wenn der verfügbare Platz zu knapp wird (besonders mit dem "E"-Badge), kann Flexbox die Demand-Zahl zusammenstauchen oder sie wird durch das Overflow des Eltern-Containers abgeschnitten.
-
-### Lösung: Zwei Änderungen nötig
-
-#### Änderung A: `shrink-0` auf die Demand-Zahl (Quick-Fix)
-
-Damit die Demand-Zahl NIE zusammengestaucht wird, muss sie `shrink-0` bekommen. Das ist unabhängig von der Breitenänderung sinnvoll.
-
-**Zeile ~118 (ParentNode expanded):**
+Nachher:
 ```tsx
+<div className="flex min-w-0 items-center justify-between gap-2">
+  <span className="flex min-w-0 flex-1 items-center gap-1">
+    {k.demandSource === "upload" && <ExternalBadge />}
+    <span className="truncate">{k.kwRaw}</span>
+  </span>
+  <span className="shrink-0 tabular-nums">{Math.round(k.demandMonthly)}</span>
+</div>
+```
+
+#### 2) SubclusterNode Keyword-Zeilen
+
+Vorher:
+```tsx
+<div className="flex justify-between gap-1">
+  <span className="truncate flex items-center gap-1">
+    {k.demandSource === "upload" && <ExternalBadge />}
+    {k.kwRaw}
+  </span>
+  <span>{Math.round(k.demandMonthly)}</span>
+</div>
+```
+
+Nachher:
+```tsx
+<div className="flex min-w-0 items-center justify-between gap-1">
+  <span className="flex min-w-0 flex-1 items-center gap-1">
+    {k.demandSource === "upload" && <ExternalBadge />}
+    <span className="truncate">{k.kwRaw}</span>
+  </span>
+  <span className="shrink-0 tabular-nums">{Math.round(k.demandMonthly)}</span>
+</div>
+```
+
+### Warum diese Änderungen
+
+- `min-w-0` + `flex-1` auf dem linken Bereich sorgt dafür, dass `truncate` in Flex-Containern korrekt greifen kann.
+- Eigener innerer `span.truncate` für den Keyword-Text trennt Badge und Text sauber.
+- `shrink-0` auf der Demand-Zahl verhindert, dass die Zahl bei Platzmangel zusammengedrückt oder abgeschnitten wird.
+- `tabular-nums` hält Zahlen in der Spalte optisch stabil.
+
+### Was bewusst **nicht** geändert wurde
+
+- Keine Änderung an `DETAIL_WIDTH`, `SUB_WIDTH`, `PARENT_WIDTH` oder anderen Layout-Konstanten.
+- Keine Änderung an `w-[360px]`, `w-[280px]`, `w-64`.
+- Keine Änderung an Dagre-Layout, API, TypeScript-Types oder Prisma-Schema.
+
+### Ergebnis
+
+Der Flex-/Truncate-Fix allein hat das Problem **nicht vollständig gelöst**. Die Demand-Zahlen waren bei langen Keywords weiterhin abgeschnitten, weil der SubclusterNode-Container eine feste Breite von `w-64` (256px) hatte — `truncate` konnte den Text zwar kürzen, aber bei vielen Keywords war der verbleibende Platz für die Demand-Zahl trotzdem zu knapp. Siehe Folge-Fix unten.
+
+---
+
+## Bug-Fix: SubclusterNode dynamische Breite
+
+**Status:** Implementiert und nach `main` gepusht.
+
+- **Umsetzung:** Commit `bca1adc` (2026-02-23)
+- **Datei:** `app/(dashboard)/keyword-workspace/page.tsx`
+- **Ansatz:** SubclusterNodes wachsen dynamisch von 256px bis max 380px, je nach längstem Keyword. Dagre-Layout berechnet die Breite pro Node.
+
+### Problem
+
+Der SubclusterNode hatte eine feste Breite von `w-64` (256px). Bei langen Keywords + ExternalBadge (16px + 4px Gap) blieb zu wenig Platz für die Demand-Zahl rechts. Der vorherige Flex-Fix (`shrink-0`, `min-w-0`) verhinderte zwar das Zusammendrücken der Zahl, aber bei 256px Gesamtbreite wurde der Keyword-Text so stark gekürzt, dass die Zeile trotzdem unlesbar wirkte.
+
+### Was geändert wurde
+
+#### 1) Konstanten
+
+```ts
 // Vorher:
-<span>{Math.round(k.demandMonthly)}</span>
+const SUB_WIDTH = 260;
 
 // Nachher:
-<span className="shrink-0 tabular-nums">{Math.round(k.demandMonthly)}</span>
+const SUB_MIN_W = 260;
+const SUB_MAX_W = 380;
 ```
 
-**Zeile ~181 (SubclusterNode):**
-```tsx
-// Gleiche Änderung
-<span className="shrink-0 tabular-nums">{Math.round(k.demandMonthly)}</span>
-```
+#### 2) Neue Hilfsfunktion `estimateSubWidth()`
 
-`tabular-nums` sorgt dafür, dass Zahlen gleich breit gerendert werden (monospaced digits), was die Spalte sauber ausrichtet.
+Berechnet die optimale Breite pro Subcluster basierend auf dem längsten Keyword:
 
-#### Änderung B: Feste Breite → Mindestbreite (dynamische Anpassung)
-
-Die Nodes sollen die aktuelle Breite als **Minimum** behalten, aber bei Bedarf breiter werden.
-
-**SubclusterNode (Zeile 161):**
-```tsx
-// Vorher:
-"rounded-lg border bg-accent px-3 py-2 shadow-sm w-64 ..."
-
-// Nachher:
-"rounded-lg border bg-accent px-3 py-2 shadow-sm min-w-[16rem] w-max max-w-[28rem] ..."
-```
-- `min-w-[16rem]` = bisherige 256px als Minimum
-- `w-max` = Breite passt sich an den Inhalt an
-- `max-w-[28rem]` = Maximum damit es nicht endlos breit wird (448px)
-
-**ParentNode expanded (Zeile 94):**
-```tsx
-// Vorher:
-"... w-[360px] max-h-[520px] ..."
-
-// Nachher:
-"... min-w-[360px] w-max max-w-[500px] max-h-[520px] ..."
-```
-
-**ParentNode compact (Zeile 134) — NICHT ändern:**
-Die Overview-Cards im Grid sollten **feste Breite** behalten (`w-[280px]`), weil sie in einem regelmäßigen Raster dargestellt werden. Dort werden keine Keywords angezeigt, nur der Cluster-Name (der schon `truncate` hat).
-
-#### Änderung C: Dagre-Layout-Berechnung anpassen
-
-Das Dagre-Layout berechnet Positionen basierend auf festen `SUB_WIDTH`/`SUB_HEIGHT`. Wenn Nodes jetzt dynamisch breiter werden können, muss die Layout-Berechnung den tatsächlichen Platzbedarf berücksichtigen.
-
-**Option 1 (einfach):** `SUB_WIDTH` auf den `max-w` Wert erhöhen (z.B. 448), damit Dagre genug Platz zwischen Nodes lässt. Nachteil: Mehr Whitespace bei kurzen Keywords.
-
-**Option 2 (besser):** Pro Subcluster die benötigte Breite berechnen, basierend auf dem längsten Keyword. Ungefähr so:
-
-```typescript
-// In buildFlowGraph, vor dem Dagre-Layout:
-function estimateNodeWidth(subcluster: SerpSubcluster): number {
-  const longestKw = Math.max(
-    SUB_WIDTH,
-    ...subcluster.keywords.map((k) => {
-      // ~7px pro Zeichen bei text-xs, +60px für Demand-Zahl, +24px für Padding, +20px für Badge
-      const badgeWidth = 20; // falls externes KW
-      return k.kwRaw.length * 7 + 60 + 24 + badgeWidth;
+```ts
+function estimateSubWidth(keywords: SerpKeyword[]): number {
+  if (!keywords.length) return SUB_MIN_W;
+  const longest = Math.max(
+    ...keywords.map((k) => {
+      const badgeW = k.demandSource === "upload" ? 20 : 0;
+      return k.kwRaw.length * 6.5 + badgeW + 54;
     })
   );
-  return Math.min(longestKw, 448); // max-w cap
+  return Math.min(Math.max(Math.ceil(longest), SUB_MIN_W), SUB_MAX_W);
 }
+```
 
+- ~6.5px pro Zeichen bei `text-xs`
+- +20px für ExternalBadge (nur bei Upload-Keywords)
+- +54px für Demand-Zahl, Gap und Container-Padding
+- Ergebnis wird auf `[260, 380]` geclampt
+
+#### 3) Dagre-Layout mit dynamischer Breite pro Node
+
+```ts
+const subWidths = new Map<string, number>();
 sortedSubclusters.forEach((s) => {
-  const w = estimateNodeWidth(s);
+  const w = estimateSubWidth(s.keywords ?? []);
+  subWidths.set(s.id, w);
   g.setNode(`sub-${s.id}`, { width: w, height: SUB_HEIGHT });
 });
 ```
 
-**Empfehlung:** Option 1 ist sicherer und einfacher. Die dynamische Berechnung (Option 2) ist nice-to-have, aber die Zeichenbreiten-Schätzung ist ungenau (proportionale Schriften). Mit `max-w-[28rem]` und `SUB_WIDTH = 448` für Dagre ist das Ergebnis in den meisten Fällen gut genug.
+Dagre bekommt die tatsächliche Breite jedes Nodes, sodass breitere Nodes korrekt positioniert werden und sich nicht überlappen.
 
-#### Änderung D: `DETAIL_WIDTH` Konstante für Focus-Mode anpassen
+#### 4) SubclusterNode-Komponente
 
-Im Focus-Mode (Zeile 274-284) wird der X-Offset der Subcluster-Nodes berechnet als:
-```typescript
-const xOffset = DETAIL_WIDTH + 120;
-```
-
-Wenn der expanded ParentNode jetzt dynamisch breiter wird (min 360px, max 500px), sollte `DETAIL_WIDTH` auf 500 erhöht werden, damit die Subcluster-Nodes nicht mit dem erweiterten Parent überlappen.
-
-```typescript
+```tsx
 // Vorher:
-const DETAIL_WIDTH = 360;
+className="... w-64 ..."
+style={{ transitionDelay: delayMs }}
 
 // Nachher:
-const DETAIL_WIDTH = 500;
+className="... ..."  // w-64 entfernt
+style={{ width: data.subWidth ?? 256, minWidth: 256, transitionDelay: delayMs }}
 ```
 
-### Zusammenfassung der Änderungen
+Die Breite kommt jetzt dynamisch aus `data.subWidth`, mit 256px als Fallback und Mindestbreite.
 
-| Was | Wo (Zeile ca.) | Änderung |
-|---|---|---|
-| Demand-Zahl `shrink-0` | 118, 181 | `<span className="shrink-0 tabular-nums">` |
-| SubclusterNode Breite | 161 | `w-64` → `min-w-[16rem] w-max max-w-[28rem]` |
-| ParentNode expanded Breite | 94 | `w-[360px]` → `min-w-[360px] w-max max-w-[500px]` |
-| ParentNode compact Breite | 134 | **Nicht ändern** (bleibt `w-[280px]`) |
-| `DETAIL_WIDTH` Konstante | 58 | `360` → `500` |
-| `SUB_WIDTH` für Dagre | 60 | `260` → `448` |
-| Dagre setNode | 281 | Nutzt neuen `SUB_WIDTH` automatisch |
+### Warum dieser Ansatz
+
+- **Minimaler Eingriff:** Nur die SubclusterNode-Breite und Dagre-Konfiguration wurden angepasst.
+- **Abwärtskompatibel:** Subclusters mit kurzen Keywords sehen exakt wie vorher aus (256px).
+- **Kein Layout-Bruch:** Dagre berücksichtigt die individuelle Breite, kein Überlappen.
+- **ExternalBadge-aware:** Die Breitenberechnung addiert 20px wenn ein Upload-Keyword vorhanden ist.
+
+### Was bewusst **nicht** geändert wurde
+
+- Keine Änderung an ParentNode-Breiten (`PARENT_WIDTH`, `DETAIL_WIDTH`).
+- Keine Änderung an der Keyword-Zeilen-Flex-Struktur (der Fix aus `9948c70` bleibt erhalten).
+- Keine Änderung an API, TypeScript-Types oder Prisma-Schema.
 
 ### Verifikation
 
-1. Cluster mit kurzen Keywords (z.B. "SEO", "SEM") → Nodes behalten Mindestbreite, sehen aus wie vorher
-2. Cluster mit langen Keywords (z.B. "macbook pro 16 zoll 2024 kaufen günstig") → Node wird breiter, Demand-Zahl bleibt sichtbar
-3. Cluster mit "E"-Badge + langem Keyword → Badge + Text + Demand alle sichtbar
-4. Focus-Mode: Expanded Parent und Subclusters überlappen nicht
-5. Overview-Grid: Compact Parent-Cards behalten ihr regelmäßiges Raster
+- **Technisch:** `npm run lint` erfolgreich (keine ESLint-Fehler/Warnungen).
+- **Manuelle UI-QA:** Im Browser prüfen mit kurzen und langen Keywords, mit/ohne ExternalBadge.
