@@ -523,6 +523,9 @@ export async function runSerpClustering(params: {
   userId: string;
   accessToken?: string;
   gscSiteUrl?: string;
+  keywordScopeMode?: "project" | "upload_source";
+  uploadSourceId?: string;
+  groupIntoParents?: boolean;
   minDemand?: number;
   overlapThreshold?: number;
   topResults?: number;
@@ -536,6 +539,9 @@ export async function runSerpClustering(params: {
     userId,
     accessToken,
     gscSiteUrl,
+    keywordScopeMode = "project",
+    uploadSourceId,
+    groupIntoParents = false,
     minDemand = 5,
     overlapThreshold = 0.3,
     topResults = 10,
@@ -560,7 +566,30 @@ export async function runSerpClustering(params: {
   let resolvedKeywordCount = 0;
   let usedKeywordCount = 0;
   let waveCount = 0;
-  let promptModel: string | null = process.env.OPENAI_API_KEY ? DEFAULT_MODEL : null;
+  let promptModel: string | null = null;
+
+  const eligibleKeywordWhere =
+    keywordScopeMode === "upload_source" && uploadSourceId
+      ? {
+          projectId,
+          sourceMetrics: { some: { sourceId: uploadSourceId } },
+          OR: [
+            { demand: { demandMonthly: { gte: minDemand } } },
+            {
+              sourceMetrics: {
+                some: {
+                  sourceId: uploadSourceId,
+                  sistrixVolume: null,
+                  impressions: null
+                }
+              }
+            }
+          ]
+        }
+      : {
+          projectId,
+          demand: { demandMonthly: { gte: minDemand } }
+        };
 
   try {
     await updateStatus("running", {
@@ -571,10 +600,10 @@ export async function runSerpClustering(params: {
     });
     // ── Phase 1: Auto-import GSC data if needed ──
     const kwCount = await prisma.keyword.count({
-      where: { projectId, demand: { demandMonthly: { gte: minDemand } } }
+      where: eligibleKeywordWhere
     });
 
-    if (kwCount === 0 && accessToken && gscSiteUrl) {
+    if (kwCount === 0 && keywordScopeMode === "project" && accessToken && gscSiteUrl) {
       await updateStatus("importing_gsc");
 
       const to = new Date();
@@ -613,7 +642,7 @@ export async function runSerpClustering(params: {
 
     // ── Phase 2: Query keywords ──
     const eligibleKeywords = await prisma.keyword.findMany({
-      where: { projectId, demand: { demandMonthly: { gte: minDemand } } },
+      where: eligibleKeywordWhere,
       include: { demand: true }
     });
     if (!eligibleKeywords.length) throw new Error("NO_KEYWORDS");
@@ -756,20 +785,25 @@ export async function runSerpClustering(params: {
 
     const subclusters: ClusteredSubcluster[] = clustered.map((s) => ({ ...s, id: nanoid() }));
 
-    // ── Phase 5: Map parents with LLM ──
-    await updateStatus("mapping_parents", {
-      zyteRequested,
-      zyteSucceeded,
-      zyteCached,
-      missingSnapshotCount,
-      fetchedMissingCount,
-      eligibleKeywordCount,
-      resolvedKeywordCount,
-      usedKeywordCount,
-      waveCount
-    });
-    const parents = await mapParentsWithLlm(subclusters);
-    promptModel = process.env.OPENAI_API_KEY ? DEFAULT_MODEL : null;
+    // ── Phase 5: Optional parent grouping ──
+    const parents = groupIntoParents
+      ? await (async () => {
+          await updateStatus("mapping_parents", {
+            zyteRequested,
+            zyteSucceeded,
+            zyteCached,
+            missingSnapshotCount,
+            fetchedMissingCount,
+            eligibleKeywordCount,
+            resolvedKeywordCount,
+            usedKeywordCount,
+            waveCount
+          });
+          const mappedParents = await mapParentsWithLlm(subclusters);
+          promptModel = process.env.OPENAI_API_KEY ? DEFAULT_MODEL : null;
+          return mappedParents;
+        })()
+      : [];
 
     // ── Phase 6: Persist results ──
     await prisma.$transaction(async (tx) => {
@@ -908,31 +942,81 @@ export async function getSerpClusters(runId: string, minDemand?: number, project
   const missing = Math.max(found - resolved, 0);
   const complete = found > 0 && used >= found && missing === 0 && run.status === "completed";
 
-  const parents = await prisma.serpParentCluster.findMany({
+  const subclusterRows = await prisma.serpSubcluster.findMany({
     where: { projectId: run.projectId, runId: run.id, totalDemand: { gte: effectiveMinDemand } },
     include: {
-      subclusters: {
+      members: {
         include: {
-          subcluster: {
+          keyword: {
             include: {
-              members: {
-                include: {
-                  keyword: {
-                    include: {
-                      demand: true,
-                      sourceMetrics: {
-                        select: {
-                          kd: true,
-                          source: { select: { type: true } }
-                        }
-                      }
-                    }
-                  }
+              demand: true,
+              sourceMetrics: {
+                select: {
+                  kd: true,
+                  source: { select: { type: true } }
                 }
               }
             }
           }
         }
+      },
+      parents: {
+        include: {
+          parent: {
+            select: {
+              id: true,
+              name: true,
+              totalDemand: true,
+              keywordCount: true,
+              topDomainsJson: true
+            }
+          }
+        }
+      }
+    },
+    orderBy: [{ totalDemand: "desc" }, { name: "asc" }]
+  });
+
+  const subclusters = subclusterRows.map((s) => {
+    const parent = s.parents[0]?.parent;
+    const members = s.members.map((m) => {
+      const uploadDifficulty = m.keyword.sourceMetrics.reduce<number | null>((best, metric) => {
+        if (metric.source.type !== "upload" || metric.kd === null) return best;
+        return best === null ? metric.kd : Math.max(best, metric.kd);
+      }, null);
+      return {
+        id: m.keywordId,
+        kwRaw: m.keyword.kwRaw,
+        demandMonthly: m.keyword.demand?.demandMonthly ?? 0,
+        demandSource: m.keyword.demand?.demandSource ?? "none",
+        difficultyScore: uploadDifficulty
+      };
+    });
+
+    return {
+      id: s.id,
+      name: s.name,
+      totalDemand: s.totalDemand,
+      keywordCount: s.keywordCount,
+      topDomains: s.topDomainsJson ? (JSON.parse(s.topDomainsJson) as string[]) : [],
+      topUrls: s.topUrlsJson ? (JSON.parse(s.topUrlsJson) as string[]) : [],
+      overlapScore: s.overlapScore ?? null,
+      keywordIds: members.map((m) => m.id),
+      keywords: members,
+      parentId: parent?.id ?? null,
+      parentName: parent?.name ?? null,
+      parentTotalDemand: parent?.totalDemand ?? null,
+      parentKeywordCount: parent?.keywordCount ?? null
+    };
+  });
+
+  const subclusterById = new Map(subclusters.map((subcluster) => [subcluster.id, subcluster]));
+
+  const parentRows = await prisma.serpParentCluster.findMany({
+    where: { projectId: run.projectId, runId: run.id, totalDemand: { gte: effectiveMinDemand } },
+    include: {
+      subclusters: {
+        select: { subclusterId: true }
       }
     },
     orderBy: [{ totalDemand: "desc" }, { name: "asc" }]
@@ -956,39 +1040,17 @@ export async function getSerpClusters(runId: string, minDemand?: number, project
       missing,
       complete
     },
-    parents: parents.map((p) => ({
+    parentClustersAvailable: parentRows.length > 0,
+    subclusters,
+    parents: parentRows.map((p) => ({
       id: p.id,
       name: p.name,
       totalDemand: p.totalDemand,
       keywordCount: p.keywordCount,
       topDomains: p.topDomainsJson ? (JSON.parse(p.topDomainsJson) as string[]) : [],
-      subclusters: p.subclusters.map((psc) => {
-        const s = psc.subcluster;
-        const members = s.members.map((m) => {
-          const uploadDifficulty = m.keyword.sourceMetrics.reduce<number | null>((best, metric) => {
-            if (metric.source.type !== "upload" || metric.kd === null) return best;
-            return best === null ? metric.kd : Math.max(best, metric.kd);
-          }, null);
-          return {
-            id: m.keywordId,
-            kwRaw: m.keyword.kwRaw,
-            demandMonthly: m.keyword.demand?.demandMonthly ?? 0,
-            demandSource: m.keyword.demand?.demandSource ?? "none",
-            difficultyScore: uploadDifficulty
-          };
-        });
-        return {
-          id: s.id,
-          name: s.name,
-          totalDemand: s.totalDemand,
-          keywordCount: s.keywordCount,
-          topDomains: s.topDomainsJson ? (JSON.parse(s.topDomainsJson) as string[]) : [],
-          topUrls: s.topUrlsJson ? (JSON.parse(s.topUrlsJson) as string[]) : [],
-          overlapScore: s.overlapScore ?? null,
-          keywordIds: members.map((m) => m.id),
-          keywords: members
-        };
-      })
+      subclusters: p.subclusters
+        .map((psc) => subclusterById.get(psc.subclusterId))
+        .filter((subcluster): subcluster is NonNullable<typeof subcluster> => Boolean(subcluster))
     }))
   };
 }

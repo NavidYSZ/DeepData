@@ -68,6 +68,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     importId: source.id,
     sourceId: source.id,
+    sourceName: source.name,
     headers,
     detectedColumns,
     previewRows

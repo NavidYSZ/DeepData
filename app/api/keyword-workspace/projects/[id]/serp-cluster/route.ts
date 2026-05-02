@@ -25,6 +25,14 @@ export async function GET(req: Request, ctx: { params: { id: string } }) {
   const data = parsed.data.runId
     ? await getSerpClusters(parsed.data.runId, parsed.data.minDemand, ctx.params.id)
     : await getLatestSerpClusters(ctx.params.id, parsed.data.minDemand ?? 5);
-  if (!data) return NextResponse.json({ runId: null, parents: [], generatedAt: null });
+  if (!data) {
+    return NextResponse.json({
+      runId: null,
+      generatedAt: null,
+      parentClustersAvailable: false,
+      subclusters: [],
+      parents: []
+    });
+  }
   return NextResponse.json(data);
 }

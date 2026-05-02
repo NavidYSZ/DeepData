@@ -13,6 +13,7 @@ import {
 
 const schema = z.object({
   keywordColumn: z.string(),
+  importMode: z.enum(["merge", "upload_only"]).default("merge"),
   volumeColumn: z.string().optional(),
   impressionsColumn: z.string().optional(),
   clicksColumn: z.string().optional(),
@@ -50,6 +51,7 @@ export async function POST(_req: Request, ctx: { params: { importId: string } })
   // Save the confirmed mapping
   meta.mapping = {
     keywordColumn: body.keywordColumn,
+    importMode: body.importMode,
     volumeColumn: body.volumeColumn,
     impressionsColumn: body.impressionsColumn,
     clicksColumn: body.clicksColumn,
@@ -59,6 +61,7 @@ export async function POST(_req: Request, ctx: { params: { importId: string } })
     kdColumn: body.kdColumn,
     mappingVersion: 1
   };
+  meta.importMode = body.importMode;
 
   await prisma.keywordSource.update({
     where: { id: source.id },
@@ -113,6 +116,9 @@ export async function POST(_req: Request, ctx: { params: { importId: string } })
 
   return NextResponse.json({
     importId: source.id,
+    sourceId: source.id,
+    sourceName: source.name,
+    importMode: body.importMode,
     status: "INGESTED",
     rowCount: metricRows.length
   });

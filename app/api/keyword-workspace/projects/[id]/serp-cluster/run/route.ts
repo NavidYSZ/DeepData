@@ -11,6 +11,9 @@ const bodySchema = z.object({
   forceRefetch: z.boolean().optional(),
   minDemand: z.coerce.number().optional(),
   overlapThreshold: z.coerce.number().optional(),
+  keywordScopeMode: z.enum(["project", "upload_source"]).optional(),
+  uploadSourceId: z.string().optional(),
+  groupIntoParents: z.boolean().optional(),
   topResults: z
     .union([z.literal(7), z.literal(10), z.enum(["7", "10"]).transform((v) => Number(v))])
     .optional(),
@@ -35,6 +38,24 @@ export async function POST(req: Request, ctx: { params: { id: string } }) {
     where: { id: projectId, userId }
   });
   if (!project) return err("PROJECT_NOT_FOUND", "Project not found", {}, 404);
+
+  if (parsed.data.keywordScopeMode === "upload_source") {
+    if (!parsed.data.uploadSourceId) {
+      return err("INVALID_BODY", "uploadSourceId is required for upload_source scope");
+    }
+
+    const uploadSource = await prisma.keywordSource.findFirst({
+      where: {
+        id: parsed.data.uploadSourceId,
+        projectId,
+        type: "upload"
+      }
+    });
+
+    if (!uploadSource) {
+      return err("SOURCE_NOT_FOUND", "Upload source not found", { sourceId: parsed.data.uploadSourceId }, 404);
+    }
+  }
 
   // Get access token while we still have request context (cookies)
   let accessToken: string | undefined;
