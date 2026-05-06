@@ -1,4 +1,4 @@
-import { InternalLinkAnalysis } from "@/components/crawl/internal-link-analysis";
+import { InternalLinkAnalysis } from "@/components/internal-links/internal-link-analysis";
 
 export default function InternalLinksPage() {
   return <InternalLinkAnalysis />;
