@@ -1,6 +1,13 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export default function HomePage() {
+  redirect("/dashboard");
+}
+
+// Landing page kept for the future login flow. Not currently rendered — to
+// bring it back, replace the redirect above with `return <Landing />`.
+function Landing() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background">
       <div className="max-w-md space-y-4 text-center">

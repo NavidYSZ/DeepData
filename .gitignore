@@ -12,3 +12,8 @@ prisma/data/sqlite.db-journal
 data/agent-files
 pnpm-lock.yaml
 yarn.lock
+deployment*.txt
+deployment logs/
+.omx/
+tsconfig.tsbuildinfo
+*.html
