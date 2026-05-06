@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { History, LayoutDashboard, Search } from "lucide-react";
+import { History, LayoutDashboard, Network, Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const items = [
   { href: "/crawl", label: "Dashboard", icon: LayoutDashboard },
   { href: "/crawl/crawler", label: "Crawler", icon: Search },
-  { href: "/crawl/changes", label: "Changes", icon: History }
+  { href: "/crawl/changes", label: "Changes", icon: History },
+  { href: "/crawl/internal-links", label: "Internal Links", icon: Network }
 ];
 
 export function CrawlSectionNav() {
