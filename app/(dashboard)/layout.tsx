@@ -14,6 +14,7 @@ const pageTitles: Record<string, string> = {
   "/data-explorer": "Data Explorer",
   "/kannibalisierung": "Kannibalisierung",
   "/top-mover": "Top Mover",
+  "/internal-links": "Internal Links",
   "/seo-bubble": "Position vs CTR",
   "/chat-agent": "Chat Agent",
   "/keyword-workspace": "Clustering",

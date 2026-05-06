@@ -12,7 +12,8 @@ import {
   MessageSquare,
   Settings,
   Network,
-  Search
+  Search,
+  Waypoints
 } from "lucide-react";
 
 import {
@@ -46,6 +47,7 @@ const navGroups = [
       { href: "/seo-bubble", label: "Position vs CTR", icon: Sparkles },
       { href: "/kannibalisierung", label: "Kannibalisierung", icon: GitMerge },
       { href: "/top-mover", label: "Top Mover", icon: ArrowUpDown },
+      { href: "/internal-links", label: "Internal Links", icon: Waypoints },
       { href: "/chat-agent", label: "Chat Agent", icon: MessageSquare }
     ]
   },
