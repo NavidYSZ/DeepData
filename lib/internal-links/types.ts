@@ -68,15 +68,49 @@ export interface OpportunityRow {
 }
 
 // Pre-computed recommendation a user can act on. Generated deterministically
-// from the inlink graph + anchor stats — no LLM required.
+// from the inlink graph + anchor stats — no LLM required. Field semantics are
+// kept plain-language so the UI can render them verbatim:
+//   action      = the imperative ("Verlinke von der Übersichtsseite")
+//   sourceUrl   = which page should hold the new/changed link
+//   oldAnchor   = the anchor text to replace, if any
+//   newAnchor   = the anchor text to use instead
+//   why         = a one-sentence reason for the recommendation
 export interface LinkRecommendation {
   id: string;
   targetId: string;
   kind: "add_hub_link" | "replace_generic_anchor" | "cross_link_peer" | "fix_image_alt";
   priority: "high" | "medium" | "low";
-  title: string;
-  description: string;
+  action: string;
+  why: string;
   sourceUrl?: string;
   oldAnchor?: string;
-  newAnchorSuggestions?: string[];
+  newAnchor?: string;
+}
+
+// Snapshot-level stat used by the Executive Dashboard view. Computed in one
+// pass over the opportunity rows so the UI does not need to know the formula.
+export interface ExecutiveKpis {
+  // Pages that already rank inside reachable territory but have a real link
+  // deficit — i.e. the "quick_win" category.
+  highPriorityCount: number;
+  // Estimated additional monthly clicks if every quick-win URL gained the
+  // realistic CTR uplift from a small position improvement.
+  estimatedClicksPotential: number;
+  // Share of all internal links whose anchor is generic / empty / image
+  // without alt — the easy rewrites.
+  weakAnchorPct: number;
+  // Indexable URLs with 0–2 incoming internal links.
+  nearOrphanCount: number;
+}
+
+// Inbound-link record used by the URL Inspector modal so it can show the full
+// anchor distribution per target without re-querying.
+export interface InboundLink {
+  sourceId: string;
+  sourceUrl: string;
+  anchorText: string;
+  anchorClass: AnchorClass;
+  placement: LinkPlacement;
+  isContextual: boolean;
+  isNofollow: boolean;
 }

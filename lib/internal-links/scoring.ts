@@ -1,5 +1,6 @@
 import type {
   AnchorClass,
+  ExecutiveKpis,
   InternalLink,
   LinkRecommendation,
   OpportunityRow,
@@ -210,7 +211,9 @@ export function scoreOpportunities(
 }
 
 // Heuristic recommendations from the scored row + raw inlink list. No LLM —
-// each rule fires on a measurable condition.
+// each rule fires on a measurable condition. Copy is intentionally plain so
+// the UI can render `action` / `why` / `sourceUrl` / `oldAnchor` / `newAnchor`
+// verbatim without further translation.
 export function buildRecommendations(
   row: OpportunityRow,
   allSnapshots: UrlSnapshot[],
@@ -219,10 +222,9 @@ export function buildRecommendations(
   const recs: LinkRecommendation[] = [];
   const targetLinks = allLinks.filter((l) => l.targetId === row.snapshot.id);
   const sourceIdSet = new Set(targetLinks.map((l) => l.sourceId));
+  const targetAnchor = row.snapshot.h1 ?? row.snapshot.title.split("|")[0].trim();
 
-  // Rule 1: a hub in the same cluster has no useful contextual link here. Fires
-  // both when the hub link is missing and when it exists only with a weak
-  // anchor (generic/empty/image-no-alt) — both cases waste hub authority.
+  // Rule 1: a hub in the same cluster has no useful contextual link here.
   const hub = allSnapshots.find(
     (s) => s.cluster === row.snapshot.cluster && s.pageType === "hub" && s.id !== row.snapshot.id
   );
@@ -237,18 +239,21 @@ export function buildRecommendations(
         l.anchorClass !== "image_no_alt"
     );
     if (!hasUsefulHubLink) {
-      const hubHasWeakLink = hubLinks.some((l) => l.isContextual);
+      const weakHubLink = hubLinks.find((l) => l.isContextual);
       recs.push({
         id: `${row.snapshot.id}-hub`,
         targetId: row.snapshot.id,
         kind: "add_hub_link",
         priority: "high",
-        title: hubHasWeakLink ? "Hub-Anchor stärken" : "Hub-Link ergänzen",
-        description: hubHasWeakLink
-          ? `Hub-Link existiert, aber mit schwachem Anchor — auf Keyword-Variante umstellen.`
-          : `Von ${hub.url} mit spezifischem Anchor verlinken.`,
+        action: weakHubLink
+          ? "Anchor auf der Übersichtsseite austauschen"
+          : "Link von der Übersichtsseite setzen",
+        why: weakHubLink
+          ? "Auf der wichtigsten Übersichtsseite des Themas zeigt der Link aktuell mit einem schwachen Ankertext hierhin — der gibt kaum Signal."
+          : "Die wichtigste Übersichtsseite des Themas verlinkt hier nicht im Inhalt — die Autorität bleibt ungenutzt.",
         sourceUrl: hub.url,
-        newAnchorSuggestions: [row.snapshot.h1 ?? row.snapshot.title].filter(Boolean) as string[]
+        oldAnchor: weakHubLink?.anchorText,
+        newAnchor: targetAnchor
       });
     }
   }
@@ -264,14 +269,11 @@ export function buildRecommendations(
       targetId: row.snapshot.id,
       kind: "replace_generic_anchor",
       priority: row.anchorHealth < 40 ? "high" : "medium",
-      title: "Generic Anchor ersetzen",
-      description: `„${genericLink.anchorText || "leerer Anchor"}“ verschenkt Kontext.`,
+      action: "Schwachen Ankertext ersetzen",
+      why: `„${genericLink.anchorText || "(leer)"}" sagt Suchmaschinen nichts über das Linkziel — ein konkreter Anker wirkt direkt.`,
       sourceUrl: sourceSnap?.url,
       oldAnchor: genericLink.anchorText,
-      newAnchorSuggestions: [
-        row.snapshot.h1 ?? row.snapshot.title,
-        row.snapshot.title.split("|")[0].trim()
-      ].filter((v, i, a) => v && a.indexOf(v) === i) as string[]
+      newAnchor: targetAnchor
     });
   }
 
@@ -292,9 +294,10 @@ export function buildRecommendations(
       targetId: row.snapshot.id,
       kind: "cross_link_peer",
       priority: "medium",
-      title: "Peer-Seite verbinden",
-      description: `${peer.title} liegt im gleichen Themenbereich. Querverlinkung stärkt das Silo.`,
-      sourceUrl: peer.url
+      action: "Querverlinkung von einer verwandten Seite setzen",
+      why: `${peer.title} behandelt ein eng verwandtes Thema und linkt aktuell nicht hierhin — die thematische Nähe ist ein einfacher zusätzlicher Linkpfad.`,
+      sourceUrl: peer.url,
+      newAnchor: targetAnchor
     });
   }
 
@@ -307,12 +310,65 @@ export function buildRecommendations(
       targetId: row.snapshot.id,
       kind: "fix_image_alt",
       priority: "medium",
-      title: "Bildlink Alt-Text ergänzen",
-      description: "Ein Bildlink zu dieser Seite hat keinen beschreibenden Alt-Text.",
+      action: "Alt-Text am Bildlink ergänzen",
+      why: "Ein Bildlink hierhin hat keinen Alt-Text — ohne Alt-Text gibt es null Anker-Signal an Suchmaschinen.",
       sourceUrl: sourceSnap?.url,
-      newAnchorSuggestions: [row.snapshot.h1 ?? row.snapshot.title].filter(Boolean) as string[]
+      newAnchor: targetAnchor
     });
   }
 
   return recs;
+}
+
+// Approximate Google-search CTR curve for a given average position. Used by
+// the executive KPI calculation; deliberately a single global curve since we
+// have no per-keyword signal at this stage.
+function ctrAtPosition(pos: number): number {
+  if (!Number.isFinite(pos) || pos <= 0) return 0;
+  if (pos <= 1) return 0.32;
+  if (pos <= 2) return 0.18;
+  if (pos <= 3) return 0.12;
+  if (pos <= 5) return 0.08;
+  if (pos <= 10) return 0.04;
+  if (pos <= 20) return 0.015;
+  return 0.005;
+}
+
+// Roll-up KPIs used by the Executive Dashboard view. Estimated clicks
+// potential is the additional monthly clicks every quick-win URL would gain
+// if it improved its average position by three slots — a deliberate
+// undercount, since not every URL can move that far, but it gives a
+// defensible "money-on-the-table" number.
+export function computeExecutiveKpis(rows: OpportunityRow[]): ExecutiveKpis {
+  const highPriorityCount = rows.filter((r) => r.category === "quick_win").length;
+  const nearOrphanCount = rows.filter(
+    (r) => r.snapshot.indexable && r.totalInlinks <= 2
+  ).length;
+
+  let weightedWeak = 0;
+  let totalLinks = 0;
+  for (const row of rows) {
+    const weakPct =
+      row.anchorBreakdown.generic +
+      row.anchorBreakdown.empty +
+      row.anchorBreakdown.image_no_alt;
+    weightedWeak += (weakPct / 100) * row.totalInlinks;
+    totalLinks += row.totalInlinks;
+  }
+  const weakAnchorPct = totalLinks > 0 ? Math.round((weightedWeak / totalLinks) * 100) : 0;
+
+  let estimatedClicksPotential = 0;
+  for (const row of rows) {
+    if (row.category !== "quick_win") continue;
+    const targetPos = Math.max(1, row.snapshot.position - 3);
+    const lift = ctrAtPosition(targetPos) - ctrAtPosition(row.snapshot.position);
+    if (lift > 0) estimatedClicksPotential += row.snapshot.impressions * lift;
+  }
+
+  return {
+    highPriorityCount,
+    nearOrphanCount,
+    weakAnchorPct,
+    estimatedClicksPotential: Math.round(estimatedClicksPotential)
+  };
 }

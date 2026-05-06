@@ -5,11 +5,14 @@ import { resolveUserSiteAccess } from "@/lib/gsc-access";
 
 import { crawl, type CrawlOptions } from "./crawler";
 import { fetchPageMetrics } from "./gsc-sync";
-import { buildRecommendations, scoreOpportunities } from "./scoring";
+import { buildRecommendations, computeExecutiveKpis, scoreOpportunities } from "./scoring";
 import type {
   AnchorClass,
+  ExecutiveKpis,
+  InboundLink,
   InternalLink,
   LinkPlacement,
+  LinkRecommendation,
   OpportunityRow,
   PageType,
   UrlSnapshot
@@ -145,9 +148,15 @@ export async function listRunsForUser(userId: string): Promise<CrawlRunSummary[]
   return runs.map(toSummary);
 }
 
+export interface OpportunityWithDetails extends OpportunityRow {
+  recommendations: LinkRecommendation[];
+  inboundLinks: InboundLink[];
+}
+
 export interface OpportunitiesPayload {
   run: CrawlRunSummary;
-  opportunities: Array<OpportunityRow & { recommendations: ReturnType<typeof buildRecommendations> }>;
+  kpis: ExecutiveKpis;
+  opportunities: OpportunityWithDetails[];
 }
 
 // Loads a single run from the DB and runs scoring + recommendations against
@@ -190,12 +199,27 @@ export async function loadOpportunitiesForRun(
   }));
 
   const rows = scoreOpportunities(snapshots, links);
-  const opportunities = rows.map((row) => ({
-    ...row,
-    recommendations: buildRecommendations(row, snapshots, links)
-  }));
+  const snapshotById = new Map(snapshots.map((s) => [s.id, s]));
+  const opportunities: OpportunityWithDetails[] = rows.map((row) => {
+    const inboundLinks: InboundLink[] = links
+      .filter((l) => l.targetId === row.snapshot.id)
+      .map((l) => ({
+        sourceId: l.sourceId,
+        sourceUrl: snapshotById.get(l.sourceId)?.url ?? "",
+        anchorText: l.anchorText,
+        anchorClass: l.anchorClass,
+        placement: l.placement,
+        isContextual: l.isContextual,
+        isNofollow: l.isNofollow
+      }));
+    return {
+      ...row,
+      recommendations: buildRecommendations(row, snapshots, links),
+      inboundLinks
+    };
+  });
 
-  return { run: toSummary(run), opportunities };
+  return { run: toSummary(run), kpis: computeExecutiveKpis(rows), opportunities };
 }
 
 function toSummary(run: {
