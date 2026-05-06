@@ -226,19 +226,62 @@ export function InternalLinkAnalysis() {
 
   const [view, setView] = useState<"executive" | "matrix">("executive");
   const [clusterFilter, setClusterFilter] = useState<string>("all");
+  const [minClicks, setMinClicks] = useState("");
+  const [minImpressions, setMinImpressions] = useState("");
+  const [containsInput, setContainsInput] = useState("");
+  const [excludeInput, setExcludeInput] = useState("");
 
   const clusters = useMemo(() => {
     const set = new Set(opportunities.map((o) => o.snapshot.cluster));
     return Array.from(set).sort();
   }, [opportunities]);
 
-  const filtered = useMemo(
-    () =>
-      clusterFilter === "all"
-        ? opportunities
-        : opportunities.filter((row) => row.snapshot.cluster === clusterFilter),
-    [opportunities, clusterFilter]
-  );
+  const filtered = useMemo(() => {
+    const containsTerms = containsInput
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const excludeTerms = excludeInput
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const minClicksNum = Number.parseInt(minClicks, 10);
+    const minImpressionsNum = Number.parseInt(minImpressions, 10);
+
+    return opportunities.filter((row) => {
+      if (clusterFilter !== "all" && row.snapshot.cluster !== clusterFilter) return false;
+      if (Number.isFinite(minClicksNum) && row.snapshot.clicks < minClicksNum) return false;
+      if (Number.isFinite(minImpressionsNum) && row.snapshot.impressions < minImpressionsNum) {
+        return false;
+      }
+      if (containsTerms.length === 0 && excludeTerms.length === 0) return true;
+      // Match against URL + title + H1 — anything visually associated with the
+      // page in the UI also matches when the user types it into the filter.
+      const haystack = `${row.snapshot.url} ${row.snapshot.title} ${row.snapshot.h1 ?? ""}`.toLowerCase();
+      if (containsTerms.length > 0 && !containsTerms.some((t) => haystack.includes(t))) {
+        return false;
+      }
+      if (excludeTerms.length > 0 && excludeTerms.some((t) => haystack.includes(t))) {
+        return false;
+      }
+      return true;
+    });
+  }, [opportunities, clusterFilter, minClicks, minImpressions, containsInput, excludeInput]);
+
+  const hasActiveFilters =
+    clusterFilter !== "all" ||
+    minClicks !== "" ||
+    minImpressions !== "" ||
+    containsInput !== "" ||
+    excludeInput !== "";
+
+  function resetFilters() {
+    setClusterFilter("all");
+    setMinClicks("");
+    setMinImpressions("");
+    setContainsInput("");
+    setExcludeInput("");
+  }
 
   const [modalId, setModalId] = useState<string | null>(null);
   const modalRow = filtered.find((r) => r.snapshot.id === modalId) ?? null;
@@ -398,26 +441,23 @@ export function InternalLinkAnalysis() {
           <>
             <KpiStrip kpis={kpis} loading={opportunitiesLoading && !payload} />
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-sm text-muted-foreground">
-                {filtered.length} URLs · {clusterFilter === "all" ? "alle Cluster" : clusterFilter}
-              </div>
-              {clusters.length > 1 ? (
-                <Select value={clusterFilter} onValueChange={setClusterFilter}>
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Cluster filtern" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Alle Cluster</SelectItem>
-                    {clusters.map((cluster) => (
-                      <SelectItem key={cluster} value={cluster}>
-                        {cluster}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : null}
-            </div>
+            <FilterBar
+              clusters={clusters}
+              clusterFilter={clusterFilter}
+              setClusterFilter={setClusterFilter}
+              minClicks={minClicks}
+              setMinClicks={setMinClicks}
+              minImpressions={minImpressions}
+              setMinImpressions={setMinImpressions}
+              containsInput={containsInput}
+              setContainsInput={setContainsInput}
+              excludeInput={excludeInput}
+              setExcludeInput={setExcludeInput}
+              filteredCount={filtered.length}
+              totalCount={opportunities.length}
+              hasActiveFilters={hasActiveFilters}
+              onReset={resetFilters}
+            />
 
             {view === "executive" ? (
               <PrioritisedTable rows={filtered} onSelect={(id) => setModalId(id)} />
@@ -469,6 +509,132 @@ function ViewSwitch({
         <ScatterChart className="h-3.5 w-3.5" />
         Matrix
       </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filter bar
+
+function FilterBar({
+  clusters,
+  clusterFilter,
+  setClusterFilter,
+  minClicks,
+  setMinClicks,
+  minImpressions,
+  setMinImpressions,
+  containsInput,
+  setContainsInput,
+  excludeInput,
+  setExcludeInput,
+  filteredCount,
+  totalCount,
+  hasActiveFilters,
+  onReset
+}: {
+  clusters: string[];
+  clusterFilter: string;
+  setClusterFilter: (v: string) => void;
+  minClicks: string;
+  setMinClicks: (v: string) => void;
+  minImpressions: string;
+  setMinImpressions: (v: string) => void;
+  containsInput: string;
+  setContainsInput: (v: string) => void;
+  excludeInput: string;
+  setExcludeInput: (v: string) => void;
+  filteredCount: number;
+  totalCount: number;
+  hasActiveFilters: boolean;
+  onReset: () => void;
+}) {
+  return (
+    <Card className="bg-card/90">
+      <CardContent className="space-y-3 p-4">
+        <div className="grid gap-3 md:grid-cols-3">
+          <FilterField label="Cluster">
+            <Select value={clusterFilter} onValueChange={setClusterFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Alle Cluster" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle Cluster</SelectItem>
+                {clusters.map((cluster) => (
+                  <SelectItem key={cluster} value={cluster}>
+                    {cluster}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterField>
+          <FilterField label="Min. Clicks">
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              value={minClicks}
+              onChange={(e) => setMinClicks(e.target.value)}
+              placeholder="0"
+            />
+          </FilterField>
+          <FilterField label="Min. Impressions">
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              value={minImpressions}
+              onChange={(e) => setMinImpressions(e.target.value)}
+              placeholder="0"
+            />
+          </FilterField>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <FilterField label="URL/Titel enthält" hint="Mehrere Begriffe komma-getrennt — Treffer wenn mindestens einer matcht.">
+            <Input
+              value={containsInput}
+              onChange={(e) => setContainsInput(e.target.value)}
+              placeholder="produkte, ratgeber"
+            />
+          </FilterField>
+          <FilterField label="URL/Titel enthält NICHT" hint="Mehrere Begriffe komma-getrennt — Zeile fliegt raus, wenn einer matcht.">
+            <Input
+              value={excludeInput}
+              onChange={(e) => setExcludeInput(e.target.value)}
+              placeholder="archiv, alt"
+            />
+          </FilterField>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
+          <span>
+            <span className="font-semibold text-foreground">{filteredCount}</span> von{" "}
+            {totalCount} URLs
+          </span>
+          {hasActiveFilters ? (
+            <Button variant="ghost" size="sm" onClick={onReset} className="h-7 px-2 text-xs">
+              Filter zurücksetzen
+            </Button>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function FilterField({
+  label,
+  hint,
+  children
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+      {children}
+      {hint ? <p className="text-[10px] leading-snug text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }
