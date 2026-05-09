@@ -20,9 +20,8 @@ import type { DateRange } from "react-day-picker";
 import { formatRange, getLastNMonthsRange, rangeToIso } from "@/lib/date-range";
 import type { QueryRow } from "@/components/dashboard/queries-table";
 import { cn } from "@/lib/utils";
-import { daySpan, defaultImpressionThreshold } from "@/lib/gsc/aggregate";
+import { daySpan, defaultImpressionThreshold, dedupCannibalized } from "@/lib/gsc/aggregate";
 import { Input } from "@/components/ui/input";
-import { useGscAutoSync } from "@/hooks/use-gsc-sync";
 import { toast } from "sonner";
 import { Download } from "lucide-react";
 import { format } from "date-fns";
@@ -34,7 +33,6 @@ import * as XLSX from "xlsx";
 
 type Mode = "query" | "page";
 type CompareMode = "periods" | "days";
-type Metric = "visibility" | "position";
 
 interface MoverRow {
   label: string;
@@ -42,9 +40,7 @@ interface MoverRow {
   page: string;
   avgPos1: number;
   avgPos2: number;
-  delta: number; // negative = improvement (lower position OR more visibility)
-  visibility1: number;
-  visibility2: number;
+  delta: number;
   impressions: number;
   impressions1: number;
   impressions2: number;
@@ -55,80 +51,29 @@ interface MoverRow {
 /* ------------------------------------------------------------------ */
 
 const PAGE_SIZE = 25000;
+const MAX_ROWS = 125000;
 
-// Reads aggregated query/page metrics from the persisted GSC store. The
-// daily endpoint already does the impression-weighted aggregation on the
-// server side, so the client just maps the response.
-async function fetchPeriod(
-  siteUrl: string,
-  startDate: string,
-  endDate: string,
-  signal?: AbortSignal
-): Promise<QueryRow[]> {
-  const res = await fetch("/api/gsc/daily", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      siteUrl,
-      startDate,
-      endDate,
-      groupBy: "query_page",
-      limit: PAGE_SIZE
-    }),
-    signal
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `Request failed ${res.status}`);
+async function fetchAllRows(body: any, signal?: AbortSignal) {
+  let startRow = 0;
+  const rows: QueryRow[] = [];
+  while (startRow < MAX_ROWS) {
+    const res = await fetch("/api/gsc/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, startRow, pageSize: PAGE_SIZE }),
+      signal
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || `Request failed ${res.status}`);
+    }
+    const json = await res.json();
+    const batch: QueryRow[] = json.rows || [];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) break;
+    startRow += PAGE_SIZE;
   }
-  const json = await res.json();
-  return json.rows || [];
-}
-
-// Visibility uses its own server-side aggregation that joins the per-day
-// rows with the site's CTR curve. We get back one row per (query, page)
-// already containing both periods.
-interface VisibilityMoverApi {
-  query: string;
-  page: string;
-  visibility1: number;
-  visibility2: number;
-  delta: number;
-  position1: number;
-  position2: number;
-  impressions1: number;
-  impressions2: number;
-}
-
-async function fetchVisibilityMovers(
-  siteUrl: string,
-  p1Start: string,
-  p1End: string,
-  p2Start: string,
-  p2End: string,
-  minImpressions: number,
-  signal?: AbortSignal
-): Promise<VisibilityMoverApi[]> {
-  const res = await fetch("/api/gsc/visibility", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      mode: "movers",
-      siteUrl,
-      p1Start,
-      p1End,
-      p2Start,
-      p2End,
-      minImpressions
-    }),
-    signal
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `Request failed ${res.status}`);
-  }
-  const json = await res.json();
-  return json.rows || [];
+  return rows;
 }
 
 /* ------------------------------------------------------------------ */
@@ -226,7 +171,6 @@ function MoverList({
   color,
   onClick,
   mode,
-  metric,
   posLabel1 = "Pos P1",
   posLabel2 = "Pos P2"
 }: {
@@ -234,7 +178,6 @@ function MoverList({
   color: "green" | "red";
   onClick: (item: MoverRow) => void;
   mode: Mode;
-  metric: Metric;
   posLabel1?: string;
   posLabel2?: string;
 }) {
@@ -280,21 +223,21 @@ function MoverList({
               onResize={(w) => resize(2, w)}
               className="px-1.5 py-1.5 text-right font-medium"
             >
-              {metric === "visibility" ? "Vis. P1" : posLabel1}
+              {posLabel1}
             </ResizableTh>
             <ResizableTh
               width={colWidths[3]}
               onResize={(w) => resize(3, w)}
               className="px-1.5 py-1.5 text-right font-medium"
             >
-              {metric === "visibility" ? "Vis. P2" : posLabel2}
+              {posLabel2}
             </ResizableTh>
             <ResizableTh
               width={colWidths[4]}
               onResize={(w) => resize(4, w)}
               className="px-1.5 py-1.5 text-right font-medium"
             >
-              {metric === "visibility" ? "Δ Vis." : "Delta"}
+              Delta
             </ResizableTh>
             <ResizableTh
               width={colWidths[5]}
@@ -321,21 +264,11 @@ function MoverList({
               >
                 {mode === "query" ? toSlug(item.page) : item.query}
               </td>
-              <td
-                className="px-1.5 py-1.5 text-right tabular-nums"
-                title={metric === "visibility" ? `Position P1: ${item.avgPos1.toFixed(1)}` : undefined}
-              >
-                {metric === "visibility"
-                  ? Math.round(item.visibility1).toLocaleString("de-DE")
-                  : item.avgPos1.toFixed(1)}
+              <td className="px-1.5 py-1.5 text-right tabular-nums">
+                {item.avgPos1.toFixed(1)}
               </td>
-              <td
-                className="px-1.5 py-1.5 text-right tabular-nums"
-                title={metric === "visibility" ? `Position P2: ${item.avgPos2.toFixed(1)}` : undefined}
-              >
-                {metric === "visibility"
-                  ? Math.round(item.visibility2).toLocaleString("de-DE")
-                  : item.avgPos2.toFixed(1)}
+              <td className="px-1.5 py-1.5 text-right tabular-nums">
+                {item.avgPos2.toFixed(1)}
               </td>
               <td
                 className={cn(
@@ -343,9 +276,8 @@ function MoverList({
                   color === "green" ? "text-green-600" : "text-red-600"
                 )}
               >
-                {metric === "visibility"
-                  ? `${-item.delta > 0 ? "+" : ""}${Math.round(-item.delta).toLocaleString("de-DE")}`
-                  : `${-item.delta > 0 ? "+" : ""}${(-item.delta).toFixed(1)}`}
+                {-item.delta > 0 ? "+" : ""}
+                {(-item.delta).toFixed(1)}
               </td>
               <td
                 className="px-1.5 py-1.5 text-right tabular-nums text-muted-foreground"
@@ -369,7 +301,6 @@ export default function TopMoverPage() {
   const { site } = useSite();
   const [mode, setMode] = useState<Mode>("query");
   const [compareMode, setCompareMode] = useState<CompareMode>("periods");
-  const [metric, setMetric] = useState<Metric>("visibility");
   const [range, setRange] = useState<DateRange | undefined>(
     getLastNMonthsRange(3)
   );
@@ -379,10 +310,11 @@ export default function TopMoverPage() {
   const [error, setError] = useState<string | null>(null);
   const [rows1Data, setRows1Data] = useState<QueryRow[]>([]);
   const [rows2Data, setRows2Data] = useState<QueryRow[]>([]);
-  const [visibilityRows, setVisibilityRows] = useState<VisibilityMoverApi[]>([]);
   const [minImpressions, setMinImpressions] = useState<number | null>(null);
   const [thresholdTouched, setThresholdTouched] = useState(false);
-  const syncState = useGscAutoSync(site);
+  // Cannibalization tolerance: per keyword, only show pages whose position
+  // is within this many ranks of the best-ranking page. 0 = strict dedup.
+  const [cannibalTolerance, setCannibalTolerance] = useState<number>(0);
 
   // Modal state
   const [selectedMover, setSelectedMover] = useState<MoverRow | null>(null);
@@ -433,124 +365,57 @@ export default function TopMoverPage() {
 
   /* ---------- main data fetch ---------- */
 
-  // Don't try to read from the DB until either (a) data is fresh, (b) a
-  // background top-up is running on top of existing data, or (c) the initial
-  // backfill just finished. While the first-time sync is in flight there's
-  // simply nothing to render.
-  const dbReady =
-    syncState.status === "fresh" ||
-    syncState.status === "synced" ||
-    (syncState.status === "syncing" && syncState.backgroundOnly);
-
   useEffect(() => {
-    if (!site || !dbReady) return;
+    if (!site) return;
     const controller = new AbortController();
 
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        if (metric === "visibility") {
-          const rows = await fetchVisibilityMovers(
-            site,
-            periods.p1Start,
-            periods.p1End,
-            periods.p2Start,
-            periods.p2End,
-            effectiveThreshold,
+        const [r1, r2] = await Promise.all([
+          fetchAllRows(
+            {
+              siteUrl: site,
+              startDate: periods.p1Start,
+              endDate: periods.p1End,
+              dimensions: ["query", "page"],
+              rowLimit: PAGE_SIZE
+            },
             controller.signal
-          );
-          setVisibilityRows(rows);
-          setRows1Data([]);
-          setRows2Data([]);
-        } else {
-          const [r1, r2] = await Promise.all([
-            fetchPeriod(site, periods.p1Start, periods.p1End, controller.signal),
-            fetchPeriod(site, periods.p2Start, periods.p2End, controller.signal)
-          ]);
-          setRows1Data(r1);
-          setRows2Data(r2);
-          setVisibilityRows([]);
-        }
+          ),
+          fetchAllRows(
+            {
+              siteUrl: site,
+              startDate: periods.p2Start,
+              endDate: periods.p2End,
+              dimensions: ["query", "page"],
+              rowLimit: PAGE_SIZE
+            },
+            controller.signal
+          )
+        ]);
+        setRows1Data(r1);
+        setRows2Data(r2);
       } catch (err: any) {
         if (controller.signal.aborted) return;
         console.error(err);
         setError(err.message ?? "Fehler beim Laden");
         setRows1Data([]);
         setRows2Data([]);
-        setVisibilityRows([]);
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
     };
     load();
     return () => controller.abort();
-  }, [
-    site,
-    dbReady,
-    metric,
-    effectiveThreshold,
-    periods.p1Start,
-    periods.p1End,
-    periods.p2Start,
-    periods.p2End
-  ]);
+  }, [site, periods.p1Start, periods.p1End, periods.p2Start, periods.p2End]);
 
   /* ---------- mover calculation ---------- */
 
-  const { winners, losers, droppedLowEvidence } = useMemo(() => {
-    const groupKey = (c: MoverRow) => (mode === "query" ? c.query : c.page);
-
-    // Visibility path: server already filtered by minImpressions and computed
-    // the per-(query, page) deltas in expected-clicks. Negative delta = loss
-    // here is "lost expected clicks" which we sign-invert below so the
-    // existing UI (winners = green = improvements) stays correct.
-    if (metric === "visibility") {
-      const combos: MoverRow[] = visibilityRows.map((r) => ({
-        label: "",
-        query: r.query,
-        page: r.page,
-        avgPos1: r.position1,
-        avgPos2: r.position2,
-        // For visibility, "delta" semantics flip: a *positive* visibility
-        // delta is good. We store it as negative to keep the rest of the UI
-        // (sort, sign, color) using the same convention as positions, where
-        // negative delta = improvement. Cleaner than threading a sign flag.
-        delta: -(r.visibility2 - r.visibility1),
-        visibility1: r.visibility1,
-        visibility2: r.visibility2,
-        impressions: r.impressions1 + r.impressions2,
-        impressions1: r.impressions1,
-        impressions2: r.impressions2
-      }));
-
-      const winnerMap = new Map<string, MoverRow>();
-      const loserMap = new Map<string, MoverRow>();
-      combos.forEach((c) => {
-        const gk = groupKey(c);
-        const labeled: MoverRow = { ...c, label: gk };
-        if (c.delta < 0) {
-          const existing = winnerMap.get(gk);
-          if (!existing || c.delta < existing.delta) winnerMap.set(gk, labeled);
-        }
-        if (c.delta > 0) {
-          const existing = loserMap.get(gk);
-          if (!existing || c.delta > existing.delta) loserMap.set(gk, labeled);
-        }
-      });
-      return {
-        winners: [...winnerMap.values()]
-          .sort((a, b) => a.delta - b.delta)
-          .slice(0, 50),
-        losers: [...loserMap.values()]
-          .sort((a, b) => b.delta - a.delta)
-          .slice(0, 50),
-        droppedLowEvidence: 0 // server-side filter handles this
-      };
-    }
-
-    // Position path (legacy view kept for users who want raw positions):
+  const { winners, losers, droppedLowEvidence, droppedCannibal } = useMemo(() => {
     const makeKey = (q: string, p: string) => `${q}\0${p}`;
+
     const map1 = new Map<string, { position: number; impressions: number }>();
     rows1Data.forEach((r) => {
       map1.set(makeKey(r.keys[0], r.keys[1]), {
@@ -558,6 +423,7 @@ export default function TopMoverPage() {
         impressions: r.impressions
       });
     });
+
     const map2 = new Map<string, { position: number; impressions: number }>();
     rows2Data.forEach((r) => {
       map2.set(makeKey(r.keys[0], r.keys[1]), {
@@ -566,40 +432,67 @@ export default function TopMoverPage() {
       });
     });
 
-    let dropped = 0;
-    const combos: MoverRow[] = [];
+    // 1) Hard min-impressions filter — combos below the threshold in either
+    //    period don't enter the calculation at all (no warning markers, just
+    //    excluded). Dropped count surfaces in the UI so the user can tell
+    //    the filter is doing something.
+    let droppedLow = 0;
+    const survivors: MoverRow[] = [];
     for (const key of map1.keys()) {
       const p1 = map1.get(key)!;
       const p2 = map2.get(key);
       if (!p2) continue;
       if (p1.impressions < effectiveThreshold || p2.impressions < effectiveThreshold) {
-        dropped++;
+        droppedLow++;
         continue;
       }
       const [query, page] = key.split("\0");
-      combos.push({
+      survivors.push({
         label: "",
         query,
         page,
         avgPos1: p1.position,
         avgPos2: p2.position,
         delta: p2.position - p1.position,
-        visibility1: 0,
-        visibility2: 0,
         impressions: p1.impressions + p2.impressions,
         impressions1: p1.impressions,
         impressions2: p2.impressions
       });
     }
 
+    // 2) Cannibalization dedup — for each query, only keep pages whose
+    //    average position (across both periods, weighted by impressions)
+    //    is within `cannibalTolerance` of the best-ranking page.
+    //    Tolerance 0 = only the best page survives per keyword.
+    const beforeDedup = survivors.length;
+    const deduped = dedupCannibalized(
+      survivors,
+      cannibalTolerance,
+      (r) => r.query,
+      (r) => {
+        const totalImp = r.impressions1 + r.impressions2;
+        return totalImp > 0
+          ? (r.avgPos1 * r.impressions1 + r.avgPos2 * r.impressions2) / totalImp
+          : (r.avgPos1 + r.avgPos2) / 2;
+      }
+    );
+    const droppedCannib = beforeDedup - deduped.length;
+
+    // 3) Group by mode dimension. Score = |delta| × log10(total impressions),
+    //    so a 0.5-position move with 10k impressions beats a 30-position move
+    //    with 50 impressions.
     const score = (c: MoverRow) =>
       Math.abs(c.delta) * Math.log10(Math.max(c.impressions, 10));
 
+    const groupKey = (c: MoverRow) => (mode === "query" ? c.query : c.page);
+
     const winnerMap = new Map<string, MoverRow>();
     const loserMap = new Map<string, MoverRow>();
-    combos.forEach((c) => {
+
+    deduped.forEach((c) => {
       const gk = groupKey(c);
       const labeled: MoverRow = { ...c, label: gk };
+
       if (c.delta < 0) {
         const existing = winnerMap.get(gk);
         if (!existing || score(c) > score(existing)) winnerMap.set(gk, labeled);
@@ -617,9 +510,10 @@ export default function TopMoverPage() {
       losers: [...loserMap.values()]
         .sort((a, b) => score(b) - score(a))
         .slice(0, 50),
-      droppedLowEvidence: dropped
+      droppedLowEvidence: droppedLow,
+      droppedCannibal: droppedCannib
     };
-  }, [metric, visibilityRows, rows1Data, rows2Data, mode, effectiveThreshold]);
+  }, [rows1Data, rows2Data, mode, effectiveThreshold, cannibalTolerance]);
 
   /* ---------- modal detail fetch ---------- */
 
@@ -738,29 +632,15 @@ export default function TopMoverPage() {
     const posLabel2 = compareMode === "days" ? "Pos Tag B" : "Pos P2";
 
     const toSheetRows = (items: MoverRow[]) =>
-      items.map((r) =>
-        metric === "visibility"
-          ? {
-              [mode === "query" ? "Query" : "Page"]: r.label,
-              [mode === "query" ? "Page" : "Query"]: mode === "query" ? r.page : r.query,
-              "Vis. P1": Math.round(r.visibility1),
-              "Vis. P2": Math.round(r.visibility2),
-              "Δ Vis.": Math.round(-r.delta),
-              "Pos P1": Number(r.avgPos1.toFixed(1)),
-              "Pos P2": Number(r.avgPos2.toFixed(1)),
-              "Impr. P1": r.impressions1,
-              "Impr. P2": r.impressions2
-            }
-          : {
-              [mode === "query" ? "Query" : "Page"]: r.label,
-              [mode === "query" ? "Page" : "Query"]: mode === "query" ? r.page : r.query,
-              [posLabel1]: Number(r.avgPos1.toFixed(1)),
-              [posLabel2]: Number(r.avgPos2.toFixed(1)),
-              Delta: Number((-r.delta).toFixed(1)),
-              "Impr. P1": r.impressions1,
-              "Impr. P2": r.impressions2
-            }
-      );
+      items.map((r) => ({
+        [mode === "query" ? "Query" : "Page"]: r.label,
+        [mode === "query" ? "Page" : "Query"]: mode === "query" ? r.page : r.query,
+        [posLabel1]: Number(r.avgPos1.toFixed(1)),
+        [posLabel2]: Number(r.avgPos2.toFixed(1)),
+        Delta: Number((-r.delta).toFixed(1)),
+        "Impr. P1": r.impressions1,
+        "Impr. P2": r.impressions2
+      }));
 
     const wb = XLSX.utils.book_new();
     const wsWinners = XLSX.utils.json_to_sheet(toSheetRows(winners));
@@ -773,7 +653,7 @@ export default function TopMoverPage() {
 
     XLSX.writeFile(wb, filename, { compression: true });
     toast.success(`Export erstellt: ${winners.length + losers.length} Einträge.`);
-  }, [winners, losers, site, compareMode, dayAIso, dayBIso, periods, mode, metric]);
+  }, [winners, losers, site, compareMode, dayAIso, dayBIso, periods, mode]);
 
   /* ---------- render ---------- */
 
@@ -805,27 +685,6 @@ export default function TopMoverPage() {
       )}
 
       <FilterBar className="md:grid-cols-5 md:items-end">
-        <div className="space-y-2">
-          <label
-            className="text-sm font-medium"
-            title="Sichtbarkeit = erwartete Klicks aus Impressionen × CTR-Kurve. Robuster gegen Rauschen als reine Position."
-          >
-            Metrik
-          </label>
-          <div className="flex flex-wrap gap-1">
-            {(["visibility", "position"] as const).map((m) => (
-              <Button
-                key={m}
-                variant={metric === m ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => setMetric(m)}
-                className="flex-1 sm:flex-none"
-              >
-                {m === "visibility" ? "Sichtbarkeit" : "Position"}
-              </Button>
-            ))}
-          </div>
-        </div>
         <div className="space-y-2">
           <label className="text-sm font-medium">Mode</label>
           <div className="flex flex-wrap gap-1">
@@ -884,6 +743,24 @@ export default function TopMoverPage() {
             placeholder={String(suggestedThreshold)}
           />
         </div>
+        <div className="space-y-2">
+          <label
+            className="text-sm font-medium"
+            title="Pro Keyword wird nur die best-rankende Page berücksichtigt. Toleranz erlaubt zusätzlich Pages, die innerhalb von X Positionen Abstand zur besten ranken (0 = strikt, 100 = effektiv aus)."
+          >
+            Kannibalisierungs-Toleranz
+          </label>
+          <Input
+            type="number"
+            min={0}
+            value={cannibalTolerance}
+            onChange={(e) => {
+              const v = e.target.value;
+              setCannibalTolerance(v === "" ? 0 : Math.max(0, Number(v)));
+            }}
+            placeholder="0"
+          />
+        </div>
       </FilterBar>
 
       <StatsRow>
@@ -907,27 +784,20 @@ export default function TopMoverPage() {
         )}
         <Badge variant="secondary">Winner: {winners.length}</Badge>
         <Badge variant="secondary">Loser: {losers.length}</Badge>
-        {syncState.status === "syncing" && !syncState.backgroundOnly && (
-          <Badge variant="secondary" title="Initialer GSC-Backfill läuft, das kann eine Minute dauern.">
-            Sync: initialer Backfill…
-          </Badge>
-        )}
-        {syncState.status === "syncing" && syncState.backgroundOnly && (
-          <Badge variant="secondary" title="Daten werden im Hintergrund auf den neuesten Stand gebracht.">
-            Sync: Hintergrund-Update
-          </Badge>
-        )}
-        {syncState.status === "error" && (
-          <Badge variant="secondary" title={syncState.message}>
-            Sync-Fehler
-          </Badge>
-        )}
         {droppedLowEvidence > 0 && (
           <Badge
             variant="secondary"
             title={`Combos unter Schwelle (< ${effectiveThreshold} Impressions in mind. einer Periode), nicht als Mover gewertet.`}
           >
-            Gefiltert: {droppedLowEvidence}
+            {`< Min. Impr.: ${droppedLowEvidence}`}
+          </Badge>
+        )}
+        {droppedCannibal > 0 && (
+          <Badge
+            variant="secondary"
+            title={`Pages, die für ihr Keyword schlechter als ${cannibalTolerance} Positionen über der besten Page ranken (Kannibalisierung).`}
+          >
+            Kannibalisiert: {droppedCannibal}
           </Badge>
         )}
         <Button
@@ -944,13 +814,7 @@ export default function TopMoverPage() {
 
       {error && !notConnected && <ErrorState>{error}</ErrorState>}
 
-      {syncState.status === "syncing" && !syncState.backgroundOnly ? (
-        <SectionCard>
-          <p className="text-sm text-muted-foreground">
-            Initialer GSC-Backfill läuft (bis zu 12 Monate Tagesdaten). Das passiert nur beim ersten Öffnen, danach wird inkrementell synchronisiert.
-          </p>
-        </SectionCard>
-      ) : loading ? (
+      {loading ? (
         <div className="space-y-4">
           <Skeleton className="h-[520px] w-full" />
           <Skeleton className="h-[520px] w-full" />
@@ -967,7 +831,6 @@ export default function TopMoverPage() {
                 color="green"
                 onClick={loadMoverDetail}
                 mode={mode}
-                metric={metric}
                 posLabel1={compareMode === "days" ? "Pos Tag A" : "Pos P1"}
                 posLabel2={compareMode === "days" ? "Pos Tag B" : "Pos P2"}
               />
@@ -984,7 +847,6 @@ export default function TopMoverPage() {
                 color="red"
                 onClick={loadMoverDetail}
                 mode={mode}
-                metric={metric}
                 posLabel1={compareMode === "days" ? "Pos Tag A" : "Pos P1"}
                 posLabel2={compareMode === "days" ? "Pos Tag B" : "Pos P2"}
               />

@@ -15,8 +15,7 @@ import { MonthPresetRangePicker } from "@/components/ui/month-preset-range-picke
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { DateRange } from "react-day-picker";
 import { formatRange, getLastNMonthsRange, rangeToIso } from "@/lib/date-range";
-import { daySpan, defaultImpressionThreshold } from "@/lib/gsc/aggregate";
-import { useGscAutoSync } from "@/hooks/use-gsc-sync";
+import { daySpan, defaultImpressionThreshold, dedupCannibalized } from "@/lib/gsc/aggregate";
 import { toast } from "sonner";
 
 interface SitesResponse {
@@ -52,12 +51,14 @@ export default function DataExplorerPage() {
   const [minWords, setMinWords] = useState<number | "">("");
   const [selectedPage, setSelectedPage] = useState<string | null>(null);
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
+  // Cannibalization tolerance: per keyword, only count pages whose position
+  // is within this many ranks of the best-ranking page. 0 = strict dedup.
+  const [cannibalTolerance, setCannibalTolerance] = useState<number>(0);
+  // Min-impressions slider; rows below this are excluded entirely from the
+  // table and the stats. Default scales with the period length.
+  const [minImpressionsTouched, setMinImpressionsTouched] = useState(false);
+  const [minImpressions, setMinImpressions] = useState<number | null>(null);
   const toasted = useRef(false);
-  const syncState = useGscAutoSync(site);
-  const dbReady =
-    syncState.status === "fresh" ||
-    syncState.status === "synced" ||
-    (syncState.status === "syncing" && syncState.backgroundOnly);
 
   const { startDate, endDate } = useMemo(() => rangeToIso(range, 90), [range]);
 
@@ -68,21 +69,21 @@ export default function DataExplorerPage() {
   }, [site, sites, setSite]);
 
   useEffect(() => {
-    if (!site || !dbReady) return;
+    if (!site) return;
     const controller = new AbortController();
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch("/api/gsc/daily", {
+        const res = await fetch("/api/gsc/query", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             siteUrl: site,
             startDate,
             endDate,
-            groupBy: "query_page",
-            limit: 25000
+            dimensions: ["query", "page"],
+            rowLimit: 25000
           }),
           signal: controller.signal
         });
@@ -103,10 +104,25 @@ export default function DataExplorerPage() {
     };
     load();
     return () => controller.abort();
-  }, [site, dbReady, startDate, endDate]);
+  }, [site, startDate, endDate]);
 
-  const filtered = useMemo(() => {
-    return rows.filter((r) => {
+  const periodSpan = useMemo(() => daySpan(startDate, endDate), [startDate, endDate]);
+  const suggestedMinImpressions = useMemo(
+    () => defaultImpressionThreshold(periodSpan),
+    [periodSpan]
+  );
+  // Reset to the period-appropriate default whenever the period changes,
+  // unless the user explicitly typed a value.
+  useEffect(() => {
+    if (!minImpressionsTouched) setMinImpressions(suggestedMinImpressions);
+  }, [suggestedMinImpressions, minImpressionsTouched]);
+  const effectiveMinImpressions = minImpressions ?? suggestedMinImpressions;
+
+  // 1) text/word/page/keyword filters → 2) hard min-impressions filter →
+  //    3) cannibalization dedup. Stats and the table both consume `filtered`,
+  //    so a row that drops out here doesn't count toward Ø Position either.
+  const { filtered, droppedLow, droppedCannibal } = useMemo(() => {
+    const baseFiltered = rows.filter((r) => {
       const q = r.keys[0] ?? "";
       const lower = q.toLowerCase();
       const passesSearch = search.trim()
@@ -125,39 +141,55 @@ export default function DataExplorerPage() {
       const passesKeyword = selectedKeyword ? q === selectedKeyword : true;
       return passesSearch && passesContains && passesNotContains && passesMinWords && passesPage && passesKeyword;
     });
-  }, [rows, search, contains, notContains, minWords, selectedPage, selectedKeyword]);
 
-  const periodSpan = useMemo(() => daySpan(startDate, endDate), [startDate, endDate]);
-  const lowConfidenceThreshold = useMemo(
-    () => defaultImpressionThreshold(periodSpan),
-    [periodSpan]
-  );
+    const afterMin = baseFiltered.filter((r) => r.impressions >= effectiveMinImpressions);
+    const droppedLowCount = baseFiltered.length - afterMin.length;
+
+    const afterCannibal = dedupCannibalized(
+      afterMin,
+      cannibalTolerance,
+      (r) => r.keys[0] ?? "",
+      (r) => r.position
+    );
+    const droppedCannibalCount = afterMin.length - afterCannibal.length;
+
+    return {
+      filtered: afterCannibal,
+      droppedLow: droppedLowCount,
+      droppedCannibal: droppedCannibalCount
+    };
+  }, [
+    rows,
+    search,
+    contains,
+    notContains,
+    minWords,
+    selectedPage,
+    selectedKeyword,
+    effectiveMinImpressions,
+    cannibalTolerance
+  ]);
 
   const stats = useMemo(() => {
     if (!filtered.length) return null;
     let clicks = 0;
     let impressions = 0;
     let posWeightedSum = 0;
-    let lowConfidenceCount = 0;
     for (const r of filtered) {
       clicks += r.clicks;
       impressions += r.impressions;
       posWeightedSum += r.position * r.impressions;
-      if (r.impressions < lowConfidenceThreshold) lowConfidenceCount++;
     }
     return {
       keywords: filtered.length,
-      lowConfidenceCount,
       clicks,
       impressions,
       // Real CTR: total clicks / total impressions, not the mean of CTRs.
       ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
-      // Impression-weighted average position: ranks with more searches behind
-      // them count proportionally more. A 1-impression Pos 1 no longer
-      // dominates a 10k-impression Pos 12.
+      // Impression-weighted average position.
       position: impressions > 0 ? posWeightedSum / impressions : 0
     };
-  }, [filtered, lowConfidenceThreshold]);
+  }, [filtered]);
 
   const notConnected = sitesError?.status === 401;
 
@@ -193,16 +225,53 @@ export default function DataExplorerPage() {
 
       {!notConnected && (
         <FilterBar className="md:grid-cols-2 lg:grid-cols-12 lg:items-end">
-          <div className="space-y-2 md:col-span-2 lg:col-span-5">
+          <div className="space-y-2 md:col-span-2 lg:col-span-3">
             <label className="text-sm font-medium">Zeitraum</label>
             <MonthPresetRangePicker value={range} onChange={setRange} />
           </div>
-          <div className="space-y-2 md:col-span-2 lg:col-span-5">
+          <div className="space-y-2 md:col-span-2 lg:col-span-3">
             <label className="text-sm font-medium">Suche</label>
             <Input
               placeholder="Keyword suchen"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2 lg:col-span-2">
+            <label
+              className="text-sm font-medium"
+              title="Zeilen mit weniger Impressions im Zeitraum werden ganz aus Tabelle und Statistik entfernt — sie zählen nicht rein."
+            >
+              Min. Impressions
+            </label>
+            <Input
+              type="number"
+              min={0}
+              value={effectiveMinImpressions}
+              onChange={(e) => {
+                const v = e.target.value;
+                setMinImpressionsTouched(true);
+                setMinImpressions(v === "" ? 0 : Math.max(0, Number(v)));
+              }}
+              placeholder={String(suggestedMinImpressions)}
+            />
+          </div>
+          <div className="space-y-2 lg:col-span-2">
+            <label
+              className="text-sm font-medium"
+              title="Pro Keyword wird nur die best-rankende Page gezeigt. Toleranz erlaubt zusätzlich Pages, die innerhalb von X Positionen Abstand zur besten ranken (0 = strikt)."
+            >
+              Kannibalis.-Toleranz
+            </label>
+            <Input
+              type="number"
+              min={0}
+              value={cannibalTolerance}
+              onChange={(e) => {
+                const v = e.target.value;
+                setCannibalTolerance(v === "" ? 0 : Math.max(0, Number(v)));
+              }}
+              placeholder="0"
             />
           </div>
           <div className="space-y-2 lg:col-span-2">
@@ -279,18 +348,20 @@ export default function DataExplorerPage() {
             Ø Position: {stats ? stats.position.toFixed(1) : "-"}
           </Badge>
           <Badge variant="secondary">Ø CTR: {stats ? stats.ctr.toFixed(1) : "-"}%</Badge>
-          {syncState.status === "syncing" && !syncState.backgroundOnly && (
-            <Badge variant="secondary">Sync: initialer Backfill…</Badge>
-          )}
-          {syncState.status === "syncing" && syncState.backgroundOnly && (
-            <Badge variant="secondary">Sync: Hintergrund-Update</Badge>
-          )}
-          {stats && stats.lowConfidenceCount > 0 && (
+          {droppedLow > 0 && (
             <Badge
               variant="secondary"
-              title={`Keywords mit < ${lowConfidenceThreshold} Impressions in diesem Zeitraum — Position ist statistisch unzuverlässig.`}
+              title={`Keywords mit < ${effectiveMinImpressions} Impressions im Zeitraum, aus der Auswertung entfernt.`}
             >
-              ⚠ Low confidence: {stats.lowConfidenceCount}
+              {`< Min. Impr.: ${droppedLow}`}
+            </Badge>
+          )}
+          {droppedCannibal > 0 && (
+            <Badge
+              variant="secondary"
+              title={`Pages, die für ihr Keyword schlechter als ${cannibalTolerance} Positionen über der best-rankenden Page liegen (Kannibalisierung).`}
+            >
+              Kannibalisiert: {droppedCannibal}
             </Badge>
           )}
           {(selectedPage || selectedKeyword) && (
@@ -312,19 +383,12 @@ export default function DataExplorerPage() {
         </StatsRow>
       )}
 
-      {!notConnected && syncState.status === "syncing" && !syncState.backgroundOnly ? (
-        <SectionCard>
-          <p className="text-sm text-muted-foreground">
-            Initialer GSC-Backfill läuft (bis zu 12 Monate Tagesdaten). Das passiert nur beim ersten Öffnen.
-          </p>
-        </SectionCard>
-      ) : !notConnected && (
+      {!notConnected && (
         loading ? (
           <Skeleton className="h-[500px] w-full" />
         ) : (
           <DataExplorerTable
             rows={filtered}
-            lowConfidenceThreshold={lowConfidenceThreshold}
             onSelectPage={(page) => {
               setSelectedPage(page);
               setSelectedKeyword(null);
