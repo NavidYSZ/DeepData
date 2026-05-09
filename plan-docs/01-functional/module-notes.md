@@ -1,15 +1,13 @@
 ---
-status: leer
+status: deprecated
 last-updated: 2026-05-09
 owner:
 ---
 
-# Modul: Notes (Memory)
+# Modul: Notes (deprecated als eigenständiges Modul)
 
-Wird in Phase 5 erarbeitet. Ohne Chat ([ADR-0008](../decisions/ADR-0008-no-chat-in-v2.md)) ein **reines User-Notizen-Modul** pro Domain: Notizen, Fakten, Entscheidungen, Erinnerungen.
-
-MVP: Tabelle/Liste mit Kategorisierung, Volltext-Suche, optional Cross-Refs zu Modul-Daten („Notiz zu URL X", „Notiz zu Cluster Y").
-
-Kein Vector-Search, keine Embeddings im MVP. pgvector kann später additiv kommen, wenn Such-Volumen es erfordert.
-
-Frage: eigener Sidebar-Eintrag oder Drawer/Sheet aus jedem Modul aufrufbar? → [`../04-ux-ui/sidebar-07.md`](../04-ux-ui/sidebar-07.md).
+> **Diese Doc ist nur ein Pointer.** Notes ist in v2 **kein eigenständiges Modul** — es lebt als Sub-Page innerhalb von Strategy.
+>
+> Siehe [`module-strategy.md`](module-strategy.md) (Sub-Page „Notes").
+>
+> Begründung: User-Entscheidung am 2026-05-09 („Notes lebt inside von Strategy"). Verankert in [`../04-ux-ui/sidebar-07.md`](../04-ux-ui/sidebar-07.md).

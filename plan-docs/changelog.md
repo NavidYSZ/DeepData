@@ -13,12 +13,17 @@ Format:
 
 ---
 
+## 2026-05-09 — Sidebar-Top-Level finalisiert + Modul-Liste festgelegt
+- **Was:** [`04-ux-ui/sidebar-07.md`](04-ux-ui/sidebar-07.md) auf finale Vorschlag-A-Struktur angehoben (Überblick / Daten erkunden / Analysen / Workspace). Sub-Pages bei Rankings, Internal Link Analysis, Keyword Clustering, Strategy. Top Mover + Position vs CTR + Kannibalisierung als Sub-Pages eines neuen Parent-Moduls „Ranking-Analysen". Notes lebt innerhalb Strategy. Dashboard ist Default beim Domain-Wechsel. [`01-functional/feature-inventory.md`](01-functional/feature-inventory.md) als Master-Liste mit 10 Top-Level + 14 Sub-Modulen geschrieben. [`10-roadmap/module-sequencing.md`](10-roadmap/module-sequencing.md) mit M0…M8 + Spec-Reihenfolge befüllt. Modul-Stubs in [`01-functional/`](01-functional/) angepasst (Parent-Stubs, Sub-Stubs, `module-notes.md` als deprecated-Pointer auf Strategy).
+- **Warum:** ohne diese Knoten lässt sich keine sinnvolle Modul-Spec schreiben. Sidebar-Top-Level + Modul-Hierarchie ist die Basis aller folgenden URL-Routing-, Layout- und Datenverträge-Specs.
+- **Refs:** [`04-ux-ui/sidebar-07.md`](04-ux-ui/sidebar-07.md), [`01-functional/feature-inventory.md`](01-functional/feature-inventory.md), [`10-roadmap/module-sequencing.md`](10-roadmap/module-sequencing.md), AskUserQuestion-Antworten am 2026-05-09.
+
+## 2026-05-09 — Stack- und Architektur-Grundsatzentscheidungen
+- **Was:** Neun ADRs angelegt: Doc-Sprache, Tech-Stack, Hosting (Coolify), DB+ORM (Postgres+Drizzle), Auth+Tenancy (Better Auth + `account_id`-Scoping), Job-Queue (BullMQ+Redis), Domain-als-Workspace, **kein Chat in v2**, Sidebar-07.
+- **Warum:** Diese Entscheidungen tragen sämtliche Modul-Specs; sie zuerst zu fixieren verhindert, dass Modul-Diskussionen Stack-Annahmen heimlich vorwegnehmen.
+- **Refs:** [`decisions/`](decisions/), [`07-software-architecture/tech-stack.md`](07-software-architecture/tech-stack.md), [`04-ux-ui/sidebar-07.md`](04-ux-ui/sidebar-07.md)
+
 ## 2026-05-09 — Bootstrap der v2-Planung
 - **Was:** plan-docs/-Architektur in DeepData angelegt (Sektionen 00-product … 10-roadmap, decisions/, v1-status-quo/, changelog, error-fix-log). Übernimmt die Struktur aus dem Schwesterrepo `seo11-agent` und befüllt sie mit DeepData-spezifischen Inhalten.
 - **Warum:** v2-Rewrite wird vorbereitet; persistentes Projektgedächtnis ist Pflichtbedingung, damit weder User noch nachfolgende Claude-Sessions Kontext verlieren.
 - **Refs:** [`README.md`](README.md), [`v1-status-quo/`](v1-status-quo/), CLAUDE.md (Update)
-
-## 2026-05-09 — Stack- und Architektur-Grundsatzentscheidungen
-- **Was:** Sieben ADRs angelegt: Doc-Sprache, Tech-Stack, Hosting (Coolify), DB+ORM (Postgres+Drizzle), Auth+Tenancy (Better Auth + `account_id`-Scoping), Job-Queue (BullMQ+Redis), Domain-als-Workspace, **kein Chat in v2**, Sidebar-07.
-- **Warum:** Diese Entscheidungen tragen sämtliche Modul-Specs; sie zuerst zu fixieren verhindert, dass Modul-Diskussionen Stack-Annahmen heimlich vorwegnehmen.
-- **Refs:** [`decisions/`](decisions/), [`07-software-architecture/tech-stack.md`](07-software-architecture/tech-stack.md), [`04-ux-ui/sidebar-07.md`](04-ux-ui/sidebar-07.md)

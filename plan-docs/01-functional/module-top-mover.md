@@ -4,6 +4,11 @@ last-updated: 2026-05-09
 owner:
 ---
 
-# Modul: Top Mover
+# Sub-Modul: Top Mover
 
-Wird in Phase 5 erarbeitet. **Übernehmen aus v1** ([`app/(dashboard)/top-mover/page.tsx`](../../app/(dashboard)/top-mover/page.tsx), 32 KB — wahrscheinlich Refactor-Kandidat). Period-vs-Period-Vergleich (Position, Clicks, Impressions). UI ins Module-View-Pattern.
+Wird in Phase 5 erarbeitet als Sub-Page von [`module-ranking-analysen.md`](module-ranking-analysen.md).
+
+**URL:** `/d/[id]/ranking-analysen/top-mover`
+**v1-Vorbild:** [`app/(dashboard)/top-mover/page.tsx`](../../app/(dashboard)/top-mover/page.tsx) (32 KB — Refactor-Kandidat).
+
+Period-vs-Period-Vergleich (Position, Clicks, Impressions). Filter: Modus (Gewinner/Verlierer), Schwellen-Threshold, Sample-Size-Threshold.
