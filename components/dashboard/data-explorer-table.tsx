@@ -17,13 +17,15 @@ export function DataExplorerTable({
   onSelectPage,
   selectedPage,
   onSelectKeyword,
-  selectedKeyword
+  selectedKeyword,
+  lowConfidenceThreshold = 0
 }: {
   rows: QueryRow[];
   onSelectPage: (page: string) => void;
   selectedPage: string | null;
   onSelectKeyword: (keyword: string) => void;
   selectedKeyword: string | null;
+  lowConfidenceThreshold?: number;
 }) {
   const [sortCol, setSortCol] = useState<SortCol>("impressions");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -160,7 +162,19 @@ export function DataExplorerTable({
                       )}
                     </TableCell>
                   )}
-                  <TableCell className="text-right">{r.position.toFixed(1)}</TableCell>
+                  <TableCell className="text-right">
+                    {lowConfidenceThreshold > 0 && r.impressions < lowConfidenceThreshold ? (
+                      <span
+                        className="inline-flex items-center gap-1 text-muted-foreground"
+                        title={`Nur ${r.impressions} Impressions in diesem Zeitraum — Position ist statistisch unzuverlässig (< ${lowConfidenceThreshold}).`}
+                      >
+                        <span aria-hidden="true">⚠</span>
+                        {r.position.toFixed(1)}
+                      </span>
+                    ) : (
+                      r.position.toFixed(1)
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">{r.impressions.toLocaleString("de-DE")}</TableCell>
                   <TableCell className="text-right">{r.clicks.toLocaleString("de-DE")}</TableCell>
                   {selectedKeyword ? null : (

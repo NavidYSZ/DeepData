@@ -19,6 +19,8 @@ import { ErrorState } from "@/components/dashboard/states";
 import { MonthPresetRangePicker } from "@/components/ui/month-preset-range-picker";
 import type { DateRange } from "react-day-picker";
 import { formatRange, getLastNMonthsRange, rangeToIso } from "@/lib/date-range";
+import { daySpan, defaultImpressionThreshold } from "@/lib/gsc/aggregate";
+import { useGscAutoSync } from "@/hooks/use-gsc-sync";
 import { toast } from "sonner";
 
 interface QueryResponse {
@@ -45,7 +47,13 @@ export default function RankTrackerPage() {
   const [error, setError] = useState<string | null>(null);
   const [showTrend, setShowTrend] = useState(false);
   const [axisMode, setAxisMode] = useState<"fixed" | "dynamic">("fixed");
+  const [visibilityByQuery, setVisibilityByQuery] = useState<Map<string, number>>(new Map());
   const toasted = useRef(false);
+  const syncState = useGscAutoSync(site);
+  const dbReady =
+    syncState.status === "fresh" ||
+    syncState.status === "synced" ||
+    (syncState.status === "syncing" && syncState.backgroundOnly);
 
   const { startDate, endDate } = useMemo(() => rangeToIso(range, 90), [range]);
 
@@ -123,6 +131,44 @@ export default function RankTrackerPage() {
       setSeries([]);
     }
   }, [selectedQueries, startDate, endDate, site]);
+
+  useEffect(() => {
+    if (!site || !dbReady) {
+      setVisibilityByQuery(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/gsc/visibility", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "byQueryPage",
+            siteUrl: site,
+            startDate,
+            endDate,
+            limit: 25_000
+          })
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        // Sum visibility across pages so each query carries its total
+        // contribution. The table is keyed by query, not query+page.
+        const map = new Map<string, number>();
+        for (const r of json.rows as Array<{ query: string; visibility: number }>) {
+          map.set(r.query, (map.get(r.query) ?? 0) + r.visibility);
+        }
+        setVisibilityByQuery(map);
+      } catch {
+        if (!cancelled) setVisibilityByQuery(new Map());
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [site, dbReady, startDate, endDate]);
 
   const notConnected = topError && (topError as any).status === 401;
 
@@ -271,7 +317,11 @@ export default function RankTrackerPage() {
           {topLoading ? (
             <Skeleton className="h-[460px] w-full" />
           ) : (
-            <QueriesTable rows={filteredTableRows} />
+            <QueriesTable
+              rows={filteredTableRows}
+              lowConfidenceThreshold={defaultImpressionThreshold(daySpan(startDate, endDate))}
+              visibilityByQuery={visibilityByQuery}
+            />
           )}
         </div>
       </div>

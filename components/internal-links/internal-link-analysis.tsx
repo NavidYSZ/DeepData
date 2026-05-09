@@ -162,6 +162,23 @@ function formatNumber(value: number) {
   return value.toLocaleString("de-DE");
 }
 
+function formatRoughInt(value: number): string {
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`;
+  return Math.round(value).toString();
+}
+
+function formatQueryStat(cand: {
+  queryImpressions?: number;
+  queryClicks?: number;
+  queryPosition?: number;
+}): string {
+  const parts: string[] = [];
+  if (cand.queryImpressions !== undefined) parts.push(`${formatRoughInt(cand.queryImpressions)} Impr.`);
+  if (cand.queryClicks !== undefined && cand.queryClicks > 0) parts.push(`${cand.queryClicks} Clicks`);
+  if (cand.queryPosition !== undefined) parts.push(`Pos ${cand.queryPosition.toFixed(1)}`);
+  return parts.join(" · ");
+}
+
 function formatDateTime(value: string | Date) {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" }).format(
     new Date(value)
@@ -971,6 +988,43 @@ function UrlInspectorBody({ row }: { row: OpportunityWithDetails }) {
             <Stat label="Useful Contextual" value={row.contextualLinks} />
           </div>
 
+          {/* Top queries — the anchor-candidate source. Shown explicitly so the
+              user can see *why* a recommendation suggests a specific anchor. */}
+          {row.snapshot.topQueries.length > 0 ? (
+            <section className="space-y-2">
+              <div className="text-sm font-semibold">Top Queries für diese URL</div>
+              <p className="text-xs text-muted-foreground">
+                {`Die Anker-Vorschläge unten leiten sich aus diesen Queries ab — wenn deine Seite für „X" rankt, sollte „X" auch der Anker sein.`}
+              </p>
+              <div className="overflow-hidden rounded-xl border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Query</TableHead>
+                      <TableHead className="w-24 text-right">Impressions</TableHead>
+                      <TableHead className="w-20 text-right">Clicks</TableHead>
+                      <TableHead className="w-20 text-right">Ø Position</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {row.snapshot.topQueries.slice(0, 8).map((q) => (
+                      <TableRow key={q.query}>
+                        <TableCell className="font-medium">{q.query}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatNumber(q.impressions)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{q.clicks}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {q.position.toFixed(1)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </section>
+          ) : null}
+
           {/* Recommendations — plain language "do X / on URL / using anchor" */}
           <section className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-semibold">
@@ -1079,14 +1133,39 @@ function RecommendationCard({ rec, index }: { rec: LinkRecommendation; index: nu
           </div>
         ) : null}
 
-        {rec.newAnchor ? (
-          <div className="flex items-start gap-1 text-[11px]">
-            <span className="shrink-0 font-medium text-muted-foreground">
-              {rec.oldAnchor ? "Neu:" : "Anker:"}
+        {rec.anchorCandidates.length > 0 ? (
+          <div className="space-y-1.5 text-[11px]">
+            <span className="block font-medium text-muted-foreground">
+              {rec.oldAnchor
+                ? rec.anchorCandidates.length > 1
+                  ? "Neu (Anker-Varianten, sortiert nach Query-Volumen):"
+                  : "Neu:"
+                : rec.anchorCandidates.length > 1
+                ? "Anker-Varianten (sortiert nach Query-Volumen):"
+                : "Anker:"}
             </span>
-            <span className="rounded-full border border-emerald-300/60 bg-emerald-500/10 px-2 py-0.5 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-              {rec.newAnchor}
-            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {rec.anchorCandidates.map((cand, i) => (
+                <span
+                  key={`${cand.text}-${i}`}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5",
+                    cand.supportingQuery
+                      ? "border-emerald-300/60 bg-emerald-500/10 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
+                      : "border-muted bg-muted/40 text-muted-foreground"
+                  )}
+                >
+                  <span className="font-medium">{cand.text}</span>
+                  {cand.supportingQuery ? (
+                    <span className="text-[10px] opacity-80">
+                      · {formatQueryStat(cand)}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] opacity-80">· H1-Fallback</span>
+                  )}
+                </span>
+              ))}
+            </div>
           </div>
         ) : null}
       </div>

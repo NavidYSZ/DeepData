@@ -22,6 +22,7 @@ type KeywordRow = {
   position: number;
   ctr: number;
   clicks: number;
+  visibility?: number;
 };
 
 function DataTableColumnHeader({ column, title }: { column: any; title: string }) {
@@ -38,7 +39,15 @@ function DataTableColumnHeader({ column, title }: { column: any; title: string }
   );
 }
 
-export function QueriesTable({ rows }: { rows: QueryRow[] }) {
+export function QueriesTable({
+  rows,
+  lowConfidenceThreshold = 0,
+  visibilityByQuery
+}: {
+  rows: QueryRow[];
+  lowConfidenceThreshold?: number;
+  visibilityByQuery?: Map<string, number>;
+}) {
   const data = useMemo<KeywordRow[]>(
     () =>
       rows.map((r) => ({
@@ -46,9 +55,10 @@ export function QueriesTable({ rows }: { rows: QueryRow[] }) {
         impressions: r.impressions,
         position: r.position,
         ctr: r.ctr,
-        clicks: r.clicks
+        clicks: r.clicks,
+        visibility: visibilityByQuery?.get(r.keys[0])
       })),
-    [rows]
+    [rows, visibilityByQuery]
   );
 
   const columns = useMemo<ColumnDef<KeywordRow>[]>(
@@ -70,9 +80,27 @@ export function QueriesTable({ rows }: { rows: QueryRow[] }) {
       {
         accessorKey: "position",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Avg. Pos" />,
-        cell: ({ row }) => (
-          <div className="text-right">{Number(row.getValue("position")).toFixed(1)}</div>
-        )
+        cell: ({ row }) => {
+          const pos = Number(row.getValue("position"));
+          const impr = Number(row.getValue("impressions"));
+          const lowConfidence =
+            lowConfidenceThreshold > 0 && impr < lowConfidenceThreshold;
+          return (
+            <div className="text-right">
+              {lowConfidence ? (
+                <span
+                  className="inline-flex items-center gap-1 text-muted-foreground"
+                  title={`Nur ${impr} Impressions — Position statistisch unzuverlässig (< ${lowConfidenceThreshold}).`}
+                >
+                  <span aria-hidden="true">⚠</span>
+                  {pos.toFixed(1)}
+                </span>
+              ) : (
+                pos.toFixed(1)
+              )}
+            </div>
+          );
+        }
       },
       {
         accessorKey: "ctr",
@@ -85,9 +113,24 @@ export function QueriesTable({ rows }: { rows: QueryRow[] }) {
         accessorKey: "clicks",
         header: ({ column }) => <DataTableColumnHeader column={column} title="Clicks" />,
         cell: ({ row }) => <div className="text-right">{row.getValue("clicks")}</div>
+      },
+      {
+        accessorKey: "visibility",
+        header: ({ column }) => <DataTableColumnHeader column={column} title="Sichtb." />,
+        cell: ({ row }) => {
+          const v = row.getValue("visibility") as number | undefined;
+          return (
+            <div
+              className="text-right tabular-nums"
+              title="Erwartete Klicks aus Impressionen × CTR-Kurve"
+            >
+              {v == null ? "—" : Math.round(v).toLocaleString("de-DE")}
+            </div>
+          );
+        }
       }
     ],
-    []
+    [lowConfidenceThreshold]
   );
 
   const emptyState = (

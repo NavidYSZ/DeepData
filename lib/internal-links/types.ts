@@ -30,6 +30,18 @@ export interface UrlSnapshot {
   position: number;
   impressions: number;
   clicks: number;
+  // Top queries this URL ranks for, sorted by impressions desc. Populated by
+  // the GSC sync — empty if GSC sync was skipped or returned no rows.
+  topQueries: TopQuery[];
+}
+
+// One query for which a URL ranks. Used both as a UrlSnapshot field and as the
+// source of anchor-candidate suggestions in recommendations.
+export interface TopQuery {
+  query: string;
+  clicks: number;
+  impressions: number;
+  position: number;
 }
 
 // One internal link instance. The crawler emits one row per occurrence, so a
@@ -67,14 +79,28 @@ export interface OpportunityRow {
   category: "quick_win" | "investigate" | "stable" | "low_data";
 }
 
+// One concrete anchor option. May be tagged with the GSC query it supports —
+// when it is, the UI can display "use this anchor because the target page
+// ranks for X with Y impressions". Variants without a supportingQuery are
+// fallbacks (typically the page H1 or title-derived).
+export interface AnchorCandidate {
+  text: string;
+  supportingQuery?: string;
+  queryImpressions?: number;
+  queryClicks?: number;
+  queryPosition?: number;
+}
+
 // Pre-computed recommendation a user can act on. Generated deterministically
-// from the inlink graph + anchor stats — no LLM required. Field semantics are
-// kept plain-language so the UI can render them verbatim:
-//   action      = the imperative ("Verlinke von der Übersichtsseite")
-//   sourceUrl   = which page should hold the new/changed link
-//   oldAnchor   = the anchor text to replace, if any
-//   newAnchor   = the anchor text to use instead
-//   why         = a one-sentence reason for the recommendation
+// from the inlink graph + anchor stats + GSC query data — no LLM required.
+//
+// Plain-language fields:
+//   action            = imperative ("Schwachen Ankertext ersetzen")
+//   why               = one-sentence reason
+//   sourceUrl         = page that should hold the new/changed link
+//   oldAnchor         = anchor text to replace, if any
+//   anchorCandidates  = ranked alternatives, each optionally tagged with the
+//                       query that motivates it
 export interface LinkRecommendation {
   id: string;
   targetId: string;
@@ -84,7 +110,7 @@ export interface LinkRecommendation {
   why: string;
   sourceUrl?: string;
   oldAnchor?: string;
-  newAnchor?: string;
+  anchorCandidates: AnchorCandidate[];
 }
 
 // Snapshot-level stat used by the Executive Dashboard view. Computed in one

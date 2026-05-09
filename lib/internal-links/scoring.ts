@@ -1,4 +1,5 @@
 import type {
+  AnchorCandidate,
   AnchorClass,
   ExecutiveKpis,
   InternalLink,
@@ -210,10 +211,55 @@ export function scoreOpportunities(
   return rows;
 }
 
+// Compact integer formatting used inside the recommendation `why` text. Keeps
+// the sentence readable when impressions tip into the thousands.
+function formatRoughInt(value: number): string {
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`;
+  return Math.round(value).toString();
+}
+
+// Build a ranked list of anchor candidates for a target URL. Top queries take
+// precedence over the H1 because they reflect what users actually type — an
+// anchor that matches a real query is a real ranking signal, while the H1 is
+// just an internal label. Fallback to H1 / title when GSC has no data yet.
+function buildAnchorCandidates(target: UrlSnapshot, count = 3): AnchorCandidate[] {
+  const candidates: AnchorCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (const q of target.topQueries) {
+    const key = q.query.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    candidates.push({
+      text: q.query,
+      supportingQuery: q.query,
+      queryImpressions: q.impressions,
+      queryClicks: q.clicks,
+      queryPosition: q.position
+    });
+    if (candidates.length >= count) break;
+  }
+
+  if (candidates.length < count) {
+    const h1 = target.h1?.trim();
+    if (h1 && !seen.has(h1.toLowerCase())) {
+      candidates.push({ text: h1 });
+      seen.add(h1.toLowerCase());
+    }
+  }
+
+  if (candidates.length === 0) {
+    const titleHead = target.title.split("|")[0].trim();
+    if (titleHead) candidates.push({ text: titleHead });
+  }
+
+  return candidates.slice(0, count);
+}
+
 // Heuristic recommendations from the scored row + raw inlink list. No LLM —
 // each rule fires on a measurable condition. Copy is intentionally plain so
-// the UI can render `action` / `why` / `sourceUrl` / `oldAnchor` / `newAnchor`
-// verbatim without further translation.
+// the UI can render `action` / `why` / `sourceUrl` / `oldAnchor` /
+// `anchorCandidates` verbatim without further translation.
 export function buildRecommendations(
   row: OpportunityRow,
   allSnapshots: UrlSnapshot[],
@@ -222,7 +268,13 @@ export function buildRecommendations(
   const recs: LinkRecommendation[] = [];
   const targetLinks = allLinks.filter((l) => l.targetId === row.snapshot.id);
   const sourceIdSet = new Set(targetLinks.map((l) => l.sourceId));
-  const targetAnchor = row.snapshot.h1 ?? row.snapshot.title.split("|")[0].trim();
+  const candidates = buildAnchorCandidates(row.snapshot, 3);
+  const topQuery = row.snapshot.topQueries[0];
+  const queryHint = topQuery
+    ? ` Diese Seite rankt für „${topQuery.query}" (${formatRoughInt(
+        topQuery.impressions
+      )} Impressions, Pos ${topQuery.position.toFixed(1)}) — der beste Hebel ist, genau diesen Begriff als Anker zu setzen.`
+    : "";
 
   // Rule 1: a hub in the same cluster has no useful contextual link here.
   const hub = allSnapshots.find(
@@ -253,7 +305,7 @@ export function buildRecommendations(
           : "Die wichtigste Übersichtsseite des Themas verlinkt hier nicht im Inhalt — die Autorität bleibt ungenutzt.",
         sourceUrl: hub.url,
         oldAnchor: weakHubLink?.anchorText,
-        newAnchor: targetAnchor
+        anchorCandidates: candidates
       });
     }
   }
@@ -270,10 +322,10 @@ export function buildRecommendations(
       kind: "replace_generic_anchor",
       priority: row.anchorHealth < 40 ? "high" : "medium",
       action: "Schwachen Ankertext ersetzen",
-      why: `„${genericLink.anchorText || "(leer)"}" sagt Suchmaschinen nichts über das Linkziel — ein konkreter Anker wirkt direkt.`,
+      why: `„${genericLink.anchorText || "(leer)"}" sagt Suchmaschinen nichts über das Linkziel — ein konkreter Anker wirkt direkt.${queryHint}`,
       sourceUrl: sourceSnap?.url,
       oldAnchor: genericLink.anchorText,
-      newAnchor: targetAnchor
+      anchorCandidates: candidates
     });
   }
 
@@ -295,9 +347,9 @@ export function buildRecommendations(
       kind: "cross_link_peer",
       priority: "medium",
       action: "Querverlinkung von einer verwandten Seite setzen",
-      why: `${peer.title} behandelt ein eng verwandtes Thema und linkt aktuell nicht hierhin — die thematische Nähe ist ein einfacher zusätzlicher Linkpfad.`,
+      why: `${peer.title} behandelt ein eng verwandtes Thema und linkt aktuell nicht hierhin — die thematische Nähe ist ein einfacher zusätzlicher Linkpfad.${queryHint}`,
       sourceUrl: peer.url,
-      newAnchor: targetAnchor
+      anchorCandidates: candidates
     });
   }
 
@@ -311,9 +363,9 @@ export function buildRecommendations(
       kind: "fix_image_alt",
       priority: "medium",
       action: "Alt-Text am Bildlink ergänzen",
-      why: "Ein Bildlink hierhin hat keinen Alt-Text — ohne Alt-Text gibt es null Anker-Signal an Suchmaschinen.",
+      why: `Ein Bildlink hierhin hat keinen Alt-Text — ohne Alt-Text gibt es null Anker-Signal an Suchmaschinen.${queryHint}`,
       sourceUrl: sourceSnap?.url,
-      newAnchor: targetAnchor
+      anchorCandidates: candidates
     });
   }
 

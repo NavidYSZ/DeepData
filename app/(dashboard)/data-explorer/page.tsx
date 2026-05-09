@@ -15,6 +15,8 @@ import { MonthPresetRangePicker } from "@/components/ui/month-preset-range-picke
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { DateRange } from "react-day-picker";
 import { formatRange, getLastNMonthsRange, rangeToIso } from "@/lib/date-range";
+import { daySpan, defaultImpressionThreshold } from "@/lib/gsc/aggregate";
+import { useGscAutoSync } from "@/hooks/use-gsc-sync";
 import { toast } from "sonner";
 
 interface SitesResponse {
@@ -51,6 +53,11 @@ export default function DataExplorerPage() {
   const [selectedPage, setSelectedPage] = useState<string | null>(null);
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
   const toasted = useRef(false);
+  const syncState = useGscAutoSync(site);
+  const dbReady =
+    syncState.status === "fresh" ||
+    syncState.status === "synced" ||
+    (syncState.status === "syncing" && syncState.backgroundOnly);
 
   const { startDate, endDate } = useMemo(() => rangeToIso(range, 90), [range]);
 
@@ -61,21 +68,21 @@ export default function DataExplorerPage() {
   }, [site, sites, setSite]);
 
   useEffect(() => {
-    if (!site) return;
+    if (!site || !dbReady) return;
     const controller = new AbortController();
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch("/api/gsc/query", {
+        const res = await fetch("/api/gsc/daily", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             siteUrl: site,
             startDate,
             endDate,
-            dimensions: ["query", "page"],
-            rowLimit: 25000
+            groupBy: "query_page",
+            limit: 25000
           }),
           signal: controller.signal
         });
@@ -96,7 +103,7 @@ export default function DataExplorerPage() {
     };
     load();
     return () => controller.abort();
-  }, [site, startDate, endDate]);
+  }, [site, dbReady, startDate, endDate]);
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
@@ -120,27 +127,37 @@ export default function DataExplorerPage() {
     });
   }, [rows, search, contains, notContains, minWords, selectedPage, selectedKeyword]);
 
+  const periodSpan = useMemo(() => daySpan(startDate, endDate), [startDate, endDate]);
+  const lowConfidenceThreshold = useMemo(
+    () => defaultImpressionThreshold(periodSpan),
+    [periodSpan]
+  );
+
   const stats = useMemo(() => {
     if (!filtered.length) return null;
-    const totals = filtered.reduce(
-      (acc, r) => {
-        acc.clicks += r.clicks;
-        acc.impressions += r.impressions;
-        acc.ctr += r.ctr;
-        acc.position += r.position;
-        return acc;
-      },
-      { clicks: 0, impressions: 0, ctr: 0, position: 0 }
-    );
-    const n = filtered.length;
+    let clicks = 0;
+    let impressions = 0;
+    let posWeightedSum = 0;
+    let lowConfidenceCount = 0;
+    for (const r of filtered) {
+      clicks += r.clicks;
+      impressions += r.impressions;
+      posWeightedSum += r.position * r.impressions;
+      if (r.impressions < lowConfidenceThreshold) lowConfidenceCount++;
+    }
     return {
       keywords: filtered.length,
-      clicks: totals.clicks,
-      impressions: totals.impressions,
-      ctr: (totals.ctr / n) * 100,
-      position: totals.position / n
+      lowConfidenceCount,
+      clicks,
+      impressions,
+      // Real CTR: total clicks / total impressions, not the mean of CTRs.
+      ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+      // Impression-weighted average position: ranks with more searches behind
+      // them count proportionally more. A 1-impression Pos 1 no longer
+      // dominates a 10k-impression Pos 12.
+      position: impressions > 0 ? posWeightedSum / impressions : 0
     };
-  }, [filtered]);
+  }, [filtered, lowConfidenceThreshold]);
 
   const notConnected = sitesError?.status === 401;
 
@@ -255,8 +272,27 @@ export default function DataExplorerPage() {
           <Badge variant="secondary">Keywords: {stats?.keywords ?? 0}</Badge>
           <Badge variant="secondary">Impressions: {(stats?.impressions ?? 0).toLocaleString("de-DE")}</Badge>
           <Badge variant="secondary">Clicks: {(stats?.clicks ?? 0).toLocaleString("de-DE")}</Badge>
-          <Badge variant="secondary">Ø Position: {stats ? stats.position.toFixed(1) : "-"}</Badge>
+          <Badge
+            variant="secondary"
+            title="Impression-gewichteter Durchschnitt: ein Keyword mit 10.000 Impressionen zählt 100× mehr als eines mit 100."
+          >
+            Ø Position: {stats ? stats.position.toFixed(1) : "-"}
+          </Badge>
           <Badge variant="secondary">Ø CTR: {stats ? stats.ctr.toFixed(1) : "-"}%</Badge>
+          {syncState.status === "syncing" && !syncState.backgroundOnly && (
+            <Badge variant="secondary">Sync: initialer Backfill…</Badge>
+          )}
+          {syncState.status === "syncing" && syncState.backgroundOnly && (
+            <Badge variant="secondary">Sync: Hintergrund-Update</Badge>
+          )}
+          {stats && stats.lowConfidenceCount > 0 && (
+            <Badge
+              variant="secondary"
+              title={`Keywords mit < ${lowConfidenceThreshold} Impressions in diesem Zeitraum — Position ist statistisch unzuverlässig.`}
+            >
+              ⚠ Low confidence: {stats.lowConfidenceCount}
+            </Badge>
+          )}
           {(selectedPage || selectedKeyword) && (
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary">Filter: {selectedKeyword ?? selectedPage}</Badge>
@@ -276,12 +312,19 @@ export default function DataExplorerPage() {
         </StatsRow>
       )}
 
-      {!notConnected && (
+      {!notConnected && syncState.status === "syncing" && !syncState.backgroundOnly ? (
+        <SectionCard>
+          <p className="text-sm text-muted-foreground">
+            Initialer GSC-Backfill läuft (bis zu 12 Monate Tagesdaten). Das passiert nur beim ersten Öffnen.
+          </p>
+        </SectionCard>
+      ) : !notConnected && (
         loading ? (
           <Skeleton className="h-[500px] w-full" />
         ) : (
           <DataExplorerTable
             rows={filtered}
+            lowConfidenceThreshold={lowConfidenceThreshold}
             onSelectPage={(page) => {
               setSelectedPage(page);
               setSelectedKeyword(null);

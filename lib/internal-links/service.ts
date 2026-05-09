@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { resolveUserSiteAccess } from "@/lib/gsc-access";
 
 import { crawl, type CrawlOptions } from "./crawler";
-import { fetchPageMetrics } from "./gsc-sync";
+import { fetchPageMetrics, fetchTopQueriesPerUrl } from "./gsc-sync";
 import { buildRecommendations, computeExecutiveKpis, scoreOpportunities } from "./scoring";
 import type {
   AnchorClass,
@@ -15,6 +15,7 @@ import type {
   LinkRecommendation,
   OpportunityRow,
   PageType,
+  TopQuery,
   UrlSnapshot
 } from "./types";
 
@@ -57,19 +58,27 @@ export async function startCrawlRun(input: StartCrawlInput): Promise<CrawlRunSum
 
     // Pull GSC metrics best-effort. A failure here should not invalidate the
     // crawl — the matrix still functions on impressions=null (those rows just
-    // get filtered to "low_data" by the scoring layer).
+    // get filtered to "low_data" by the scoring layer). We do two GSC calls:
+    // page-level totals (authoritative for KPIs/scoring) and page+query for
+    // anchor candidates. Both share one OAuth token resolution.
     let metrics: Awaited<ReturnType<typeof fetchPageMetrics>> = new Map();
+    let queriesByUrl: Awaited<ReturnType<typeof fetchTopQueriesPerUrl>> = new Map();
     try {
       const access = await resolveUserSiteAccess(input.userId, input.siteUrl);
-      metrics = await fetchPageMetrics(access.accessToken, input.siteUrl);
+      [metrics, queriesByUrl] = await Promise.all([
+        fetchPageMetrics(access.accessToken, input.siteUrl),
+        fetchTopQueriesPerUrl(access.accessToken, input.siteUrl)
+      ]);
     } catch {
       metrics = new Map();
+      queriesByUrl = new Map();
     }
 
     // Persist snapshots first so we have ids to FK from InternalLink.
     const snapshotIdByUrl = new Map<string, string>();
     for (const page of pages) {
       const m = metrics.get(page.url);
+      const queries = queriesByUrl.get(page.url) ?? [];
       const snap = await prisma.urlSnapshot.create({
         data: {
           runId: run.id,
@@ -83,7 +92,8 @@ export async function startCrawlRun(input: StartCrawlInput): Promise<CrawlRunSum
           cluster: page.cluster,
           position: m?.position ?? null,
           impressions: m?.impressions ?? null,
-          clicks: m?.clicks ?? null
+          clicks: m?.clicks ?? null,
+          topQueriesJson: queries.length > 0 ? JSON.stringify(queries) : null
         },
         select: { id: true }
       });
@@ -184,7 +194,8 @@ export async function loadOpportunitiesForRun(
     indexable: s.indexable,
     position: s.position ?? 0,
     impressions: s.impressions ?? 0,
-    clicks: s.clicks ?? 0
+    clicks: s.clicks ?? 0,
+    topQueries: parseTopQueries(s.topQueriesJson)
   }));
 
   const links: InternalLink[] = run.links.map((l) => ({
@@ -220,6 +231,23 @@ export async function loadOpportunitiesForRun(
   });
 
   return { run: toSummary(run), kpis: computeExecutiveKpis(rows), opportunities };
+}
+
+function parseTopQueries(json: string | null): TopQuery[] {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (q): q is TopQuery =>
+        typeof q === "object" &&
+        q !== null &&
+        typeof (q as TopQuery).query === "string" &&
+        typeof (q as TopQuery).impressions === "number"
+    );
+  } catch {
+    return [];
+  }
 }
 
 function toSummary(run: {

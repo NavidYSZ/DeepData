@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { DateRange } from "react-day-picker";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { useGscAutoSync } from "@/hooks/use-gsc-sync";
 
 interface SitesResponse {
   sites: { siteUrl: string; permissionLevel: string }[];
@@ -47,13 +48,14 @@ interface PerformancePoint {
   clicks: number;
   impressions: number;
   ctr: number;
+  visibility: number;
 }
 
-type MetricKey = "clicks" | "impressions" | "ctr";
+type MetricKey = "clicks" | "impressions" | "ctr" | "visibility";
 type MetricVisibility = Record<MetricKey, boolean>;
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-const METRIC_ORDER: MetricKey[] = ["clicks", "impressions", "ctr"];
+const METRIC_ORDER: MetricKey[] = ["visibility", "clicks", "impressions", "ctr"];
 
 const METRIC_META: Record<
   MetricKey,
@@ -89,6 +91,14 @@ const METRIC_META: Record<
     inactiveClass: "border-border bg-background text-foreground hover:bg-muted/30",
     valueFormatter: (value) => `${(value * 100).toFixed(1)} %`,
     chartFormatter: (value) => `${(value * 100).toFixed(2)}%`
+  },
+  visibility: {
+    label: "Sichtbarkeit (erw. Klicks)",
+    color: "#F4511E",
+    activeClass: "border-[#F4511E]/40 bg-[#F4511E]/10 text-foreground",
+    inactiveClass: "border-border bg-background text-foreground hover:bg-muted/30",
+    valueFormatter: (value) => Math.round(value).toLocaleString("de-DE"),
+    chartFormatter: (value) => Math.round(value).toLocaleString("de-DE")
   }
 };
 
@@ -107,7 +117,12 @@ function formatDateShort(dateNum: number) {
   return `${String(d.getUTCDate()).padStart(2, "0")}.${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-function buildPerformanceSeries(rows: DateMetricRow[], startDate: string, endDate: string): PerformancePoint[] {
+function buildPerformanceSeries(
+  rows: DateMetricRow[],
+  visibilityByDate: Map<string, number>,
+  startDate: string,
+  endDate: string
+): PerformancePoint[] {
   const byDate = new Map<string, DateMetricRow>();
   rows.forEach((row) => {
     const key = row.keys?.[0];
@@ -138,7 +153,8 @@ function buildPerformanceSeries(rows: DateMetricRow[], startDate: string, endDat
       dateNum: ts,
       clicks,
       impressions,
-      ctr: impressions > 0 ? clicks / impressions : 0
+      ctr: impressions > 0 ? clicks / impressions : 0,
+      visibility: visibilityByDate.get(date) ?? 0
     });
   }
 
@@ -150,14 +166,20 @@ export default function DashboardPage() {
   const { site, setSite } = useSite();
   const [range, setRange] = useState<DateRange | undefined>(getLastNMonthsRange(3));
   const [metricVisibility, setMetricVisibility] = useState<MetricVisibility>({
+    visibility: true,
     clicks: true,
-    impressions: true,
+    impressions: false,
     ctr: false
   });
   const [series, setSeries] = useState<PerformancePoint[]>([]);
   const [loading, setLoading] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
   const toasted = useRef(false);
+  const syncState = useGscAutoSync(site);
+  const dbReady =
+    syncState.status === "fresh" ||
+    syncState.status === "synced" ||
+    (syncState.status === "syncing" && syncState.backgroundOnly);
 
   const { startDate, endDate } = useMemo(() => rangeToIso(range, 90), [range]);
 
@@ -182,7 +204,11 @@ export default function DashboardPage() {
       setQueryError(null);
 
       try {
-        const res = await fetch("/api/gsc/query", {
+        // Performance series stays on the live GSC API: it's only one row per
+        // day (cheap) and stays accurate even without a completed backfill.
+        // Visibility comes from the persisted store + CTR curve, gated on
+        // sync readiness so we don't show 0s while the initial backfill runs.
+        const performanceRes = await fetch("/api/gsc/query", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -193,15 +219,44 @@ export default function DashboardPage() {
             rowLimit: 1000
           })
         });
+        if (!performanceRes.ok) {
+          const text = await performanceRes.text();
+          throw new Error(text || `Performance request failed: ${performanceRes.status}`);
+        }
+        const performance: QueryResponse = await performanceRes.json();
 
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(text || `Performance request failed: ${res.status}`);
+        let visibilityByDate = new Map<string, number>();
+        if (dbReady) {
+          const visRes = await fetch("/api/gsc/visibility", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mode: "series",
+              siteUrl: site,
+              startDate,
+              endDate
+            })
+          });
+          if (visRes.ok) {
+            const visJson = await visRes.json();
+            visibilityByDate = new Map(
+              (visJson.rows as Array<{ date: string; visibility: number }>).map((r) => [
+                r.date,
+                r.visibility
+              ])
+            );
+          }
         }
 
-        const data: QueryResponse = await res.json();
         if (cancelled) return;
-        setSeries(buildPerformanceSeries(data.rows ?? [], startDate, endDate));
+        setSeries(
+          buildPerformanceSeries(
+            performance.rows ?? [],
+            visibilityByDate,
+            startDate,
+            endDate
+          )
+        );
       } catch (err: any) {
         if (cancelled) return;
         setQueryError(err.message ?? "Fehler beim Laden");
@@ -216,7 +271,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [site, startDate, endDate, notConnected]);
+  }, [site, startDate, endDate, notConnected, dbReady]);
 
   useEffect(() => {
     if (notConnected && !toasted.current) {
@@ -229,7 +284,10 @@ export default function DashboardPage() {
     const clicks = series.reduce((sum, point) => sum + point.clicks, 0);
     const impressions = series.reduce((sum, point) => sum + point.impressions, 0);
     const ctr = impressions > 0 ? clicks / impressions : 0;
-    return { clicks, impressions, ctr };
+    // Visibility is summed across days so the tile reads as "expected clicks
+    // over the period". The chart shows the daily series.
+    const visibility = series.reduce((sum, point) => sum + point.visibility, 0);
+    return { clicks, impressions, ctr, visibility };
   }, [series]);
 
   const isMobile = useMediaQuery("(max-width: 767px)");
@@ -289,7 +347,7 @@ export default function DashboardPage() {
           <CardTitle className="text-base">Performance</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 pt-0">
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
             {METRIC_ORDER.map((metric) => {
               const meta = METRIC_META[metric];
               const active = metricVisibility[metric];
