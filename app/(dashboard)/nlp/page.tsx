@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Sparkles, ExternalLink } from "lucide-react";
+import { Loader2, Sparkles, ExternalLink, Brain, Cloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { PageHeader, SectionCard } from "@/components/dashboard/page-shell";
+import { EntityMap } from "@/components/nlp/entity-map";
+import type { ExtractionOutput } from "@/lib/nlp/types";
 
 type AnnotateResponse = {
   documentSentiment?: { score: number; magnitude: number };
@@ -34,12 +37,18 @@ type Extracted = {
   source: "article" | "main" | "body";
 };
 
-type ApiResponse = {
+type GoogleResponse = { extracted: Extracted; nlp: AnnotateResponse };
+type LlmResponse = {
   extracted: Extracted;
-  nlp: AnnotateResponse;
+  extraction: ExtractionOutput;
+  model: string;
+  durationMs: number;
 };
 
+type Mode = "google" | "llm";
+
 export default function NlpPage() {
+  const [mode, setMode] = useState<Mode>("google");
   const [url, setUrl] = useState("");
   const [sentiment, setSentiment] = useState(true);
   const [entities, setEntities] = useState(true);
@@ -47,27 +56,51 @@ export default function NlpPage() {
   const [classify, setClassify] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<ApiResponse | null>(null);
+  const [googleData, setGoogleData] = useState<GoogleResponse | null>(null);
+  const [llmData, setLlmData] = useState<LlmResponse | null>(null);
 
   async function analyze() {
     setLoading(true);
     setError(null);
-    setData(null);
+    setGoogleData(null);
+    setLlmData(null);
     try {
-      const res = await fetch("/api/nlp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: url.trim(),
-          features: { sentiment, entities, entitySentiment, classify }
-        })
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setError(json?.error ?? "Request failed");
-        if (json?.extracted) setData({ extracted: json.extracted, nlp: {} });
+      if (mode === "google") {
+        const res = await fetch("/api/nlp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: url.trim(),
+            features: { sentiment, entities, entitySentiment, classify }
+          })
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setError(json?.error ?? "Request failed");
+          if (json?.extracted) setGoogleData({ extracted: json.extracted, nlp: {} });
+        } else {
+          setGoogleData(json);
+        }
       } else {
-        setData(json);
+        const res = await fetch("/api/nlp/llm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: url.trim() })
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setError(json?.error ?? "LLM request failed");
+          if (json?.extracted) {
+            setLlmData({
+              extracted: json.extracted,
+              extraction: null as any,
+              model: "",
+              durationMs: 0
+            });
+          }
+        } else {
+          setLlmData(json);
+        }
       }
     } catch (err: any) {
       setError(err?.message ?? "Network error");
@@ -77,12 +110,21 @@ export default function NlpPage() {
   }
 
   const canSubmit = !!url.trim() && /^https?:\/\//i.test(url.trim()) && !loading;
+  const currentExtracted =
+    mode === "google" ? googleData?.extracted : llmData?.extracted;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Google Cloud NLP"
-        description="URL eingeben → Body-Content wird extrahiert → Sentiment, Entitäten und Kategorien werden über die Google Natural Language API analysiert."
+        title="NLP Playground"
+        description={
+          mode === "google"
+            ? "URL eingeben → Body-Content wird extrahiert → Sentiment, Entitäten und Kategorien über die Google Natural Language API."
+            : "URL eingeben → Body-Content wird extrahiert → DeepSeek führt 5-Phasen-Semantik-Extraktion durch (Entitäten, Relationen, SEO-Signale)."
+        }
+        actions={
+          <ModeSwitch mode={mode} onChange={setMode} disabled={loading} />
+        }
       />
 
       <SectionCard title="URL analysieren">
@@ -104,19 +146,34 @@ export default function NlpPage() {
               ) : (
                 <Sparkles className="mr-2 h-4 w-4" />
               )}
-              Analysieren
+              {mode === "google" ? "Analysieren" : "Semantik extrahieren"}
             </Button>
           </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <Toggle label="Sentiment" checked={sentiment} onChange={setSentiment} />
-            <Toggle label="Entitäten" checked={entities} onChange={setEntities} />
-            <Toggle label="Entity Sentiment" checked={entitySentiment} onChange={setEntitySentiment} />
-            <Toggle
-              label="Kategorien (≥20 Wörter, EN)"
-              checked={classify}
-              onChange={setClassify}
-            />
-          </div>
+          {mode === "google" ? (
+            <div className="flex flex-wrap items-center gap-4">
+              <Toggle label="Sentiment" checked={sentiment} onChange={setSentiment} />
+              <Toggle label="Entitäten" checked={entities} onChange={setEntities} />
+              <Toggle
+                label="Entity Sentiment"
+                checked={entitySentiment}
+                onChange={setEntitySentiment}
+              />
+              <Toggle
+                label="Kategorien (≥20 Wörter, EN)"
+                checked={classify}
+                onChange={setClassify}
+              />
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground">
+              Modell:{" "}
+              <span className="font-mono text-foreground">
+                {llmData?.model || "deepseek-chat"}
+              </span>
+              {" · "}konfigurierbar über{" "}
+              <code className="rounded bg-muted px-1 py-0.5 text-[10px]">DEEPSEEK_MODEL</code>
+            </div>
+          )}
           {error ? (
             <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
@@ -125,8 +182,56 @@ export default function NlpPage() {
         </div>
       </SectionCard>
 
-      {data?.extracted ? <ExtractedCard extracted={data.extracted} /> : null}
-      {data?.nlp && Object.keys(data.nlp).length > 0 ? <Results result={data.nlp} /> : null}
+      {currentExtracted ? <ExtractedCard extracted={currentExtracted} /> : null}
+
+      {mode === "google" && googleData?.nlp && Object.keys(googleData.nlp).length > 0 ? (
+        <GoogleResults result={googleData.nlp} />
+      ) : null}
+
+      {mode === "llm" && llmData?.extraction ? (
+        <SectionCard
+          title="Entity Map"
+          description={`${llmData.extraction.entities.length} Entities · ${llmData.extraction.relations.length} Relationen · in ${(
+            llmData.durationMs / 1000
+          ).toFixed(1)}s extrahiert`}
+          contentClassName="!p-0"
+        >
+          <EntityMap data={llmData.extraction} />
+        </SectionCard>
+      ) : null}
+    </div>
+  );
+}
+
+function ModeSwitch({
+  mode,
+  onChange,
+  disabled
+}: {
+  mode: Mode;
+  onChange: (m: Mode) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="inline-flex items-center gap-3 rounded-md border bg-card px-3 py-1.5 text-sm">
+      <span
+        className={`inline-flex items-center gap-1.5 ${mode === "google" ? "text-foreground" : "text-muted-foreground"}`}
+      >
+        <Cloud className="h-3.5 w-3.5" />
+        Google
+      </span>
+      <Switch
+        checked={mode === "llm"}
+        onCheckedChange={(v) => onChange(v ? "llm" : "google")}
+        disabled={disabled}
+        aria-label="Modus wechseln"
+      />
+      <span
+        className={`inline-flex items-center gap-1.5 ${mode === "llm" ? "text-foreground" : "text-muted-foreground"}`}
+      >
+        <Brain className="h-3.5 w-3.5" />
+        LLM
+      </span>
     </div>
   );
 }
@@ -194,7 +299,7 @@ function ExtractedCard({ extracted }: { extracted: Extracted }) {
   );
 }
 
-function Results({ result }: { result: AnnotateResponse }) {
+function GoogleResults({ result }: { result: AnnotateResponse }) {
   return (
     <div className="grid gap-6 md:grid-cols-2">
       {result.documentSentiment ? (
