@@ -18,7 +18,7 @@ function EntityCardNodeInner({ data, selected }: NodeProps<EntityNodeData>) {
         "group relative w-[240px] cursor-pointer rounded-lg border bg-card text-card-foreground shadow-sm transition-all",
         "hover:shadow-md hover:-translate-y-0.5",
         isPillar
-          ? "border-foreground/70 ring-1 ring-foreground/40"
+          ? "border-amber-500/70 ring-2 ring-amber-500/40"
           : selected
             ? "border-primary ring-1 ring-primary/40"
             : "border-border",
@@ -36,6 +36,13 @@ function EntityCardNodeInner({ data, selected }: NodeProps<EntityNodeData>) {
         className="!h-2 !w-2 !border-0 !bg-muted-foreground/40"
       />
 
+      {isPillar ? (
+        <div className="absolute -top-2.5 left-2 inline-flex items-center gap-1 rounded-full border border-amber-500/70 bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-white shadow-sm">
+          <Star className="h-2.5 w-2.5 fill-white" />
+          Pillar
+        </div>
+      ) : null}
+
       <div
         className="flex items-center gap-2 rounded-t-lg px-3 py-1.5"
         style={{ backgroundColor: `${color}22` }}
@@ -47,13 +54,10 @@ function EntityCardNodeInner({ data, selected }: NodeProps<EntityNodeData>) {
         <span className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           {entity.category}
         </span>
-        {isPillar ? (
-          <Star className="ml-auto h-3 w-3 shrink-0 text-amber-500" aria-label="Pillar" />
-        ) : null}
       </div>
 
       <div className="px-3 py-2">
-        <div className="line-clamp-2 text-sm font-semibold leading-snug">
+        <div className={cn("line-clamp-2 leading-snug", isPillar ? "text-base font-bold" : "text-sm font-semibold")}>
           {entity.canonical_name}
         </div>
         <div className="mt-1.5 flex items-center gap-3 text-[11px] text-muted-foreground">

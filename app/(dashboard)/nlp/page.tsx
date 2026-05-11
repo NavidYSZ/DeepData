@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { PageHeader, SectionCard } from "@/components/dashboard/page-shell";
 import { EntityMap } from "@/components/nlp/entity-map";
+import { PageProfile } from "@/components/nlp/page-profile";
 import type { ExtractionOutput } from "@/lib/nlp/types";
 
 type AnnotateResponse = {
@@ -205,15 +206,20 @@ export default function NlpPage() {
       ) : null}
 
       {mode === "llm" && llmData?.extraction ? (
-        <SectionCard
-          title="Entity Map"
-          description={`${llmData.extraction.entities.length} Entities · ${llmData.extraction.relations.length} Relationen · in ${(
-            llmData.durationMs / 1000
-          ).toFixed(1)}s extrahiert`}
-          contentClassName="!p-0"
-        >
-          <EntityMap data={llmData.extraction} />
-        </SectionCard>
+        <>
+          <SectionCard title="Page Profile">
+            <PageProfile data={llmData.extraction} />
+          </SectionCard>
+          <SectionCard
+            title="Entity Map"
+            description={`${llmData.extraction.entities.length} Entities · ${llmData.extraction.relations.length} Relationen · in ${(
+              llmData.durationMs / 1000
+            ).toFixed(1)}s extrahiert. Pillar-Entities sind gelb umrandet.`}
+            contentClassName="!p-0"
+          >
+            <EntityMap data={llmData.extraction} />
+          </SectionCard>
+        </>
       ) : null}
     </div>
   );
