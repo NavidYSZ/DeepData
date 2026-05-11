@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -17,42 +18,56 @@ type AnnotateResponse = {
     salience: number;
     metadata?: Record<string, string>;
     sentiment?: { score: number; magnitude: number };
-    mentions?: Array<{ text: { content: string }; type: string }>;
   }>;
   categories?: Array<{ name: string; confidence: number }>;
   sentences?: Array<{ text: { content: string }; sentiment?: { score: number; magnitude: number } }>;
 };
 
-const SAMPLE = `Wir haben gestern Abend im neuen Restaurant in Berlin gegessen. Das Essen war fantastisch, der Service eher mittelmäßig. Trotzdem komme ich wieder, weil die Pizza wirklich exzellent war.`;
+type Extracted = {
+  finalUrl: string;
+  title: string | null;
+  description: string | null;
+  text: string;
+  totalChars: number;
+  analyzedChars: number;
+  truncated: boolean;
+  source: "article" | "main" | "body";
+};
+
+type ApiResponse = {
+  extracted: Extracted;
+  nlp: AnnotateResponse;
+};
 
 export default function NlpPage() {
-  const [text, setText] = useState(SAMPLE);
+  const [url, setUrl] = useState("");
   const [sentiment, setSentiment] = useState(true);
   const [entities, setEntities] = useState(true);
   const [entitySentiment, setEntitySentiment] = useState(false);
   const [classify, setClassify] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AnnotateResponse | null>(null);
+  const [data, setData] = useState<ApiResponse | null>(null);
 
   async function analyze() {
     setLoading(true);
     setError(null);
-    setResult(null);
+    setData(null);
     try {
       const res = await fetch("/api/nlp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text,
+          url: url.trim(),
           features: { sentiment, entities, entitySentiment, classify }
         })
       });
       const json = await res.json();
       if (!res.ok) {
         setError(json?.error ?? "Request failed");
+        if (json?.extracted) setData({ extracted: json.extracted, nlp: {} });
       } else {
-        setResult(json);
+        setData(json);
       }
     } catch (err: any) {
       setError(err?.message ?? "Network error");
@@ -61,22 +76,37 @@ export default function NlpPage() {
     }
   }
 
+  const canSubmit = !!url.trim() && /^https?:\/\//i.test(url.trim()) && !loading;
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Google Cloud NLP"
-        description="Spielwiese für die Natural Language API – Sentiment, Entitäten, Kategorien. Text einfügen, Analyse starten."
+        description="URL eingeben → Body-Content wird extrahiert → Sentiment, Entitäten und Kategorien werden über die Google Natural Language API analysiert."
       />
 
-      <SectionCard title="Text">
+      <SectionCard title="URL analysieren">
         <div className="space-y-3">
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={8}
-            className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            placeholder="Text zum Analysieren eingeben…"
-          />
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://example.com/blog/artikel"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && canSubmit) analyze();
+              }}
+              className="flex-1"
+            />
+            <Button onClick={analyze} disabled={!canSubmit}>
+              {loading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="mr-2 h-4 w-4" />
+              )}
+              Analysieren
+            </Button>
+          </div>
           <div className="flex flex-wrap items-center gap-4">
             <Toggle label="Sentiment" checked={sentiment} onChange={setSentiment} />
             <Toggle label="Entitäten" checked={entities} onChange={setEntities} />
@@ -87,17 +117,6 @@ export default function NlpPage() {
               onChange={setClassify}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={analyze} disabled={loading || !text.trim()}>
-              {loading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="mr-2 h-4 w-4" />
-              )}
-              Analysieren
-            </Button>
-            <span className="text-xs text-muted-foreground">{text.length} Zeichen</span>
-          </div>
           {error ? (
             <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
@@ -106,7 +125,8 @@ export default function NlpPage() {
         </div>
       </SectionCard>
 
-      {result ? <Results result={result} /> : null}
+      {data?.extracted ? <ExtractedCard extracted={data.extracted} /> : null}
+      {data?.nlp && Object.keys(data.nlp).length > 0 ? <Results result={data.nlp} /> : null}
     </div>
   );
 }
@@ -128,6 +148,52 @@ function Toggle({
   );
 }
 
+function ExtractedCard({ extracted }: { extracted: Extracted }) {
+  return (
+    <SectionCard title="Extrahierter Inhalt">
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-sm">
+            <a
+              href={extracted.finalUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-primary underline"
+            >
+              {extracted.finalUrl}
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+          {extracted.title ? (
+            <div className="text-base font-medium">{extracted.title}</div>
+          ) : null}
+          {extracted.description ? (
+            <div className="text-sm text-muted-foreground">{extracted.description}</div>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Badge variant="outline">Quelle: &lt;{extracted.source}&gt;</Badge>
+          <Badge variant="outline">{extracted.totalChars.toLocaleString()} Zeichen extrahiert</Badge>
+          {extracted.truncated ? (
+            <Badge variant="secondary">
+              auf {extracted.analyzedChars.toLocaleString()} Zeichen gekürzt
+            </Badge>
+          ) : null}
+        </div>
+        <details className="text-sm">
+          <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+            Text-Vorschau anzeigen
+          </summary>
+          <div className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-3 font-mono text-xs leading-relaxed">
+            {extracted.text.slice(0, 4000)}
+            {extracted.text.length > 4000 ? "\n\n…" : ""}
+          </div>
+        </details>
+      </div>
+    </SectionCard>
+  );
+}
+
 function Results({ result }: { result: AnnotateResponse }) {
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -143,9 +209,9 @@ function Results({ result }: { result: AnnotateResponse }) {
           {result.sentences?.length ? (
             <div className="mt-4 space-y-2">
               <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                Sätze
+                Sätze ({result.sentences.length})
               </Label>
-              <ul className="space-y-1.5">
+              <ul className="max-h-96 space-y-1.5 overflow-y-auto pr-2">
                 {result.sentences.map((s, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm">
                     <SentimentDot score={s.sentiment?.score ?? 0} />
@@ -165,7 +231,7 @@ function Results({ result }: { result: AnnotateResponse }) {
 
       {result.entities?.length ? (
         <SectionCard title="Entitäten" description={`${result.entities.length} erkannt`}>
-          <ul className="space-y-2">
+          <ul className="max-h-[32rem] space-y-2 overflow-y-auto pr-2">
             {result.entities
               .slice()
               .sort((a, b) => b.salience - a.salience)
