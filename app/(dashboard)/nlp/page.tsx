@@ -93,9 +93,16 @@ export default function NlpPage() {
           if (json?.hint) parts.push(json.hint);
           if (json?.statusCode) parts.push(`HTTP ${json.statusCode}`);
           if (json?.model) parts.push(`model: ${json.model}`);
-          if (json?.url) parts.push(`url: ${json.url}`);
+          if (json?.endpoint || json?.url) parts.push(`endpoint: ${json.endpoint ?? json.url}`);
           if (json?.baseURL) parts.push(`baseURL: ${json.baseURL}`);
-          if (json?.responseBody) parts.push(`response: ${json.responseBody}`);
+          if (json?._routeVersion) parts.push(`route: ${json._routeVersion}`);
+          if (json?.responseBody) {
+            const rb =
+              typeof json.responseBody === "string"
+                ? json.responseBody
+                : JSON.stringify(json.responseBody);
+            parts.push(`response: ${rb}`);
+          }
           setError(parts.join(" · "));
           if (json?.extracted) {
             setLlmData({

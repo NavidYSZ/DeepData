@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { createOpenAI } from "@ai-sdk/openai";
-import { generateText } from "ai";
 import { authOptions } from "@/lib/auth";
 import { fetchAndExtract } from "@/lib/nlp/extract";
 import { EXTRACTION_SYSTEM_PROMPT } from "@/lib/nlp/extraction-prompt";
@@ -10,11 +8,16 @@ import type { ExtractionOutput } from "@/lib/nlp/types";
 
 export const maxDuration = 120;
 
+// Bump this whenever the route logic changes so the client can confirm
+// the redeploy is live. Visible in the JSON response as `_routeVersion`.
+const ROUTE_VERSION = "2026-05-11.4-direct-fetch";
+
 const bodySchema = z.object({
   url: z.string().url()
 });
 
 const MAX_TEXT_CHARS = 24_000;
+const DEEPSEEK_TIMEOUT_MS = 110_000;
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -26,8 +29,9 @@ export async function POST(request: Request) {
   if (!apiKey) {
     return NextResponse.json(
       {
+        _routeVersion: ROUTE_VERSION,
         error:
-          "Missing DEEPSEEK_API_KEY. Set DEEPSEEK_API_KEY in your .env.local. Optional: DEEPSEEK_BASE_URL (default https://api.deepseek.com), DEEPSEEK_MODEL (default deepseek-v4-pro, alt: deepseek-v4-flash)."
+          "Missing DEEPSEEK_API_KEY. Set DEEPSEEK_API_KEY in your env. Optional: DEEPSEEK_BASE_URL (default https://api.deepseek.com), DEEPSEEK_MODEL (default deepseek-v4-pro)."
       },
       { status: 500 }
     );
@@ -37,7 +41,10 @@ export async function POST(request: Request) {
   try {
     body = bodySchema.parse(await request.json());
   } catch {
-    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+    return NextResponse.json(
+      { _routeVersion: ROUTE_VERSION, error: "Invalid body" },
+      { status: 400 }
+    );
   }
 
   let extracted;
@@ -45,7 +52,7 @@ export async function POST(request: Request) {
     extracted = await fetchAndExtract(body.url);
   } catch (err: any) {
     return NextResponse.json(
-      { error: err?.message ?? "Failed to fetch URL" },
+      { _routeVersion: ROUTE_VERSION, error: err?.message ?? "Failed to fetch URL" },
       { status: 422 }
     );
   }
@@ -53,6 +60,7 @@ export async function POST(request: Request) {
   if (extracted.text.length < 50) {
     return NextResponse.json(
       {
+        _routeVersion: ROUTE_VERSION,
         error:
           "Extracted body content is too short (<50 chars). The page may require JavaScript, be paywalled, or block bots.",
         extracted
@@ -62,53 +70,118 @@ export async function POST(request: Request) {
   }
 
   const truncated = extracted.text.slice(0, MAX_TEXT_CHARS);
-
-  const deepseek = createOpenAI({
-    apiKey,
-    baseURL: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com"
-  });
+  const baseURL = (process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com").replace(/\/$/, "");
+  const endpoint = `${baseURL}/chat/completions`;
   const modelId = process.env.DEEPSEEK_MODEL || "deepseek-v4-pro";
 
-  const userPrompt = `# Der zu analysierende Text:\n\n${truncated}`;
+  console.log(`[nlp/llm ${ROUTE_VERSION}] POST ${endpoint} model=${modelId}`);
 
   const started = Date.now();
-  let resultText: string;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DEEPSEEK_TIMEOUT_MS);
+
+  let upstreamRes: Response;
+  let upstreamText: string;
   try {
-    const result = await generateText({
-      model: deepseek.chat(modelId),
-      temperature: 0.1,
-      messages: [
-        { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
-        { role: "user", content: userPrompt }
-      ]
+    upstreamRes = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json"
+      },
+      body: JSON.stringify({
+        model: modelId,
+        temperature: 0.1,
+        stream: false,
+        messages: [
+          { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+          { role: "user", content: `# Der zu analysierende Text:\n\n${truncated}` }
+        ]
+      }),
+      signal: controller.signal
     });
-    resultText = result.text;
+    upstreamText = await upstreamRes.text();
   } catch (err: any) {
-    const statusCode: number | undefined = err?.statusCode ?? err?.status;
-    const responseBody: string | undefined =
-      err?.responseBody ?? err?.data?.error?.message ?? err?.cause?.message;
-    const url: string | undefined = err?.url;
-    const hint =
-      statusCode === 404
-        ? `Model "${modelId}" or endpoint not found. Valid models: deepseek-v4-pro, deepseek-v4-flash. Base URL must be https://api.deepseek.com (no /v1).`
-        : statusCode === 401
-          ? "DeepSeek rejected the API key — check DEEPSEEK_API_KEY."
-          : undefined;
+    clearTimeout(timer);
     return NextResponse.json(
       {
-        error: err?.message ?? "DeepSeek request failed",
+        _routeVersion: ROUTE_VERSION,
+        error: err?.name === "AbortError" ? "DeepSeek request timed out" : err?.message ?? "Network error calling DeepSeek",
+        endpoint,
+        model: modelId
+      },
+      { status: 502 }
+    );
+  }
+  clearTimeout(timer);
+
+  console.log(
+    `[nlp/llm ${ROUTE_VERSION}] response status=${upstreamRes.status} bytes=${upstreamText.length} in ${Date.now() - started}ms`
+  );
+
+  if (!upstreamRes.ok) {
+    let parsedBody: unknown = upstreamText;
+    try {
+      parsedBody = JSON.parse(upstreamText);
+    } catch {
+      /* keep as raw text */
+    }
+    const hint =
+      upstreamRes.status === 404
+        ? `Endpoint or model not found. Verify base URL (${baseURL}) and model "${modelId}". Valid models: deepseek-v4-pro, deepseek-v4-flash.`
+        : upstreamRes.status === 401
+          ? "DeepSeek rejected the API key — check DEEPSEEK_API_KEY."
+          : upstreamRes.status === 402
+            ? "DeepSeek payment required — top up your account balance."
+            : upstreamRes.status === 429
+              ? "DeepSeek rate-limit or quota exceeded."
+              : undefined;
+    return NextResponse.json(
+      {
+        _routeVersion: ROUTE_VERSION,
+        error: `DeepSeek HTTP ${upstreamRes.status} ${upstreamRes.statusText}`,
         hint,
-        statusCode,
-        url,
-        responseBody,
+        statusCode: upstreamRes.status,
+        endpoint,
+        url: endpoint,
+        baseURL,
         model: modelId,
-        baseURL: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com",
+        responseBody: parsedBody,
         extracted
       },
       { status: 502 }
     );
   }
-  const durationMs = Date.now() - started;
+
+  let upstreamJson: any;
+  try {
+    upstreamJson = JSON.parse(upstreamText);
+  } catch (err: any) {
+    return NextResponse.json(
+      {
+        _routeVersion: ROUTE_VERSION,
+        error: "DeepSeek returned non-JSON response",
+        details: err?.message ?? String(err),
+        raw: upstreamText.slice(0, 2000),
+        extracted
+      },
+      { status: 502 }
+    );
+  }
+
+  const resultText: string | undefined = upstreamJson?.choices?.[0]?.message?.content;
+  if (typeof resultText !== "string" || !resultText.length) {
+    return NextResponse.json(
+      {
+        _routeVersion: ROUTE_VERSION,
+        error: "DeepSeek response missing choices[0].message.content",
+        upstream: upstreamJson,
+        extracted
+      },
+      { status: 502 }
+    );
+  }
 
   let parsed: ExtractionOutput;
   try {
@@ -116,6 +189,7 @@ export async function POST(request: Request) {
   } catch (err: any) {
     return NextResponse.json(
       {
+        _routeVersion: ROUTE_VERSION,
         error: "LLM response could not be parsed as JSON",
         details: err?.message ?? String(err),
         raw: resultText,
@@ -126,6 +200,7 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({
+    _routeVersion: ROUTE_VERSION,
     extracted: {
       ...extracted,
       analyzedChars: truncated.length,
@@ -133,7 +208,8 @@ export async function POST(request: Request) {
     },
     extraction: parsed,
     model: modelId,
-    durationMs
+    durationMs: Date.now() - started,
+    usage: upstreamJson?.usage ?? null
   });
 }
 
