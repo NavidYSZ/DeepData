@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Filter Vereinheitlichung · DeepData</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        background: #f8fafc;
+      }
+      .mono {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+      }
+    </style>
+  </head>
+  <body class="text-slate-900">
+    <div class="mx-auto max-w-7xl px-6 py-10">
+      <!-- Header -->
+      <header class="mb-8">
+        <a href="./index.html" class="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-900">
+          <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6" /></svg>
+          Zurück zur Übersicht
+        </a>
+        <h1 class="mt-3 text-3xl font-semibold tracking-tight">
+          Filter-Bar · Vorher / Nachher
+        </h1>
+        <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
+          Die größte Schwachstelle des aktuellen Designs sind die Filter. Sie
+          unterscheiden sich pro Seite in Layout, Komponente und Logik. Hier ist
+          jede Modul-Seite einmal in ihrer aktuellen Form und einmal mit der
+          vorgeschlagenen einheitlichen Filter-Bar.
+        </p>
+      </header>
+
+      <!-- Legend -->
+      <div class="mb-8 grid gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-xs md:grid-cols-3">
+        <div class="flex items-start gap-2">
+          <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-700">!</span>
+          <div><strong class="text-slate-900">Problem</strong> · markiert was im aktuellen Filter inkonsistent oder verwirrend ist</div>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">✓</span>
+          <div><strong class="text-slate-900">Lösung</strong> · was der einheitliche Vorschlag bringt</div>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700">i</span>
+          <div><strong class="text-slate-900">Pattern</strong> · neue, einheitliche Filter-Komponente</div>
+        </div>
+      </div>
+
+      <!-- ========== UNIFIED COMPONENTS REFERENCE ========== -->
+      <section class="mb-10 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-6">
+        <div class="mb-1 inline-flex items-center gap-2 rounded-full bg-white px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-700 ring-1 ring-indigo-200">
+          Toolkit
+        </div>
+        <h2 class="mt-2 text-xl font-semibold tracking-tight">Die neuen Filter-Primitive</h2>
+        <p class="mt-1 text-sm text-slate-600">
+          Drei wiederverwendbare Patterns, die alle Modulseiten teilen:
+        </p>
+
+        <div class="mt-5 grid gap-4 md:grid-cols-3">
+          <!-- Pattern 1: Date Preset -->
+          <div class="rounded-xl bg-white p-4 shadow-sm">
+            <div class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Pattern 1</div>
+            <h3 class="text-sm font-semibold">Date-Preset Segmented</h3>
+            <p class="mt-1 text-xs text-slate-500">Ein Picker für alle Seiten. Ersetzt MonthPresetRangePicker und DateRangePicker.</p>
+            <div class="mt-3 inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+              <button class="rounded-md px-2.5 py-1 text-[11px] font-medium text-slate-600">1M</button>
+              <button class="rounded-md bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-900 shadow-sm">3M</button>
+              <button class="rounded-md px-2.5 py-1 text-[11px] font-medium text-slate-600">6M</button>
+              <button class="rounded-md px-2.5 py-1 text-[11px] font-medium text-slate-600">12M</button>
+              <span class="mx-0.5 h-3 w-px bg-slate-200"></span>
+              <button class="rounded-md px-2 py-1 text-[11px] font-medium text-slate-600">📅 Eigene</button>
+            </div>
+          </div>
+
+          <!-- Pattern 2: Chip with Counter -->
+          <div class="rounded-xl bg-white p-4 shadow-sm">
+            <div class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Pattern 2</div>
+            <h3 class="text-sm font-semibold">Erweitert + Active Chips</h3>
+            <p class="mt-1 text-xs text-slate-500">Ein "Erweitert"-Button mit Counter, aktive Filter als entfernbare Chips darunter.</p>
+            <div class="mt-3 flex flex-wrap items-center gap-1.5">
+              <button class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 shadow-sm">
+                Erweitert
+                <span class="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-100 px-1 text-[9px] font-bold text-indigo-700">3</span>
+              </button>
+              <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-700 shadow-sm">
+                Min Impr <span class="mono">≥ 100</span>
+                <button class="text-slate-400">×</button>
+              </span>
+            </div>
+          </div>
+
+          <!-- Pattern 3: Mode Toggle -->
+          <div class="rounded-xl bg-white p-4 shadow-sm">
+            <div class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Pattern 3</div>
+            <h3 class="text-sm font-semibold">Mode Toggle (segmented)</h3>
+            <p class="mt-1 text-xs text-slate-500">Für binäre/ternäre Modi: Query/Page, Riser/Faller, Periods/Days.</p>
+            <div class="mt-3 inline-flex items-center rounded-md border border-slate-200 bg-white p-0.5 shadow-sm">
+              <button class="rounded bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white">Query</button>
+              <button class="rounded px-2.5 py-1 text-[11px] font-medium text-slate-600">Page</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== PAGE-BY-PAGE COMPARISON ========== -->
+
+      <!-- Data Explorer -->
+      <article class="mb-10">
+        <div class="mb-3 flex items-center gap-2">
+          <span class="mono rounded bg-slate-900 px-2 py-0.5 text-[11px] font-semibold text-white">/data-explorer</span>
+          <h2 class="text-xl font-semibold tracking-tight">Data Explorer</h2>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-2">
+          <!-- BEFORE -->
+          <div class="rounded-2xl border border-rose-200/60 bg-white p-5 shadow-sm">
+            <div class="mb-3 flex items-center gap-2">
+              <span class="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200">Vorher</span>
+              <span class="text-[11px] text-slate-500">Aktueller Zustand</span>
+            </div>
+
+            <!-- Reproduces current filter -->
+            <div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+              <div class="grid grid-cols-2 gap-2">
+                <div class="rounded border border-slate-200 p-2 text-[11px]">
+                  <span class="text-slate-500">Zeitraum:</span>
+                  <div class="mt-1 flex gap-1">
+                    <button class="rounded bg-slate-100 px-2 py-0.5 text-[10px]">1M</button>
+                    <button class="rounded bg-slate-900 px-2 py-0.5 text-[10px] text-white">3M</button>
+                    <button class="rounded bg-slate-100 px-2 py-0.5 text-[10px]">6M</button>
+                    <button class="rounded bg-slate-100 px-2 py-0.5 text-[10px]">Mehr ▾</button>
+                  </div>
+                </div>
+                <div class="rounded border border-slate-200 p-2 text-[11px]">
+                  <span class="text-slate-500">Suche:</span>
+                  <div class="mt-1 h-5 rounded bg-slate-50"></div>
+                </div>
+                <div class="rounded border border-slate-200 p-2 text-[11px]">
+                  <span class="text-slate-500">Enthält:</span>
+                  <div class="mt-1 h-5 rounded bg-slate-50"></div>
+                </div>
+                <div class="rounded border border-slate-200 p-2 text-[11px]">
+                  <span class="text-slate-500">Nicht enthält:</span>
+                  <div class="mt-1 h-5 rounded bg-slate-50"></div>
+                </div>
+                <div class="rounded border border-slate-200 p-2 text-[11px]">
+                  <span class="text-slate-500">Min. Wörter:</span>
+                  <div class="mt-1 h-5 rounded bg-slate-50"></div>
+                </div>
+                <div class="rounded border border-slate-200 p-2 text-[11px]">
+                  <span class="text-slate-500">Seite:</span>
+                  <div class="mt-1 h-5 rounded bg-slate-50">▾</div>
+                </div>
+                <div class="rounded border border-dashed border-amber-300 bg-amber-50/50 p-2 text-[11px]">
+                  <span class="text-amber-700">Kannib. Tol. (Slider):</span>
+                  <div class="mt-1 h-1 rounded bg-amber-200"></div>
+                </div>
+                <div class="rounded border border-dashed border-amber-300 bg-amber-50/50 p-2 text-[11px]">
+                  <span class="text-amber-700">Min. Impr. (Toggle):</span>
+                  <div class="mt-1 flex gap-1">
+                    <button class="rounded bg-white px-1.5 py-0.5 text-[9px]">Auto</button>
+                    <button class="rounded bg-amber-200 px-1.5 py-0.5 text-[9px]">Custom</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <ul class="mt-4 space-y-1.5 text-xs">
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-100 text-[10px] font-bold text-rose-700">!</span>
+                <span class="text-slate-700"><strong>8 Filter</strong> inline auf einer Ebene — keine Hierarchie</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-100 text-[10px] font-bold text-rose-700">!</span>
+                <span class="text-slate-700"><strong>Kannib.-Slider</strong> und <strong>Min Impr.-Toggle</strong> sind Power-User Optionen, stören aber den Standard-Flow</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-100 text-[10px] font-bold text-rose-700">!</span>
+                <span class="text-slate-700">Was ist aktiv? Nicht sofort sichtbar</span>
+              </li>
+            </ul>
+          </div>
+
+          <!-- AFTER -->
+          <div class="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-white to-emerald-50/30 p-5 shadow-sm">
+            <div class="mb-3 flex items-center gap-2">
+              <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200">Nachher</span>
+              <span class="text-[11px] text-slate-500">Einheitlich</span>
+            </div>
+
+            <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              <div class="flex flex-wrap items-center gap-2 p-2.5">
+                <div class="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 p-0.5">
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">1M</button>
+                  <button class="rounded bg-white px-2 py-1 text-[11px] font-semibold text-slate-900 shadow-sm">3M</button>
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">6M</button>
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">12M</button>
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">16M</button>
+                  <span class="mx-0.5 h-3 w-px bg-slate-200"></span>
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">📅</button>
+                </div>
+                <div class="relative min-w-[140px] flex-1">
+                  <input class="h-7 w-full rounded-md border border-slate-200 px-2 text-[11px] placeholder:text-slate-400" placeholder="Suchen…" />
+                </div>
+                <button class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 shadow-sm">
+                  Erweitert
+                  <span class="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-100 px-1 text-[9px] font-bold text-indigo-700">3</span>
+                </button>
+              </div>
+              <div class="flex flex-wrap items-center gap-1.5 border-t border-slate-100 bg-slate-50/50 px-2.5 py-1.5">
+                <span class="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Aktiv</span>
+                <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-700 shadow-sm">
+                  Enthält <span class="mono">"schuhe"</span>
+                  <span class="text-slate-400">×</span>
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-700 shadow-sm">
+                  Min Impr <span class="mono">≥ 120</span>
+                  <span class="text-slate-400">×</span>
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] text-indigo-700">
+                  Kannib. Tol. <span class="mono">3</span>
+                  <span class="text-indigo-400">×</span>
+                </span>
+              </div>
+            </div>
+
+            <ul class="mt-4 space-y-1.5 text-xs">
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                <span class="text-slate-700"><strong>Primärfilter sichtbar</strong>, Power-User Filter im "Erweitert"-Popover</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                <span class="text-slate-700"><strong>Aktive Chips</strong> sind jederzeit sichtbar und einzeln entfernbar</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                <span class="text-slate-700"><strong>Counter</strong> auf Erweitert zeigt sofort, wie viele Filter aktiv sind</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <!-- Kannibalisierung -->
+      <article class="mb-10">
+        <div class="mb-3 flex items-center gap-2">
+          <span class="mono rounded bg-slate-900 px-2 py-0.5 text-[11px] font-semibold text-white">/kannibalisierung</span>
+          <h2 class="text-xl font-semibold tracking-tight">Kannibalisierung</h2>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-2">
+          <!-- BEFORE -->
+          <div class="rounded-2xl border border-rose-200/60 bg-white p-5 shadow-sm">
+            <div class="mb-3 flex items-center gap-2">
+              <span class="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200">Vorher</span>
+            </div>
+
+            <div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+              <div class="space-y-2">
+                <!-- Different date picker! -->
+                <div class="rounded border border-dashed border-rose-300 bg-rose-50/50 p-2 text-[11px]">
+                  <span class="text-rose-700 font-semibold">⚠ Anderer Date-Range Picker (Kalender statt Presets)</span>
+                  <div class="mt-1 flex gap-1">
+                    <span class="rounded bg-white px-2 py-0.5 text-[10px] ring-1 ring-slate-200">📅 28 Tage</span>
+                    <span class="rounded bg-white px-2 py-0.5 text-[10px] ring-1 ring-slate-200">📅 91 Tage</span>
+                  </div>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-[11px]">
+                  <div class="rounded border border-slate-200 p-2">
+                    <span class="text-slate-500">Min Impr:</span>
+                    <div class="mt-1 h-5 rounded bg-slate-50"></div>
+                  </div>
+                  <div class="rounded border border-slate-200 p-2">
+                    <span class="text-slate-500">Min Klicks:</span>
+                    <div class="mt-1 h-5 rounded bg-slate-50"></div>
+                  </div>
+                  <div class="rounded border border-slate-200 p-2">
+                    <span class="text-slate-500">Top N:</span>
+                    <div class="mt-1 h-5 rounded bg-slate-50">▾</div>
+                  </div>
+                </div>
+                <div class="rounded border border-dashed border-amber-300 bg-amber-50/50 p-2 text-[11px]">
+                  <span class="text-amber-700">Erweitert (im Popover):</span>
+                  <div class="mt-1 flex flex-wrap gap-1">
+                    <span class="rounded bg-white px-1.5 py-0.5 text-[10px] ring-1 ring-amber-200">Switches</span>
+                    <span class="rounded bg-white px-1.5 py-0.5 text-[10px] ring-1 ring-amber-200">Share Metric</span>
+                    <span class="rounded bg-white px-1.5 py-0.5 text-[10px] ring-1 ring-amber-200">URL Bucket</span>
+                    <span class="rounded bg-white px-1.5 py-0.5 text-[10px] ring-1 ring-amber-200">Only Critical</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <ul class="mt-4 space-y-1.5 text-xs">
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-100 text-[10px] font-bold text-rose-700">!</span>
+                <span class="text-slate-700"><strong>Anderer DateRangePicker</strong> als der Rest der App (Inkonsistenz)</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-100 text-[10px] font-bold text-rose-700">!</span>
+                <span class="text-slate-700"><strong>Top N als Dropdown</strong> — Werte wie "200" / "500" / "all" sind willkürlich, sollte Pagination sein</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-100 text-[10px] font-bold text-rose-700">!</span>
+                <span class="text-slate-700"><strong>URL Bucket</strong> (2 / 3-4 / 5+) ist eine Modul-spezifische Idee, sollte als Mode-Toggle sichtbar sein</span>
+              </li>
+            </ul>
+          </div>
+
+          <!-- AFTER -->
+          <div class="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-white to-emerald-50/30 p-5 shadow-sm">
+            <div class="mb-3 flex items-center gap-2">
+              <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200">Nachher</span>
+            </div>
+
+            <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              <div class="flex flex-wrap items-center gap-2 p-2.5">
+                <!-- SAME date picker as all other pages -->
+                <div class="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 p-0.5">
+                  <button class="rounded bg-white px-2 py-1 text-[11px] font-semibold text-slate-900 shadow-sm">28T</button>
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">3M</button>
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">6M</button>
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">12M</button>
+                  <span class="mx-0.5 h-3 w-px bg-slate-200"></span>
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">📅</button>
+                </div>
+                <!-- URL bucket as visible mode toggle -->
+                <div class="inline-flex items-center rounded-md border border-slate-200 bg-white p-0.5 shadow-sm">
+                  <button class="rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white">Alle</button>
+                  <button class="rounded px-2 py-1 text-[10px] text-slate-600">2 URLs</button>
+                  <button class="rounded px-2 py-1 text-[10px] text-slate-600">3–4</button>
+                  <button class="rounded px-2 py-1 text-[10px] text-slate-600">5+</button>
+                </div>
+                <button class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 shadow-sm">
+                  Erweitert
+                  <span class="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-100 px-1 text-[9px] font-bold text-indigo-700">2</span>
+                </button>
+                <button class="ml-auto inline-flex items-center gap-1 rounded-md bg-slate-900 px-2 py-1 text-[11px] font-medium text-white">
+                  Only Critical
+                </button>
+              </div>
+              <div class="flex flex-wrap items-center gap-1.5 border-t border-slate-100 bg-slate-50/50 px-2.5 py-1.5">
+                <span class="text-[9px] font-semibold uppercase tracking-wider text-slate-500">Aktiv</span>
+                <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-700 shadow-sm">
+                  Min Impr <span class="mono">≥ 50</span>
+                  <span class="text-slate-400">×</span>
+                </span>
+                <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-700 shadow-sm">
+                  Min Klicks <span class="mono">≥ 5</span>
+                  <span class="text-slate-400">×</span>
+                </span>
+              </div>
+            </div>
+
+            <ul class="mt-4 space-y-1.5 text-xs">
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                <span class="text-slate-700"><strong>Gleicher Date-Preset Picker</strong> wie auf allen anderen Seiten — Standard "28T" als zusätzlicher Preset</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                <span class="text-slate-700"><strong>URL Bucket als Mode-Toggle</strong> — direkt sichtbar als domänen-spezifischer Schalter</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                <span class="text-slate-700"><strong>"Only Critical"</strong> als prominenter Action-Button rechts (häufigster Use Case)</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                <span class="text-slate-700"><strong>Top N entfernt</strong> — durch echte Pagination ersetzt</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <!-- Top Mover -->
+      <article class="mb-10">
+        <div class="mb-3 flex items-center gap-2">
+          <span class="mono rounded bg-slate-900 px-2 py-0.5 text-[11px] font-semibold text-white">/top-mover</span>
+          <h2 class="text-xl font-semibold tracking-tight">Top Mover</h2>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-2">
+          <!-- BEFORE -->
+          <div class="rounded-2xl border border-rose-200/60 bg-white p-5 shadow-sm">
+            <div class="mb-3"><span class="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200">Vorher</span></div>
+            <div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="rounded border border-slate-200 px-2 py-1 text-[11px]">
+                  📅 1M / 3M / 6M / Mehr ▾
+                </div>
+                <div class="rounded border border-slate-200 px-2 py-1 text-[11px]">
+                  Query | Page
+                </div>
+                <div class="rounded border border-dashed border-amber-300 bg-amber-50/50 px-2 py-1 text-[11px]">
+                  Periods | Days <span class="text-amber-700">(unklar was das macht)</span>
+                </div>
+                <div class="ml-auto rounded bg-slate-900 px-2 py-1 text-[11px] text-white">XLSX ↓</div>
+              </div>
+            </div>
+            <ul class="mt-4 space-y-1.5 text-xs">
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-100 text-[10px] font-bold text-rose-700">!</span>
+                <span class="text-slate-700"><strong>"Periods vs Days"</strong> Toggle: unklar was es bedeutet ohne Tooltip</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-100 text-[10px] font-bold text-rose-700">!</span>
+                <span class="text-slate-700"><strong>Keine Search/Filter</strong> — bei 25k+ Rows nicht praktikabel</span>
+              </li>
+            </ul>
+          </div>
+          <!-- AFTER -->
+          <div class="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-white to-emerald-50/30 p-5 shadow-sm">
+            <div class="mb-3"><span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200">Nachher</span></div>
+            <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              <div class="flex flex-wrap items-center gap-2 p-2.5">
+                <div class="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 p-0.5">
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">1M</button>
+                  <button class="rounded bg-white px-2 py-1 text-[11px] font-semibold text-slate-900 shadow-sm">3M</button>
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">6M</button>
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">12M</button>
+                </div>
+                <div class="inline-flex items-center rounded-md border border-slate-200 bg-white p-0.5 shadow-sm">
+                  <button class="rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white">Query</button>
+                  <button class="rounded px-2 py-1 text-[10px] text-slate-600">Page</button>
+                </div>
+                <button class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 shadow-sm">
+                  <span class="text-slate-500">vs.</span>
+                  <span>Vorperiode</span>
+                  <span class="text-slate-400">▾</span>
+                </button>
+                <input class="h-7 w-40 rounded-md border border-slate-200 px-2 text-[11px] placeholder:text-slate-400" placeholder="Filtern…" />
+                <button class="ml-auto inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700">
+                  XLSX ↓
+                </button>
+              </div>
+              <div class="flex items-center gap-1 border-t border-slate-100 bg-slate-50/50 px-2.5 py-1.5 text-[10px] font-medium text-slate-500">
+                <button class="rounded px-2 py-0.5 bg-slate-200 text-slate-900">Alle</button>
+                <button class="rounded px-2 py-0.5 hover:bg-slate-200">Riser</button>
+                <button class="rounded px-2 py-0.5 hover:bg-slate-200">Faller</button>
+                <button class="rounded px-2 py-0.5 hover:bg-slate-200">Neu in Top 10</button>
+                <button class="rounded px-2 py-0.5 hover:bg-slate-200">Out of Top 100</button>
+              </div>
+            </div>
+            <ul class="mt-4 space-y-1.5 text-xs">
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                <span class="text-slate-700"><strong>"Vorperiode"</strong> als sprechender Vergleich-Selector (statt kryptisch "periods/days")</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                <span class="text-slate-700"><strong>Quick-Filter-Tabs</strong> (Riser / Faller / Neu in Top 10) ersetzen unnötige Filter-Felder</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                <span class="text-slate-700"><strong>Search-Input</strong> für die 25k+ Rows</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <!-- Rank Tracker (by Query) -->
+      <article class="mb-10">
+        <div class="mb-3 flex items-center gap-2">
+          <span class="mono rounded bg-slate-900 px-2 py-0.5 text-[11px] font-semibold text-white">/rank-tracker</span>
+          <h2 class="text-xl font-semibold tracking-tight">by Query</h2>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-2">
+          <div class="rounded-2xl border border-rose-200/60 bg-white p-5 shadow-sm">
+            <div class="mb-3"><span class="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200">Vorher</span></div>
+            <div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="rounded border border-slate-200 px-2 py-1 text-[11px]">📅 1M / 3M / 6M / Mehr</div>
+                <div class="rounded border border-slate-200 px-2 py-1 text-[11px]">Show Trend ⌧</div>
+                <div class="rounded border border-dashed border-amber-300 bg-amber-50/50 px-2 py-1 text-[11px]">Axis: Fixed | Dynamic <span class="text-amber-700">(Display-Option!)</span></div>
+              </div>
+              <div class="mt-2 rounded border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-600">
+                + QueryMultiSelect (separat, "auto-select all on load")
+              </div>
+            </div>
+            <ul class="mt-4 space-y-1.5 text-xs">
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-100 text-[10px] font-bold text-rose-700">!</span>
+                <span class="text-slate-700"><strong>"Axis: Fixed/Dynamic"</strong> ist eine Chart-Display-Option, gehört NICHT in den Filter</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-100 text-[10px] font-bold text-rose-700">!</span>
+                <span class="text-slate-700"><strong>QueryMultiSelect</strong> separat unter den Filtern — "auto-select all" ist verwirrend</span>
+              </li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-white to-emerald-50/30 p-5 shadow-sm">
+            <div class="mb-3"><span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200">Nachher</span></div>
+            <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              <div class="flex flex-wrap items-center gap-2 p-2.5">
+                <div class="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 p-0.5">
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">1M</button>
+                  <button class="rounded bg-white px-2 py-1 text-[11px] font-semibold text-slate-900 shadow-sm">3M</button>
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">6M</button>
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">12M</button>
+                </div>
+                <button class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 shadow-sm">
+                  Keywords
+                  <span class="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-100 px-1 text-[9px] font-bold text-indigo-700">12</span>
+                  <span class="text-slate-400">▾</span>
+                </button>
+                <input class="h-7 w-40 rounded-md border border-slate-200 px-2 text-[11px] placeholder:text-slate-400" placeholder="Filtern…" />
+              </div>
+              <div class="border-t border-slate-100 bg-slate-50/30 px-2.5 py-1.5 text-[10px] text-slate-500">
+                Chart-Optionen (Y-Achse, Trend) sind in einem ⚙ neben dem Chart, nicht im Filter
+              </div>
+            </div>
+            <ul class="mt-4 space-y-1.5 text-xs">
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                <span class="text-slate-700"><strong>Keywords-Picker im Filter</strong> mit Counter — keine separate Komponente mehr</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                <span class="text-slate-700"><strong>Display-Optionen separat</strong> (⚙ neben dem Chart) — saubere Trennung Filter vs. Darstellung</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <!-- Position vs CTR / SEO Bubble -->
+      <article class="mb-10">
+        <div class="mb-3 flex items-center gap-2">
+          <span class="mono rounded bg-slate-900 px-2 py-0.5 text-[11px] font-semibold text-white">/seo-bubble</span>
+          <h2 class="text-xl font-semibold tracking-tight">Position vs CTR</h2>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-2">
+          <div class="rounded-2xl border border-rose-200/60 bg-white p-5 shadow-sm">
+            <div class="mb-3"><span class="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200">Vorher</span></div>
+            <div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+              <div class="flex flex-wrap items-center gap-2">
+                <div class="rounded border border-slate-200 px-2 py-1 text-[11px]">📅 1M / 3M / 6M / Mehr</div>
+                <div class="rounded border border-slate-200 px-2 py-1 text-[11px]">Query | Page</div>
+                <div class="rounded border border-dashed border-amber-300 bg-amber-50/50 px-2 py-1 text-[11px]">Pos Window: All/10/20/50 <span class="text-amber-700">(redundant?)</span></div>
+                <div class="rounded border border-dashed border-amber-300 bg-amber-50/50 px-2 py-1 text-[11px]">CTR Window: All/2/5/10 <span class="text-amber-700">(redundant?)</span></div>
+                <div class="rounded border border-slate-200 px-2 py-1 text-[11px]">⚙ Settings ▾</div>
+                <div class="rounded border border-slate-200 px-2 py-1 text-[11px]">⛶ Fullscreen</div>
+              </div>
+            </div>
+            <ul class="mt-4 space-y-1.5 text-xs">
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-rose-100 text-[10px] font-bold text-rose-700">!</span>
+                <span class="text-slate-700"><strong>Pos Window + CTR Window</strong> sind Axis-Zoom — gehören in Chart-Controls, nicht in den Filter</span>
+              </li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-emerald-200/60 bg-gradient-to-br from-white to-emerald-50/30 p-5 shadow-sm">
+            <div class="mb-3"><span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200">Nachher</span></div>
+            <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              <div class="flex flex-wrap items-center gap-2 p-2.5">
+                <div class="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 p-0.5">
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">1M</button>
+                  <button class="rounded bg-white px-2 py-1 text-[11px] font-semibold text-slate-900 shadow-sm">3M</button>
+                  <button class="rounded px-2 py-1 text-[11px] text-slate-600">6M</button>
+                </div>
+                <div class="inline-flex items-center rounded-md border border-slate-200 bg-white p-0.5 shadow-sm">
+                  <button class="rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white">Query</button>
+                  <button class="rounded px-2 py-1 text-[10px] text-slate-600">Page</button>
+                </div>
+                <div class="inline-flex items-center rounded-md border border-slate-200 bg-white p-0.5 shadow-sm">
+                  <button class="rounded bg-slate-900 px-2 py-1 text-[10px] font-medium text-white">Alle</button>
+                  <button class="rounded px-2 py-1 text-[10px] text-slate-600">Quick Wins</button>
+                  <button class="rounded px-2 py-1 text-[10px] text-slate-600">Hidden Gems</button>
+                  <button class="rounded px-2 py-1 text-[10px] text-slate-600">High Impact</button>
+                </div>
+                <button class="ml-auto inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 shadow-sm">⛶</button>
+              </div>
+            </div>
+            <ul class="mt-4 space-y-1.5 text-xs">
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                <span class="text-slate-700"><strong>Segment-Toggle</strong> (Quick Wins, Hidden Gems, High Impact) ist der eigentliche Insight — direkt sichtbar</span>
+              </li>
+              <li class="flex gap-2">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">✓</span>
+                <span class="text-slate-700"><strong>Pos/CTR Window</strong> ist jetzt Zoom direkt im Chart (Pinch/Drag), kein Filter</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <!-- ========== SUMMARY ========== -->
+      <section class="mt-12 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 class="text-xl font-semibold tracking-tight">Was sich konkret ändert</h2>
+        <div class="mt-4 grid gap-6 md:grid-cols-2">
+          <div>
+            <h3 class="mb-2 text-sm font-semibold uppercase tracking-wider text-slate-500">Komponenten</h3>
+            <ul class="space-y-1.5 text-sm text-slate-700">
+              <li class="flex gap-2"><span class="text-emerald-500">→</span> <strong><code class="mono text-xs">MonthPresetRangePicker</code></strong> wird zum Standard auf <em>allen</em> Seiten (Kannibalisierung migriert)</li>
+              <li class="flex gap-2"><span class="text-emerald-500">→</span> <strong><code class="mono text-xs">DateRangePicker</code></strong> wird intern als Fallback hinter "Eigene…" gehalten</li>
+              <li class="flex gap-2"><span class="text-emerald-500">→</span> Neue <strong><code class="mono text-xs">FilterChip</code></strong> Komponente (Label + Value + X)</li>
+              <li class="flex gap-2"><span class="text-emerald-500">→</span> Neue <strong><code class="mono text-xs">SegmentedToggle</code></strong> für Mode-Picker (Query/Page, Alle/2/3-4/5+)</li>
+              <li class="flex gap-2"><span class="text-emerald-500">→</span> Refactor <strong><code class="mono text-xs">FilterBar</code></strong>: Primary-Row + Active-Chips-Row + Advanced-Popover</li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="mb-2 text-sm font-semibold uppercase tracking-wider text-slate-500">Aufgeräumt / entfernt</h3>
+            <ul class="space-y-1.5 text-sm text-slate-700">
+              <li class="flex gap-2"><span class="text-rose-500">−</span> "Mehr" Dropdown beim Date Picker (jetzt Teil des Segmented Controls)</li>
+              <li class="flex gap-2"><span class="text-rose-500">−</span> "Top N" Dropdown auf Kannibalisierung & by Site (durch echte Pagination ersetzt)</li>
+              <li class="flex gap-2"><span class="text-rose-500">−</span> Axis-Fixed/Dynamic auf by Query (wandert zu Chart-Controls)</li>
+              <li class="flex gap-2"><span class="text-rose-500">−</span> Pos/CTR Window auf Position-vs-CTR (wandert zu Chart-Zoom)</li>
+              <li class="flex gap-2"><span class="text-rose-500">−</span> Min-Impressions-Toggle (Auto/Custom) — wird zum Slider im Erweitert-Popover</li>
+            </ul>
+          </div>
+        </div>
+        <div class="mt-6 rounded-lg bg-slate-50 p-4 text-sm text-slate-700">
+          <strong>Implementierungs-Reihenfolge (wenn du grünes Licht gibst):</strong>
+          <ol class="mt-2 space-y-1 text-sm">
+            <li>1. Design-Tokens (Farben, Schatten, Radius) in <code class="mono text-xs">globals.css</code> migrieren</li>
+            <li>2. Neue <code class="mono text-xs">FilterChip</code>, <code class="mono text-xs">SegmentedToggle</code>, <code class="mono text-xs">FilterBarV2</code> in <code class="mono text-xs">components/ui/</code></li>
+            <li>3. <code class="mono text-xs">MonthPresetRangePicker</code> als Segmented Control neu bauen</li>
+            <li>4. Pro Seite migrieren: Kannibalisierung → Data Explorer → Top Mover → Rank Tracker → URL Tracker → SEO Bubble</li>
+            <li>5. Eine Seite (z. B. Kannibalisierung) zuerst als Pilot, dann iterieren bevor der Rest folgt</li>
+          </ol>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

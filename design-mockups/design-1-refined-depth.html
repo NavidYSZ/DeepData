@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design 1 · Refined Depth · DeepData</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui"],
+              mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+            },
+            boxShadow: {
+              soft: "0 1px 2px 0 rgba(15,23,42,0.04), 0 1px 3px 0 rgba(15,23,42,0.06)",
+              lift: "0 4px 6px -1px rgba(15,23,42,0.05), 0 2px 4px -2px rgba(15,23,42,0.05)",
+              float:
+                "0 10px 15px -3px rgba(15,23,42,0.06), 0 4px 6px -4px rgba(15,23,42,0.05)",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        background: #f8fafc;
+        color: #0f172a;
+      }
+      .mono {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+      }
+      /* Subtle textured background */
+      .canvas-bg {
+        background-color: #f8fafc;
+        background-image:
+          radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.04) 0px, transparent 50%),
+          radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.03) 0px, transparent 50%);
+      }
+      .sparkline {
+        stroke-dasharray: 100;
+        stroke-dashoffset: 0;
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(15, 23, 42, 0.12);
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body class="canvas-bg min-h-screen">
+    <div class="flex min-h-screen">
+      <!-- ===== SIDEBAR ===== -->
+      <aside
+        class="hidden w-64 shrink-0 flex-col border-r border-slate-200/80 bg-white/60 backdrop-blur md:flex"
+      >
+        <!-- Logo + Property switcher -->
+        <div class="border-b border-slate-200/80 p-4">
+          <div class="flex items-center gap-2.5">
+            <div
+              class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lift"
+            >
+              <span class="text-sm font-bold">D</span>
+            </div>
+            <div class="leading-tight">
+              <div class="text-sm font-semibold">DeepData</div>
+              <div class="text-[10px] uppercase tracking-wider text-slate-500">
+                GSC Studio
+              </div>
+            </div>
+          </div>
+
+          <!-- Property switcher -->
+          <button
+            class="mt-4 flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-left shadow-soft transition hover:border-slate-300 hover:shadow-lift"
+          >
+            <div class="min-w-0">
+              <div
+                class="text-[10px] font-medium uppercase tracking-wider text-slate-500"
+              >
+                Property
+              </div>
+              <div class="truncate text-sm font-medium text-slate-900">
+                example-shop.de
+              </div>
+            </div>
+            <svg
+              class="h-4 w-4 shrink-0 text-slate-400"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="m7 15 5 5 5-5M7 9l5-5 5 5" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Nav -->
+        <nav class="flex-1 overflow-y-auto p-3 text-sm">
+          <a
+            href="#"
+            class="flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium text-slate-700 hover:bg-slate-100"
+          >
+            <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="9" rx="1.5" />
+              <rect x="14" y="3" width="7" height="5" rx="1.5" />
+              <rect x="14" y="12" width="7" height="9" rx="1.5" />
+              <rect x="3" y="16" width="7" height="5" rx="1.5" />
+            </svg>
+            Dashboard
+          </a>
+
+          <div class="mt-5">
+            <div
+              class="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400"
+            >
+              Keywords
+            </div>
+            <a href="#" class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100">
+              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              by Query
+            </a>
+            <a href="#" class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100">
+              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                <path d="M3.6 9h16.8M3.6 15h16.8M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+              </svg>
+              by Site
+            </a>
+
+            <!-- Active item -->
+            <a
+              href="#"
+              class="relative flex items-center gap-2.5 rounded-lg bg-gradient-to-r from-indigo-50 to-transparent px-3 py-2 font-medium text-indigo-700 shadow-soft ring-1 ring-indigo-100"
+            >
+              <span
+                class="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r bg-indigo-500"
+              ></span>
+              <svg class="h-4 w-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 3v18h18M7 14l4-4 4 4 5-5" />
+              </svg>
+              Data Explorer
+            </a>
+          </div>
+
+          <div class="mt-5">
+            <div class="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              Insights
+            </div>
+            <a href="#" class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100">
+              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="6" cy="6" r="2" /><circle cx="18" cy="14" r="3" /><circle cx="10" cy="18" r="2" />
+              </svg>
+              Position vs CTR
+            </a>
+            <a href="#" class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100">
+              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+              </svg>
+              Kannibalisierung
+            </a>
+            <a href="#" class="flex items-center justify-between rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100">
+              <span class="flex items-center gap-2.5">
+                <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m7 17 5-5 5 5M7 7l5-5 5 5" />
+                </svg>
+                Top Mover
+              </span>
+              <span class="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">NEU</span>
+            </a>
+            <a href="#" class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100">
+              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+              Internal Links
+            </a>
+            <a href="#" class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100">
+              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              Chat Agent
+            </a>
+          </div>
+
+          <div class="mt-5">
+            <div class="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              Tools
+            </div>
+            <a href="#" class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100">
+              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3" /><circle cx="19" cy="5" r="2" /><circle cx="5" cy="19" r="2" />
+                <path d="m14 10 3-3M7 17l3-3" />
+              </svg>
+              Clustering
+            </a>
+            <a href="#" class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100">
+              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
+              </svg>
+              NLP
+            </a>
+          </div>
+        </nav>
+
+        <!-- Footer / settings -->
+        <div class="border-t border-slate-200/80 p-3">
+          <a href="#" class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100">
+            <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            Einstellungen
+          </a>
+        </div>
+      </aside>
+
+      <!-- ===== MAIN ===== -->
+      <main class="min-w-0 flex-1">
+        <!-- Header -->
+        <header
+          class="sticky top-0 z-30 border-b border-slate-200/80 bg-white/70 backdrop-blur-xl"
+        >
+          <div class="flex h-14 items-center justify-between px-6">
+            <div class="flex items-center gap-3 text-sm">
+              <a href="./index.html" class="text-slate-500 hover:text-slate-700">Übersicht</a>
+              <svg class="h-3.5 w-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+              <span class="text-slate-500">Keywords</span>
+              <svg class="h-3.5 w-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+              <span class="font-medium text-slate-900">Data Explorer</span>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <!-- Account picker -->
+              <button
+                class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-soft hover:bg-slate-50"
+              >
+                <span class="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-rose-500 text-[10px] font-bold text-white">M</span>
+                marketing@example.com
+                <svg class="h-3 w-3 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+              <button
+                class="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+                title="Hilfe"
+              >
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div class="space-y-6 px-6 py-6">
+          <!-- Page header -->
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 class="text-2xl font-semibold tracking-tight text-slate-900">
+                Data Explorer
+              </h1>
+              <p class="mt-1 max-w-2xl text-sm text-slate-600">
+                Live-Rohdaten aus der Search Console. Filtere Keywords, dedupliziere
+                Kannibalisierung und exportiere die Auswahl.
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-soft hover:bg-slate-50"
+              >
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                Export
+              </button>
+              <button
+                class="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white shadow-lift hover:bg-slate-800"
+              >
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M5 12h14M12 5v14" />
+                </svg>
+                Filter speichern
+              </button>
+            </div>
+          </div>
+
+          <!-- =================== UNIFIED FILTER BAR =================== -->
+          <section
+            class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-soft"
+          >
+            <!-- Primary row: date range + search + advanced -->
+            <div class="flex flex-wrap items-center gap-3 p-3">
+              <!-- Date preset segmented control -->
+              <div
+                class="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 shadow-inner"
+              >
+                <button class="rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-white">1M</button>
+                <button class="rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-soft">3M</button>
+                <button class="rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-white">6M</button>
+                <button class="rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-white">12M</button>
+                <button class="rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-white">16M</button>
+                <span class="mx-1 h-4 w-px bg-slate-200"></span>
+                <button class="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-white">
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <path d="M16 2v4M8 2v4M3 10h18" />
+                  </svg>
+                  Eigene
+                </button>
+              </div>
+
+              <!-- Search -->
+              <div class="relative min-w-[220px] flex-1">
+                <svg class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Suchen in Keywords oder URLs…"
+                  class="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                />
+              </div>
+
+              <!-- Advanced filters trigger -->
+              <button
+                class="relative inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-soft hover:bg-slate-50"
+              >
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 6h18M6 12h12M10 18h4" />
+                </svg>
+                Erweitert
+                <span class="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-100 px-1 text-[10px] font-semibold text-indigo-700">3</span>
+              </button>
+
+              <button
+                class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-soft hover:bg-slate-50"
+                title="Filter zurücksetzen"
+              >
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Active filter chips -->
+            <div
+              class="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/70 px-3 py-2"
+            >
+              <span
+                class="text-[11px] font-medium uppercase tracking-wider text-slate-500"
+                >Aktive Filter</span
+              >
+              <span
+                class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-soft"
+              >
+                <span class="text-slate-500">Enthält</span>
+                <span class="mono text-slate-900">"schuhe"</span>
+                <button class="text-slate-400 hover:text-slate-700">
+                  <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </span>
+              <span
+                class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-soft"
+              >
+                <span class="text-slate-500">Min. Impressionen</span>
+                <span class="mono text-slate-900">≥ 120</span>
+                <button class="text-slate-400 hover:text-slate-700">
+                  <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </span>
+              <span
+                class="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700"
+              >
+                <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4" />
+                </svg>
+                Kannibalisierung dedupliziert · Toleranz 3
+                <button class="text-indigo-400 hover:text-indigo-700">
+                  <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </span>
+            </div>
+          </section>
+
+          <!-- =================== STATS ROW =================== -->
+          <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <!-- KPI 1 -->
+            <article
+              class="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft transition hover:shadow-lift"
+            >
+              <div
+                class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-indigo-50/80 blur-2xl"
+              ></div>
+              <div class="relative">
+                <div class="flex items-center justify-between">
+                  <div class="text-xs font-medium uppercase tracking-wider text-slate-500">
+                    Keywords (gefiltert)
+                  </div>
+                  <span
+                    class="inline-flex items-center gap-0.5 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700"
+                  >
+                    <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <path d="m6 9 6-6 6 6M12 3v18" />
+                    </svg>
+                    +12.4%
+                  </span>
+                </div>
+                <div class="mt-3 flex items-baseline gap-1.5">
+                  <div class="text-3xl font-semibold tracking-tight text-slate-900">
+                    8,142
+                  </div>
+                  <div class="text-xs text-slate-500">/ 24,891 total</div>
+                </div>
+                <svg class="mt-3 h-8 w-full" viewBox="0 0 200 32" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stop-color="#6366f1" stop-opacity="0.3" />
+                      <stop offset="100%" stop-color="#6366f1" stop-opacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M0 24 L20 20 L40 22 L60 14 L80 16 L100 10 L120 12 L140 6 L160 8 L180 4 L200 2 L200 32 L0 32 Z" fill="url(#g1)" />
+                  <path d="M0 24 L20 20 L40 22 L60 14 L80 16 L100 10 L120 12 L140 6 L160 8 L180 4 L200 2" stroke="#6366f1" stroke-width="1.5" fill="none" />
+                </svg>
+              </div>
+            </article>
+
+            <!-- KPI 2 -->
+            <article class="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft transition hover:shadow-lift">
+              <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-sky-50/80 blur-2xl"></div>
+              <div class="relative">
+                <div class="flex items-center justify-between">
+                  <div class="text-xs font-medium uppercase tracking-wider text-slate-500">Klicks</div>
+                  <span class="inline-flex items-center gap-0.5 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                    <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6-6 6 6M12 3v18" /></svg>
+                    +8.1%
+                  </span>
+                </div>
+                <div class="mt-3 flex items-baseline gap-1.5">
+                  <div class="text-3xl font-semibold tracking-tight text-slate-900">142.8K</div>
+                  <div class="text-xs text-slate-500">in 91 Tagen</div>
+                </div>
+                <svg class="mt-3 h-8 w-full" viewBox="0 0 200 32" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="g2" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.3" />
+                      <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M0 28 L20 26 L40 22 L60 24 L80 18 L100 20 L120 14 L140 16 L160 10 L180 12 L200 6 L200 32 L0 32 Z" fill="url(#g2)" />
+                  <path d="M0 28 L20 26 L40 22 L60 24 L80 18 L100 20 L120 14 L140 16 L160 10 L180 12 L200 6" stroke="#0ea5e9" stroke-width="1.5" fill="none" />
+                </svg>
+              </div>
+            </article>
+
+            <!-- KPI 3 -->
+            <article class="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft transition hover:shadow-lift">
+              <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-violet-50/80 blur-2xl"></div>
+              <div class="relative">
+                <div class="flex items-center justify-between">
+                  <div class="text-xs font-medium uppercase tracking-wider text-slate-500">Impressionen</div>
+                  <span class="inline-flex items-center gap-0.5 rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
+                    <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 15 6 6 6-6M12 21V3" /></svg>
+                    −2.3%
+                  </span>
+                </div>
+                <div class="mt-3 flex items-baseline gap-1.5">
+                  <div class="text-3xl font-semibold tracking-tight text-slate-900">4.2M</div>
+                  <div class="text-xs text-slate-500">Reichweite</div>
+                </div>
+                <svg class="mt-3 h-8 w-full" viewBox="0 0 200 32" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="g3" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.3" />
+                      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M0 8 L20 10 L40 6 L60 12 L80 10 L100 16 L120 14 L140 18 L160 16 L180 20 L200 24 L200 32 L0 32 Z" fill="url(#g3)" />
+                  <path d="M0 8 L20 10 L40 6 L60 12 L80 10 L100 16 L120 14 L140 18 L160 16 L180 20 L200 24" stroke="#8b5cf6" stroke-width="1.5" fill="none" />
+                </svg>
+              </div>
+            </article>
+
+            <!-- KPI 4 -->
+            <article class="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft transition hover:shadow-lift">
+              <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-emerald-50/80 blur-2xl"></div>
+              <div class="relative">
+                <div class="flex items-center justify-between">
+                  <div class="text-xs font-medium uppercase tracking-wider text-slate-500">Ø Position</div>
+                  <span class="inline-flex items-center gap-0.5 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">−0.4</span>
+                </div>
+                <div class="mt-3 flex items-baseline gap-1.5">
+                  <div class="text-3xl font-semibold tracking-tight text-slate-900">14.2</div>
+                  <div class="text-xs text-slate-500">impressionsgewichtet</div>
+                </div>
+                <svg class="mt-3 h-8 w-full" viewBox="0 0 200 32" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="g4" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stop-color="#10b981" stop-opacity="0.3" />
+                      <stop offset="100%" stop-color="#10b981" stop-opacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M0 12 L20 14 L40 18 L60 14 L80 20 L100 18 L120 22 L140 20 L160 24 L180 22 L200 26 L200 32 L0 32 Z" fill="url(#g4)" />
+                  <path d="M0 12 L20 14 L40 18 L60 14 L80 20 L100 18 L120 22 L140 20 L160 24 L180 22 L200 26" stroke="#10b981" stroke-width="1.5" fill="none" />
+                </svg>
+              </div>
+            </article>
+          </section>
+
+          <!-- =================== DATA TABLE =================== -->
+          <section
+            class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-soft"
+          >
+            <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5">
+              <div>
+                <h2 class="text-base font-semibold tracking-tight text-slate-900">
+                  Keyword-Treffer
+                </h2>
+                <p class="mt-0.5 text-xs text-slate-500">
+                  8.142 gefiltert · <span class="text-slate-400">1.243 unter Min-Impr</span> · <span class="text-slate-400">512 kannibalisiert</span>
+                </p>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <div class="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 text-xs font-medium shadow-soft">
+                  <button class="rounded-md bg-slate-900 px-2 py-1 text-white">Tabelle</button>
+                  <button class="rounded-md px-2 py-1 text-slate-600 hover:bg-slate-50">Chart</button>
+                </div>
+                <button class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-soft hover:bg-slate-50">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
+                  </svg>
+                </button>
+              </div>
+            </header>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-slate-100 bg-slate-50/70 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    <th class="px-5 py-2.5">Keyword</th>
+                    <th class="px-5 py-2.5">Top-Page</th>
+                    <th class="px-5 py-2.5 text-right">Klicks</th>
+                    <th class="px-5 py-2.5 text-right">Impr.</th>
+                    <th class="px-5 py-2.5 text-right">CTR</th>
+                    <th class="px-5 py-2.5 text-right">Position</th>
+                    <th class="px-5 py-2.5 text-right">Δ vs. Vorperiode</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <!-- Row -->
+                  <tr class="group hover:bg-slate-50/70">
+                    <td class="px-5 py-3 font-medium text-slate-900">winterschuhe damen</td>
+                    <td class="px-5 py-3">
+                      <a href="#" class="mono text-xs text-indigo-600 hover:underline">/damen/winterschuhe</a>
+                    </td>
+                    <td class="px-5 py-3 text-right mono">2,847</td>
+                    <td class="px-5 py-3 text-right mono text-slate-500">52,310</td>
+                    <td class="px-5 py-3 text-right mono">5.44%</td>
+                    <td class="px-5 py-3 text-right">
+                      <span class="inline-flex items-center justify-center rounded-md bg-emerald-50 px-1.5 py-0.5 mono text-xs font-semibold text-emerald-700">3.2</span>
+                    </td>
+                    <td class="px-5 py-3 text-right">
+                      <span class="inline-flex items-center gap-0.5 mono text-xs font-semibold text-emerald-600">
+                        <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6-6 6 6" /></svg>
+                        −1.8
+                      </span>
+                    </td>
+                  </tr>
+                  <tr class="group hover:bg-slate-50/70">
+                    <td class="px-5 py-3 font-medium text-slate-900">laufschuhe herren</td>
+                    <td class="px-5 py-3">
+                      <a href="#" class="mono text-xs text-indigo-600 hover:underline">/herren/laufschuhe</a>
+                    </td>
+                    <td class="px-5 py-3 text-right mono">1,902</td>
+                    <td class="px-5 py-3 text-right mono text-slate-500">38,194</td>
+                    <td class="px-5 py-3 text-right mono">4.98%</td>
+                    <td class="px-5 py-3 text-right">
+                      <span class="inline-flex items-center justify-center rounded-md bg-emerald-50 px-1.5 py-0.5 mono text-xs font-semibold text-emerald-700">5.1</span>
+                    </td>
+                    <td class="px-5 py-3 text-right">
+                      <span class="inline-flex items-center gap-0.5 mono text-xs font-semibold text-rose-600">
+                        <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 15 6 6 6-6" /></svg>
+                        +2.4
+                      </span>
+                    </td>
+                  </tr>
+                  <tr class="group bg-amber-50/30 hover:bg-amber-50/60">
+                    <td class="px-5 py-3 font-medium text-slate-900">
+                      <span class="flex items-center gap-2">
+                        sneaker weiss
+                        <span title="Kannibalisierung erkannt" class="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                          <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></svg>
+                          2 Seiten
+                        </span>
+                      </span>
+                    </td>
+                    <td class="px-5 py-3">
+                      <a href="#" class="mono text-xs text-indigo-600 hover:underline">/sneaker</a>
+                    </td>
+                    <td class="px-5 py-3 text-right mono">1,108</td>
+                    <td class="px-5 py-3 text-right mono text-slate-500">28,440</td>
+                    <td class="px-5 py-3 text-right mono">3.89%</td>
+                    <td class="px-5 py-3 text-right">
+                      <span class="inline-flex items-center justify-center rounded-md bg-amber-100 px-1.5 py-0.5 mono text-xs font-semibold text-amber-800">7.8</span>
+                    </td>
+                    <td class="px-5 py-3 text-right">
+                      <span class="inline-flex items-center gap-0.5 mono text-xs font-semibold text-slate-500">
+                        ±0.1
+                      </span>
+                    </td>
+                  </tr>
+                  <tr class="group hover:bg-slate-50/70">
+                    <td class="px-5 py-3 font-medium text-slate-900">wanderschuhe wasserdicht</td>
+                    <td class="px-5 py-3">
+                      <a href="#" class="mono text-xs text-indigo-600 hover:underline">/outdoor/wanderschuhe</a>
+                    </td>
+                    <td class="px-5 py-3 text-right mono">854</td>
+                    <td class="px-5 py-3 text-right mono text-slate-500">15,892</td>
+                    <td class="px-5 py-3 text-right mono">5.37%</td>
+                    <td class="px-5 py-3 text-right">
+                      <span class="inline-flex items-center justify-center rounded-md bg-emerald-50 px-1.5 py-0.5 mono text-xs font-semibold text-emerald-700">4.2</span>
+                    </td>
+                    <td class="px-5 py-3 text-right">
+                      <span class="inline-flex items-center gap-0.5 mono text-xs font-semibold text-emerald-600">
+                        <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6-6 6 6" /></svg>
+                        −0.9
+                      </span>
+                    </td>
+                  </tr>
+                  <tr class="group hover:bg-slate-50/70">
+                    <td class="px-5 py-3 font-medium text-slate-900">ballerinas leder</td>
+                    <td class="px-5 py-3">
+                      <a href="#" class="mono text-xs text-indigo-600 hover:underline">/damen/ballerinas</a>
+                    </td>
+                    <td class="px-5 py-3 text-right mono">412</td>
+                    <td class="px-5 py-3 text-right mono text-slate-500">9,201</td>
+                    <td class="px-5 py-3 text-right mono">4.48%</td>
+                    <td class="px-5 py-3 text-right">
+                      <span class="inline-flex items-center justify-center rounded-md bg-slate-100 px-1.5 py-0.5 mono text-xs font-semibold text-slate-700">12.4</span>
+                    </td>
+                    <td class="px-5 py-3 text-right">
+                      <span class="inline-flex items-center gap-0.5 mono text-xs font-semibold text-rose-600">
+                        <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 15 6 6 6-6" /></svg>
+                        +3.2
+                      </span>
+                    </td>
+                  </tr>
+                  <tr class="group hover:bg-slate-50/70">
+                    <td class="px-5 py-3 font-medium text-slate-900">stiefel braun</td>
+                    <td class="px-5 py-3">
+                      <a href="#" class="mono text-xs text-indigo-600 hover:underline">/damen/stiefel</a>
+                    </td>
+                    <td class="px-5 py-3 text-right mono">389</td>
+                    <td class="px-5 py-3 text-right mono text-slate-500">8,712</td>
+                    <td class="px-5 py-3 text-right mono">4.47%</td>
+                    <td class="px-5 py-3 text-right">
+                      <span class="inline-flex items-center justify-center rounded-md bg-slate-100 px-1.5 py-0.5 mono text-xs font-semibold text-slate-700">11.2</span>
+                    </td>
+                    <td class="px-5 py-3 text-right">
+                      <span class="inline-flex items-center gap-0.5 mono text-xs font-semibold text-slate-500">
+                        ±0.0
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <footer class="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+              <div>
+                Zeige <span class="font-semibold text-slate-700">1–25</span> von
+                <span class="font-semibold text-slate-700">8.142</span> Keywords
+              </div>
+              <div class="flex items-center gap-1">
+                <button class="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 font-medium text-slate-600 hover:bg-slate-50">
+                  <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6" /></svg>
+                  Zurück
+                </button>
+                <button class="inline-flex h-7 items-center gap-1 rounded-md bg-slate-900 px-2.5 font-medium text-white hover:bg-slate-800">
+                  Weiter
+                  <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6" /></svg>
+                </button>
+              </div>
+            </footer>
+          </section>
+
+          <!-- Design notes -->
+          <section
+            class="rounded-2xl border border-dashed border-slate-300 bg-white/60 p-5 text-sm"
+          >
+            <h3 class="mb-2 font-semibold text-slate-900">Design-Notizen · Refined Depth</h3>
+            <ul class="grid gap-2 text-slate-600 md:grid-cols-2">
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Mehrstufige Schatten (<code class="mono text-xs">soft</code>, <code class="mono text-xs">lift</code>, <code class="mono text-xs">float</code>) statt nur <code class="mono text-xs">shadow-sm</code></li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> <code class="mono text-xs">rounded-2xl</code> auf Cards für moderneres Look (statt 8 px)</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Off-white Canvas (<code class="mono text-xs">#f8fafc</code>) + pure-white Cards = Tiefe ohne aggressive Schatten</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Segmented Control für Date-Presets ersetzt 3 Einzel-Buttons + "Mehr"</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Aktive Filter als Chips mit Inline-Remove (×) und Counter im Trigger</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Mono-Schrift für Zahlen → bessere Lesbarkeit in Tabellen</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Sparklines in KPI-Cards zeigen Trend ohne separate Chart</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Kannibalisierte Zeilen mit dezenter amber/50 Hervorhebung</li>
+            </ul>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

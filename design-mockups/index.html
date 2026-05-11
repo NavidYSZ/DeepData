@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DeepData · Redesign Mockups</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+      }
+      body {
+        font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+      }
+      .grain {
+        background-image: radial-gradient(
+          rgba(15, 23, 42, 0.04) 1px,
+          transparent 1px
+        );
+        background-size: 16px 16px;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-900 grain">
+    <div class="mx-auto max-w-6xl px-6 py-16">
+      <!-- Header -->
+      <header class="mb-14">
+        <div
+          class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm"
+        >
+          <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+          UI Redesign · DeepData GSC Dashboard
+        </div>
+        <h1 class="mt-4 text-4xl font-semibold tracking-tight md:text-5xl">
+          Drei Designrichtungen für ein moderneres
+          <span
+            class="bg-gradient-to-r from-indigo-600 via-violet-600 to-emerald-500 bg-clip-text text-transparent"
+            >DeepData</span
+          >.
+        </h1>
+        <p class="mt-4 max-w-2xl text-base leading-relaxed text-slate-600">
+          Jedes Mockup adressiert die gleichen Kernprobleme — flache Hierarchie,
+          uneinheitliche Filter, fehlende visuelle Tiefe — mit einer eigenen
+          Designsprache. Wähle einen Stil, oder kombiniere Elemente.
+        </p>
+      </header>
+
+      <!-- Problem statement -->
+      <section
+        class="mb-12 rounded-2xl border border-amber-200 bg-amber-50/70 p-6"
+      >
+        <h2
+          class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-amber-900"
+        >
+          <svg
+            class="h-4 w-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+            />
+          </svg>
+          Was im Audit aufgefallen ist
+        </h2>
+        <div class="mt-3 grid gap-4 md:grid-cols-2">
+          <div class="text-sm leading-relaxed text-amber-950">
+            <strong>1. Filter sind nicht einheitlich.</strong> Kannibalisierung
+            nutzt einen vollen Kalender-Picker, der Rest nutzt
+            <code class="mono rounded bg-amber-100 px-1">MonthPresetRangePicker</code>.
+            Manche Seiten zeigen Advanced-Filter inline, andere im Popover.
+          </div>
+          <div class="text-sm leading-relaxed text-amber-950">
+            <strong>2. Visuell zu flach.</strong> Nur
+            <code class="mono rounded bg-amber-100 px-1">shadow-sm</code>
+            auf allen Cards, kaum Background-Differenzierung, alle Elemente auf
+            der gleichen "Ebene".
+          </div>
+          <div class="text-sm leading-relaxed text-amber-950">
+            <strong>3. Stats-Hierarchie fehlt.</strong> Die wichtigste Zahl
+            sieht aus wie jede andere. KPIs verstecken sich im Fließtext.
+          </div>
+          <div class="text-sm leading-relaxed text-amber-950">
+            <strong>4. Filter-Redundanz.</strong> "Min Impressions" gibt es in
+            drei Varianten (Slider, Input, Tolerance). Drop-downs für Top N,
+            Bucket, Mode überall verstreut.
+          </div>
+        </div>
+      </section>
+
+      <!-- Design cards -->
+      <section class="grid gap-6 md:grid-cols-3">
+        <!-- Design 1 -->
+        <a
+          href="./design-1-refined-depth.html"
+          class="group block rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-lg hover:-translate-y-0.5"
+        >
+          <div
+            class="mb-5 aspect-[4/3] overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 to-slate-50 ring-1 ring-slate-200/60"
+          >
+            <div class="flex h-full flex-col p-3">
+              <div class="flex gap-1">
+                <div class="h-2 w-2 rounded-full bg-rose-400"></div>
+                <div class="h-2 w-2 rounded-full bg-amber-400"></div>
+                <div class="h-2 w-2 rounded-full bg-emerald-400"></div>
+              </div>
+              <div class="mt-2 flex flex-1 gap-2">
+                <div
+                  class="w-1/4 rounded-md bg-white shadow-sm ring-1 ring-slate-200"
+                ></div>
+                <div class="flex flex-1 flex-col gap-1.5">
+                  <div
+                    class="h-4 rounded bg-white shadow-sm ring-1 ring-slate-200"
+                  ></div>
+                  <div class="grid grid-cols-3 gap-1.5">
+                    <div
+                      class="h-8 rounded-md bg-white shadow ring-1 ring-slate-200"
+                    ></div>
+                    <div
+                      class="h-8 rounded-md bg-white shadow ring-1 ring-slate-200"
+                    ></div>
+                    <div
+                      class="h-8 rounded-md bg-white shadow ring-1 ring-slate-200"
+                    ></div>
+                  </div>
+                  <div
+                    class="h-12 flex-1 rounded-md bg-white shadow ring-1 ring-slate-200"
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mb-2 flex items-center gap-2">
+            <span class="mono text-xs text-slate-400">01</span>
+            <span
+              class="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700"
+              >Sanfte Evolution</span
+            >
+          </div>
+          <h3 class="text-lg font-semibold tracking-tight">Refined Depth</h3>
+          <p class="mt-1 text-sm leading-relaxed text-slate-600">
+            Bleibt nah am bestehenden Look, aber mit echter visueller Hierarchie:
+            mehrstufige Schatten, abgesetzte Cards, abgerundete Ecken.
+            Niedrigstes Risiko, größter Komfortgewinn.
+          </p>
+          <div
+            class="mt-4 flex items-center gap-1 text-sm font-medium text-indigo-600 group-hover:gap-2"
+          >
+            Mockup öffnen
+            <svg
+              class="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M5 12h14M13 5l7 7-7 7" />
+            </svg>
+          </div>
+        </a>
+
+        <!-- Design 2 -->
+        <a
+          href="./design-2-linear-pro.html"
+          class="group block rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-lg hover:-translate-y-0.5"
+        >
+          <div
+            class="mb-5 aspect-[4/3] overflow-hidden rounded-xl bg-slate-950 ring-1 ring-slate-800"
+          >
+            <div class="flex h-full p-3">
+              <div class="w-1/4 rounded-md bg-slate-900/60 ring-1 ring-slate-800"></div>
+              <div class="ml-2 flex flex-1 flex-col gap-1.5">
+                <div class="h-4 rounded bg-slate-900/60 ring-1 ring-slate-800"></div>
+                <div class="grid grid-cols-3 gap-1.5">
+                  <div class="h-8 rounded-md bg-slate-900/60 ring-1 ring-slate-800"></div>
+                  <div class="h-8 rounded-md bg-slate-900/60 ring-1 ring-slate-800"></div>
+                  <div class="h-8 rounded-md bg-slate-900/60 ring-1 ring-slate-800"></div>
+                </div>
+                <div
+                  class="h-12 flex-1 rounded-md bg-slate-900/60 ring-1 ring-slate-800"
+                ></div>
+              </div>
+            </div>
+          </div>
+          <div class="mb-2 flex items-center gap-2">
+            <span class="mono text-xs text-slate-400">02</span>
+            <span
+              class="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-violet-700"
+              >Pro / Dense</span
+            >
+          </div>
+          <h3 class="text-lg font-semibold tracking-tight">Linear Pro</h3>
+          <p class="mt-1 text-sm leading-relaxed text-slate-600">
+            Dunkle Sidebar, helle Content-Area, hohe Daten-Dichte. Filter werden
+            zu Chips mit "Add filter"-Pattern wie in Linear/Notion. Scharf,
+            schnell, datenfokussiert.
+          </p>
+          <div
+            class="mt-4 flex items-center gap-1 text-sm font-medium text-indigo-600 group-hover:gap-2"
+          >
+            Mockup öffnen
+            <svg
+              class="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M5 12h14M13 5l7 7-7 7" />
+            </svg>
+          </div>
+        </a>
+
+        <!-- Design 3 -->
+        <a
+          href="./design-3-bento-studio.html"
+          class="group block rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-lg hover:-translate-y-0.5"
+        >
+          <div
+            class="mb-5 aspect-[4/3] overflow-hidden rounded-xl bg-gradient-to-br from-indigo-50 via-white to-emerald-50 ring-1 ring-slate-200/60"
+          >
+            <div class="flex h-full p-3">
+              <div class="w-1/4 rounded-md bg-white shadow-sm ring-1 ring-slate-200"></div>
+              <div class="ml-2 flex flex-1 flex-col gap-1.5">
+                <div
+                  class="h-4 rounded bg-white shadow-sm ring-1 ring-slate-200"
+                ></div>
+                <div class="grid grid-cols-4 gap-1.5">
+                  <div
+                    class="h-10 rounded-md bg-indigo-100 shadow-sm ring-1 ring-indigo-200"
+                  ></div>
+                  <div
+                    class="h-10 rounded-md bg-violet-100 shadow-sm ring-1 ring-violet-200"
+                  ></div>
+                  <div
+                    class="h-10 rounded-md bg-emerald-100 shadow-sm ring-1 ring-emerald-200"
+                  ></div>
+                  <div
+                    class="h-10 rounded-md bg-amber-100 shadow-sm ring-1 ring-amber-200"
+                  ></div>
+                </div>
+                <div
+                  class="h-10 flex-1 rounded-md bg-white shadow ring-1 ring-slate-200"
+                ></div>
+              </div>
+            </div>
+          </div>
+          <div class="mb-2 flex items-center gap-2">
+            <span class="mono text-xs text-slate-400">03</span>
+            <span
+              class="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-700"
+              >Bold / Vibrant</span
+            >
+          </div>
+          <h3 class="text-lg font-semibold tracking-tight">Bento Studio</h3>
+          <p class="mt-1 text-sm leading-relaxed text-slate-600">
+            Farb-codierte KPI-Kacheln in einem Bento-Grid (Klicks blau,
+            Impressionen lila, CTR grün — bereits im Code angelegt). Mehr
+            Persönlichkeit, mehr Visualisierung, modernes Analytics-Tool-Feeling.
+          </p>
+          <div
+            class="mt-4 flex items-center gap-1 text-sm font-medium text-indigo-600 group-hover:gap-2"
+          >
+            Mockup öffnen
+            <svg
+              class="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M5 12h14M13 5l7 7-7 7" />
+            </svg>
+          </div>
+        </a>
+      </section>
+
+      <!-- Filter comparison link -->
+      <section class="mt-12">
+        <a
+          href="./filters-unified.html"
+          class="group flex items-center justify-between rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 transition hover:shadow-md"
+        >
+          <div>
+            <div
+              class="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-700"
+            >
+              Bonus
+            </div>
+            <h3 class="mt-2 text-lg font-semibold tracking-tight">
+              Vereinheitlichte Filter-Bar — Vorher / Nachher
+            </h3>
+            <p class="mt-1 max-w-2xl text-sm text-slate-600">
+              Direkter Vergleich der aktuellen Filter pro Seite gegen ein
+              einheitliches System. Adressiert die Redundanzen und den
+              uneinheitlichen Date-Range-Picker.
+            </p>
+          </div>
+          <div
+            class="hidden h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-white transition group-hover:scale-105 md:flex"
+          >
+            <svg
+              class="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M5 12h14M13 5l7 7-7 7" />
+            </svg>
+          </div>
+        </a>
+      </section>
+
+      <footer class="mt-16 text-xs text-slate-400">
+        Mockups sind statische HTML-Dateien mit Tailwind via CDN. Wenn du eine
+        Richtung wählst, übertrage ich die Tokens (Farben, Schatten, Radius) in
+        <code class="mono">globals.css</code> und passe
+        <code class="mono">page-shell.tsx</code> sowie die Filter-Komponenten an.
+      </footer>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design 3 · Bento Studio · DeepData</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui"],
+              mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        background: linear-gradient(180deg, #fafbff 0%, #f5f7fb 100%);
+      }
+      .mono {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(15, 23, 42, 0.14);
+        border-radius: 8px;
+      }
+      .bento-card {
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+      }
+      .bento-card:hover {
+        transform: translateY(-1px);
+      }
+      .grain-blue {
+        background-image: radial-gradient(
+          rgba(99, 102, 241, 0.05) 1px,
+          transparent 1px
+        );
+        background-size: 16px 16px;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-900">
+    <div class="flex min-h-screen">
+      <!-- ===== SIDEBAR ===== -->
+      <aside
+        class="hidden w-64 shrink-0 flex-col border-r border-slate-200/70 bg-white md:flex"
+      >
+        <div class="border-b border-slate-200/70 p-5">
+          <div class="flex items-center gap-2.5">
+            <div
+              class="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/30"
+            >
+              <span class="text-base font-bold">D</span>
+              <span class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500"></span>
+            </div>
+            <div class="leading-tight">
+              <div class="text-base font-semibold tracking-tight">DeepData</div>
+              <div class="text-[11px] text-slate-500">Studio · Pro Plan</div>
+            </div>
+          </div>
+
+          <button
+            class="mt-4 flex w-full items-center justify-between rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 px-3 py-2.5 text-left shadow-sm transition hover:shadow-md"
+          >
+            <div class="min-w-0">
+              <div class="text-[10px] font-medium uppercase tracking-wider text-slate-500">
+                Property
+              </div>
+              <div class="flex items-center gap-1.5 truncate text-sm font-medium text-slate-900">
+                <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                example-shop.de
+              </div>
+            </div>
+            <svg class="h-4 w-4 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m7 15 5 5 5-5M7 9l5-5 5 5" />
+            </svg>
+          </button>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto p-3 text-sm">
+          <!-- Active: Dashboard -->
+          <a href="#" class="relative flex items-center gap-3 rounded-xl bg-gradient-to-r from-indigo-50 via-indigo-50/60 to-transparent px-3 py-2.5 font-medium text-indigo-700">
+            <span class="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r bg-gradient-to-b from-indigo-500 to-violet-500"></span>
+            <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-indigo-100">
+              <svg class="h-4 w-4 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="9" rx="1.5" />
+                <rect x="14" y="3" width="7" height="5" rx="1.5" />
+                <rect x="14" y="12" width="7" height="9" rx="1.5" />
+                <rect x="3" y="16" width="7" height="5" rx="1.5" />
+              </svg>
+            </div>
+            Dashboard
+          </a>
+
+          <div class="mt-5">
+            <div class="mb-2 flex items-center justify-between px-3">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Keywords</span>
+              <span class="text-[10px] text-slate-300">3</span>
+            </div>
+            <a href="#" class="flex items-center gap-3 rounded-xl px-3 py-2 text-slate-700 transition hover:bg-slate-50">
+              <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100">
+                <svg class="h-4 w-4 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+                </svg>
+              </div>
+              by Query
+            </a>
+            <a href="#" class="flex items-center gap-3 rounded-xl px-3 py-2 text-slate-700 transition hover:bg-slate-50">
+              <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100">
+                <svg class="h-4 w-4 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+                </svg>
+              </div>
+              by Site
+            </a>
+            <a href="#" class="flex items-center gap-3 rounded-xl px-3 py-2 text-slate-700 transition hover:bg-slate-50">
+              <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100">
+                <svg class="h-4 w-4 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 3v18h18M7 14l4-4 4 4 5-5" />
+                </svg>
+              </div>
+              Data Explorer
+            </a>
+          </div>
+
+          <div class="mt-5">
+            <div class="mb-2 flex items-center justify-between px-3">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Insights</span>
+              <span class="text-[10px] text-slate-300">5</span>
+            </div>
+            <a href="#" class="flex items-center gap-3 rounded-xl px-3 py-2 text-slate-700 transition hover:bg-slate-50">
+              <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50">
+                <svg class="h-4 w-4 text-violet-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="6" cy="6" r="2" /><circle cx="18" cy="14" r="3" /><circle cx="10" cy="18" r="2" />
+                </svg>
+              </div>
+              Position vs CTR
+            </a>
+            <a href="#" class="flex items-center gap-3 rounded-xl px-3 py-2 text-slate-700 transition hover:bg-slate-50">
+              <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50">
+                <svg class="h-4 w-4 text-rose-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="9" /><path d="M12 6v6l4 2" />
+                </svg>
+              </div>
+              Kannibalisierung
+            </a>
+            <a href="#" class="flex items-center justify-between rounded-xl px-3 py-2 text-slate-700 transition hover:bg-slate-50">
+              <span class="flex items-center gap-3">
+                <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50">
+                  <svg class="h-4 w-4 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="m7 17 5-5 5 5M7 7l5-5 5 5" />
+                  </svg>
+                </div>
+                Top Mover
+              </span>
+              <span class="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">12</span>
+            </a>
+            <a href="#" class="flex items-center gap-3 rounded-xl px-3 py-2 text-slate-700 transition hover:bg-slate-50">
+              <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-50">
+                <svg class="h-4 w-4 text-sky-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+              </div>
+              Internal Links
+            </a>
+            <a href="#" class="flex items-center justify-between rounded-xl px-3 py-2 text-slate-700 transition hover:bg-slate-50">
+              <span class="flex items-center gap-3">
+                <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-fuchsia-50 to-violet-50">
+                  <svg class="h-4 w-4 text-fuchsia-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                </div>
+                Chat Agent
+              </span>
+              <span class="rounded-md bg-gradient-to-r from-fuchsia-100 to-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-fuchsia-700">AI</span>
+            </a>
+          </div>
+
+          <div class="mt-5">
+            <div class="mb-2 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Tools</div>
+            <a href="#" class="flex items-center gap-3 rounded-xl px-3 py-2 text-slate-700 transition hover:bg-slate-50">
+              <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50">
+                <svg class="h-4 w-4 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3" /><circle cx="19" cy="5" r="2" /><circle cx="5" cy="19" r="2" />
+                  <path d="m14 10 3-3M7 17l3-3" />
+                </svg>
+              </div>
+              Clustering
+            </a>
+            <a href="#" class="flex items-center gap-3 rounded-xl px-3 py-2 text-slate-700 transition hover:bg-slate-50">
+              <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-50">
+                <svg class="h-4 w-4 text-teal-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                </svg>
+              </div>
+              NLP
+            </a>
+          </div>
+        </nav>
+
+        <!-- Upgrade card -->
+        <div class="m-3 mt-0 overflow-hidden rounded-xl bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-900 p-4 text-white shadow-lg">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-indigo-300">
+            ✨ Tip
+          </div>
+          <div class="mt-1 text-sm font-semibold">Erstelle deinen ersten Runbook</div>
+          <p class="mt-1 text-xs leading-relaxed text-slate-300">
+            Automatisierte Analysen mit dem Chat Agent.
+          </p>
+          <button class="mt-2.5 inline-flex items-center gap-1 rounded-md bg-white/10 px-2.5 py-1.5 text-xs font-medium backdrop-blur hover:bg-white/20">
+            Mehr erfahren
+            <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M13 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </aside>
+
+      <!-- ===== MAIN ===== -->
+      <main class="min-w-0 flex-1">
+        <!-- Header -->
+        <header class="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl">
+          <div class="flex h-16 items-center justify-between px-6">
+            <div>
+              <div class="flex items-center gap-2 text-xs">
+                <a href="./index.html" class="text-slate-500 hover:text-slate-700">Übersicht</a>
+                <svg class="h-3 w-3 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+                <span class="font-medium text-slate-700">Dashboard</span>
+              </div>
+              <h1 class="mt-0.5 flex items-center gap-2 text-xl font-semibold tracking-tight">
+                Willkommen zurück, Marketing
+                <span class="text-amber-500">👋</span>
+              </h1>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button class="hidden h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-500 shadow-sm hover:bg-slate-50 md:inline-flex">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+                </svg>
+                Suche...
+                <kbd class="mono ml-8 rounded bg-slate-100 px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+              </button>
+              <button class="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm hover:bg-slate-50">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21a2 2 0 0 0 4 0" />
+                </svg>
+                <span class="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white">3</span>
+              </button>
+              <button class="inline-flex h-9 items-center gap-2 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 px-3 text-sm font-medium text-white shadow-lg shadow-indigo-500/30 hover:from-indigo-600 hover:to-violet-700">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                </svg>
+                Neue Analyse
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <div class="space-y-6 px-6 py-6">
+          <!-- =================== UNIFIED FILTER BAR (compact) =================== -->
+          <section class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- Date preset (segmented) -->
+              <div class="inline-flex items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+                <button class="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50">1M</button>
+                <button class="rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-md shadow-indigo-500/30">3M</button>
+                <button class="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50">6M</button>
+                <button class="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50">12M</button>
+                <span class="mx-0.5 h-4 w-px bg-slate-200"></span>
+                <button class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50">
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <path d="M16 2v4M8 2v4M3 10h18" />
+                  </svg>
+                  Eigene
+                </button>
+              </div>
+
+              <!-- Vergleich -->
+              <button class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+                <svg class="h-3.5 w-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+                </svg>
+                <span class="text-slate-500">vs.</span>
+                <span>Vorperiode</span>
+              </button>
+
+              <!-- Country -->
+              <button class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+                <span>🇩🇪</span>
+                Deutschland
+                <svg class="h-3 w-3 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6" /></svg>
+              </button>
+
+              <!-- Device -->
+              <button class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+                <svg class="h-3.5 w-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="12" rx="1" /><path d="M2 20h20M8 8h8M8 12h5" />
+                </svg>
+                Alle Geräte
+                <svg class="h-3 w-3 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6" /></svg>
+              </button>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button class="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                PDF Report
+              </button>
+            </div>
+          </section>
+
+          <!-- =================== BENTO GRID — KPIs =================== -->
+          <section class="grid grid-cols-1 gap-4 md:grid-cols-6">
+            <!-- BIG: Klicks (spans 3 cols) -->
+            <article class="bento-card md:col-span-3 md:row-span-2 overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-br from-[#4285F4]/10 via-white to-white p-6 shadow-sm ring-1 ring-[#4285F4]/10">
+              <div class="flex items-start justify-between">
+                <div class="flex items-center gap-2">
+                  <div class="flex h-8 w-8 items-center justify-center rounded-xl bg-[#4285F4] text-white shadow-lg shadow-[#4285F4]/30">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <path d="M12 2l8 4-8 4-8-4 8-4zM4 12l8 4 8-4M4 18l8 4 8-4" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="text-sm font-semibold tracking-tight text-slate-900">Klicks</div>
+                    <div class="text-[11px] text-slate-500">letzte 3 Monate · Live</div>
+                  </div>
+                </div>
+                <button class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></svg>
+                </button>
+              </div>
+              <div class="mt-4 flex items-baseline gap-3">
+                <div class="text-5xl font-bold tracking-tighter text-slate-900">142,847</div>
+                <div class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                  <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6-6 6 6M12 3v18" /></svg>
+                  +8.1%
+                </div>
+              </div>
+              <div class="text-[11px] text-slate-500 mono">+10,672 vs. Vorperiode</div>
+
+              <!-- Larger chart -->
+              <svg class="mt-5 h-32 w-full" viewBox="0 0 400 100" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="g-clicks" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stop-color="#4285F4" stop-opacity="0.3" />
+                    <stop offset="100%" stop-color="#4285F4" stop-opacity="0" />
+                  </linearGradient>
+                </defs>
+                <!-- Grid lines -->
+                <line x1="0" y1="25" x2="400" y2="25" stroke="#e2e8f0" stroke-dasharray="2,4" />
+                <line x1="0" y1="50" x2="400" y2="50" stroke="#e2e8f0" stroke-dasharray="2,4" />
+                <line x1="0" y1="75" x2="400" y2="75" stroke="#e2e8f0" stroke-dasharray="2,4" />
+                <!-- Previous period (dashed) -->
+                <path d="M0 70 L40 68 L80 64 L120 66 L160 60 L200 58 L240 54 L280 52 L320 48 L360 46 L400 44" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-dasharray="4,3" />
+                <!-- Current period -->
+                <path d="M0 80 L40 75 L80 68 L120 62 L160 56 L200 50 L240 42 L280 36 L320 28 L360 22 L400 18 L400 100 L0 100 Z" fill="url(#g-clicks)" />
+                <path d="M0 80 L40 75 L80 68 L120 62 L160 56 L200 50 L240 42 L280 36 L320 28 L360 22 L400 18" stroke="#4285F4" stroke-width="2.5" fill="none" />
+                <circle cx="400" cy="18" r="4" fill="#4285F4" />
+                <circle cx="400" cy="18" r="8" fill="#4285F4" fill-opacity="0.2" />
+              </svg>
+              <div class="mt-2 flex items-center justify-between text-[10px] text-slate-400">
+                <span>1. Feb</span>
+                <span>15. Feb</span>
+                <span>1. Mär</span>
+                <span>15. Mär</span>
+                <span>1. Apr</span>
+                <span class="font-semibold text-slate-700">heute</span>
+              </div>
+            </article>
+
+            <!-- Impressionen (purple) -->
+            <article class="bento-card md:col-span-3 overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-br from-[#673AB7]/10 via-white to-white p-5 shadow-sm ring-1 ring-[#673AB7]/10">
+              <div class="flex items-start justify-between">
+                <div class="flex items-center gap-2">
+                  <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-[#673AB7] text-white shadow-md shadow-[#673AB7]/30">
+                    <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="text-sm font-semibold tracking-tight text-slate-900">Impressionen</div>
+                    <div class="text-[11px] text-slate-500">Reichweite</div>
+                  </div>
+                </div>
+                <div class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700">
+                  <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 15 6 6 6-6M12 21V3" /></svg>
+                  −2.3%
+                </div>
+              </div>
+              <div class="mt-3 flex items-baseline justify-between">
+                <div>
+                  <div class="text-3xl font-bold tracking-tighter text-slate-900">4.2M</div>
+                  <div class="mono text-[11px] text-slate-500">−98K vs. Vorperiode</div>
+                </div>
+                <svg class="h-12 w-32" viewBox="0 0 120 48" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="g-impr" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stop-color="#673AB7" stop-opacity="0.3" />
+                      <stop offset="100%" stop-color="#673AB7" stop-opacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M0 10 L12 14 L24 8 L36 18 L48 12 L60 22 L72 18 L84 26 L96 22 L108 30 L120 36 L120 48 L0 48 Z" fill="url(#g-impr)" />
+                  <path d="M0 10 L12 14 L24 8 L36 18 L48 12 L60 22 L72 18 L84 26 L96 22 L108 30 L120 36" stroke="#673AB7" stroke-width="2" fill="none" />
+                </svg>
+              </div>
+            </article>
+
+            <!-- CTR (green) -->
+            <article class="bento-card md:col-span-2 overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-br from-[#0F9D58]/10 via-white to-white p-5 shadow-sm ring-1 ring-[#0F9D58]/10">
+              <div class="flex items-center gap-2">
+                <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-[#0F9D58] text-white shadow-md shadow-[#0F9D58]/30">
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                  </svg>
+                </div>
+                <div class="text-sm font-semibold tracking-tight text-slate-900">CTR</div>
+              </div>
+              <div class="mt-3 flex items-baseline gap-1.5">
+                <div class="text-3xl font-bold tracking-tighter text-slate-900">3.41%</div>
+                <span class="text-xs font-semibold text-emerald-600">+0.32pp</span>
+              </div>
+              <div class="mt-2 flex h-2 overflow-hidden rounded-full bg-slate-100">
+                <div class="bg-gradient-to-r from-[#0F9D58] to-[#34a853]" style="width: 68%"></div>
+              </div>
+              <div class="mono mt-1 text-[10px] text-slate-500">68% des Industriedurchschnitts</div>
+            </article>
+
+            <!-- Avg Position -->
+            <article class="bento-card md:col-span-2 overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm">
+              <div class="flex items-center gap-2">
+                <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-900 text-white">
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M3 17l6-6 4 4 8-8M17 7h4v4" />
+                  </svg>
+                </div>
+                <div class="text-sm font-semibold tracking-tight text-slate-900">Ø Position</div>
+              </div>
+              <div class="mt-3 flex items-baseline gap-1.5">
+                <div class="text-3xl font-bold tracking-tighter text-slate-900">14.2</div>
+                <span class="text-xs font-semibold text-emerald-600">−0.4</span>
+              </div>
+              <div class="mt-2 text-[11px] text-slate-500">
+                <span class="mono">8.142</span> Keywords im Top 20
+              </div>
+            </article>
+
+            <!-- Top Keyword (highlight) -->
+            <article class="bento-card md:col-span-2 overflow-hidden rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm ring-1 ring-amber-100">
+              <div class="flex items-center gap-2">
+                <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500 text-white shadow-md shadow-amber-500/30">
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" />
+                  </svg>
+                </div>
+                <div class="text-sm font-semibold tracking-tight text-slate-900">Top Keyword</div>
+              </div>
+              <div class="mt-3 truncate text-lg font-semibold tracking-tight text-slate-900">
+                winterschuhe damen
+              </div>
+              <div class="mt-1 mono text-[11px] text-slate-500">
+                <span class="font-semibold text-amber-700">2,847 Klicks</span> · Pos. 3.2
+              </div>
+            </article>
+          </section>
+
+          <!-- =================== TWO COLUMN: Top Movers + Quick Wins =================== -->
+          <section class="grid gap-4 lg:grid-cols-3">
+            <!-- Top Movers card -->
+            <div class="lg:col-span-2 overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm">
+              <header class="flex items-center justify-between border-b border-slate-100 p-5">
+                <div>
+                  <h2 class="flex items-center gap-2 text-base font-semibold tracking-tight text-slate-900">
+                    <span class="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-emerald-700">
+                      <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m7 17 5-5 5 5M7 7l5-5 5 5" /></svg>
+                    </span>
+                    Größte Bewegungen
+                  </h2>
+                  <p class="mt-0.5 text-xs text-slate-500">Top 5 Riser & Faller in 3 Monaten</p>
+                </div>
+                <a href="#" class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700">
+                  Alle ansehen
+                  <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
+                </a>
+              </header>
+              <div class="divide-y divide-slate-100">
+                <!-- Row 1 -->
+                <div class="flex items-center gap-4 p-4 transition hover:bg-slate-50/70">
+                  <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 shadow-sm">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m18 15-6-6-6 6" /></svg>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate text-sm font-medium text-slate-900">winterschuhe damen</div>
+                    <div class="mono text-[11px] text-slate-500">Pos 8.4 → 3.2 · +1,841 Klicks</div>
+                  </div>
+                  <div class="hidden w-32 sm:block">
+                    <svg class="h-6 w-full" viewBox="0 0 100 24" preserveAspectRatio="none">
+                      <path d="M0 22 L20 18 L40 14 L60 10 L80 6 L100 2" stroke="#10b981" stroke-width="2" fill="none" />
+                    </svg>
+                  </div>
+                  <span class="mono inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">−5.2</span>
+                </div>
+                <div class="flex items-center gap-4 p-4 transition hover:bg-slate-50/70">
+                  <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 shadow-sm">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m18 15-6-6-6 6" /></svg>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate text-sm font-medium text-slate-900">laufschuhe nike</div>
+                    <div class="mono text-[11px] text-slate-500">Pos 12.1 → 7.5 · +1,204 Klicks</div>
+                  </div>
+                  <div class="hidden w-32 sm:block">
+                    <svg class="h-6 w-full" viewBox="0 0 100 24" preserveAspectRatio="none">
+                      <path d="M0 20 L20 18 L40 12 L60 14 L80 8 L100 4" stroke="#10b981" stroke-width="2" fill="none" />
+                    </svg>
+                  </div>
+                  <span class="mono inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">−4.6</span>
+                </div>
+                <div class="flex items-center gap-4 p-4 transition hover:bg-slate-50/70">
+                  <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-700 shadow-sm">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6" /></svg>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate text-sm font-medium text-slate-900">stiefel braun damen</div>
+                    <div class="mono text-[11px] text-slate-500">Pos 4.8 → 9.1 · −612 Klicks</div>
+                  </div>
+                  <div class="hidden w-32 sm:block">
+                    <svg class="h-6 w-full" viewBox="0 0 100 24" preserveAspectRatio="none">
+                      <path d="M0 4 L20 8 L40 6 L60 14 L80 18 L100 22" stroke="#f43f5e" stroke-width="2" fill="none" />
+                    </svg>
+                  </div>
+                  <span class="mono inline-flex shrink-0 items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-700">+4.3</span>
+                </div>
+                <div class="flex items-center gap-4 p-4 transition hover:bg-slate-50/70">
+                  <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-700 shadow-sm">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6" /></svg>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate text-sm font-medium text-slate-900">ballerinas leder</div>
+                    <div class="mono text-[11px] text-slate-500">Pos 9.2 → 12.4 · −287 Klicks</div>
+                  </div>
+                  <div class="hidden w-32 sm:block">
+                    <svg class="h-6 w-full" viewBox="0 0 100 24" preserveAspectRatio="none">
+                      <path d="M0 8 L20 10 L40 8 L60 12 L80 16 L100 20" stroke="#f43f5e" stroke-width="2" fill="none" />
+                    </svg>
+                  </div>
+                  <span class="mono inline-flex shrink-0 items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-700">+3.2</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Wins card -->
+            <div class="overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-br from-amber-50/40 to-white p-5 shadow-sm">
+              <header class="flex items-center justify-between">
+                <h2 class="flex items-center gap-2 text-base font-semibold tracking-tight text-slate-900">
+                  <span class="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700">
+                    ⚡
+                  </span>
+                  Quick Wins
+                </h2>
+                <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">23</span>
+              </header>
+              <p class="mt-1 text-xs text-slate-500">
+                Keywords auf Position 11–20 mit hohem Impressionsvolumen.
+              </p>
+
+              <div class="mt-4 space-y-2.5">
+                <div class="rounded-xl bg-white p-3 ring-1 ring-slate-200/80">
+                  <div class="flex items-start justify-between">
+                    <div class="min-w-0 flex-1">
+                      <div class="truncate text-sm font-medium text-slate-900">sneaker damen weiss</div>
+                      <div class="mono mt-0.5 text-[11px] text-slate-500">Pos 11.2 · 24.8K Impr.</div>
+                    </div>
+                    <span class="mono shrink-0 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-700">+820</span>
+                  </div>
+                </div>
+                <div class="rounded-xl bg-white p-3 ring-1 ring-slate-200/80">
+                  <div class="flex items-start justify-between">
+                    <div class="min-w-0 flex-1">
+                      <div class="truncate text-sm font-medium text-slate-900">sportschuhe günstig</div>
+                      <div class="mono mt-0.5 text-[11px] text-slate-500">Pos 12.7 · 18.4K Impr.</div>
+                    </div>
+                    <span class="mono shrink-0 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-700">+612</span>
+                  </div>
+                </div>
+                <div class="rounded-xl bg-white p-3 ring-1 ring-slate-200/80">
+                  <div class="flex items-start justify-between">
+                    <div class="min-w-0 flex-1">
+                      <div class="truncate text-sm font-medium text-slate-900">wanderschuhe outdoor</div>
+                      <div class="mono mt-0.5 text-[11px] text-slate-500">Pos 13.5 · 14.2K Impr.</div>
+                    </div>
+                    <span class="mono shrink-0 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-700">+489</span>
+                  </div>
+                </div>
+              </div>
+
+              <button class="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                Mit Agent analysieren
+              </button>
+            </div>
+          </section>
+
+          <!-- Design notes -->
+          <section class="rounded-3xl border border-dashed border-slate-300 bg-white/60 p-5 text-sm">
+            <h3 class="mb-2 font-semibold text-slate-900">Design-Notizen · Bento Studio</h3>
+            <ul class="grid gap-2 text-slate-600 md:grid-cols-2">
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Bento-Grid mit unterschiedlich großen Kacheln (KPI-Hierarchie sichtbar)</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Farb-Coding nach Metrik (Klicks <span class="mono text-[10px] rounded bg-[#4285F4]/10 px-1 text-[#4285F4]">#4285F4</span>, Impr <span class="mono text-[10px] rounded bg-[#673AB7]/10 px-1 text-[#673AB7]">#673AB7</span>, CTR <span class="mono text-[10px] rounded bg-[#0F9D58]/10 px-1 text-[#0F9D58]">#0F9D58</span>) — bereits im Code-Base vorhanden</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Größere Border-Radii (<code class="mono text-xs">rounded-3xl</code>) für weicheren, modernen Look</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Vergleich-Linie (gestrichelt) im Hauptchart zeigt Vorperiode</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Action-orientierte Sektionen: Quick Wins mit "Mit Agent analysieren"-CTA</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Sidebar mit farbigen Icon-Containern (visuelle Kategorisierung)</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Pro-CTA in Sidebar (Upgrade-Card mit Gradient)</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Reduktion auf 4–5 wichtige Filter (Date, Vergleich, Land, Device) — keine Filter-Überflutung</li>
+            </ul>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

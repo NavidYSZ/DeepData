@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design 2 · Linear Pro · DeepData</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui"],
+              mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+            },
+            colors: {
+              ink: {
+                950: "#0b0d12",
+                900: "#11141a",
+                800: "#181c25",
+                700: "#232936",
+                600: "#2f3645",
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+        letter-spacing: -0.01em;
+      }
+      .mono {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        letter-spacing: -0.02em;
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(15, 23, 42, 0.16);
+        border-radius: 8px;
+      }
+      .keyline {
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+      }
+      .focus-ring:focus-within {
+        box-shadow:
+          0 0 0 1px rgb(99 102 241),
+          0 0 0 4px rgba(99, 102, 241, 0.15);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen bg-white text-slate-900">
+    <div class="flex min-h-screen">
+      <!-- ===== DARK SIDEBAR ===== -->
+      <aside
+        class="hidden w-60 shrink-0 flex-col bg-ink-950 text-slate-300 md:flex"
+      >
+        <!-- Workspace switcher -->
+        <div class="border-b border-white/[0.06] p-3">
+          <button
+            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]"
+          >
+            <div
+              class="flex h-6 w-6 items-center justify-center rounded bg-gradient-to-br from-indigo-500 to-violet-500 text-[11px] font-bold text-white"
+            >
+              D
+            </div>
+            <div class="min-w-0 flex-1 text-left">
+              <div class="text-[13px] font-medium text-white">DeepData</div>
+              <div class="truncate text-[10px] text-slate-500">example-shop.de</div>
+            </div>
+            <svg class="h-3.5 w-3.5 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m7 15 5 5 5-5M7 9l5-5 5 5" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Search -->
+        <div class="p-3">
+          <button
+            class="flex w-full items-center justify-between rounded-md bg-white/[0.04] px-2 py-1.5 text-left text-[12px] text-slate-500 hover:bg-white/[0.08]"
+          >
+            <span class="flex items-center gap-2">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+              </svg>
+              Suche
+            </span>
+            <kbd class="mono rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-slate-400">⌘K</kbd>
+          </button>
+        </div>
+
+        <!-- Nav -->
+        <nav class="flex-1 overflow-y-auto px-2 pb-3 text-[13px]">
+          <!-- Primary -->
+          <a href="#" class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]">
+            <svg class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="9" rx="1.5" />
+              <rect x="14" y="3" width="7" height="5" rx="1.5" />
+              <rect x="14" y="12" width="7" height="9" rx="1.5" />
+              <rect x="3" y="16" width="7" height="5" rx="1.5" />
+            </svg>
+            Dashboard
+          </a>
+
+          <div class="mt-4">
+            <div class="mb-1 flex items-center justify-between px-2 text-[10px] font-medium uppercase tracking-wider text-slate-500">
+              <span>Keywords</span>
+              <button class="rounded p-0.5 hover:bg-white/10">
+                <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14" /></svg>
+              </button>
+            </div>
+            <a href="#" class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]">
+              <svg class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+              </svg>
+              by Query
+            </a>
+            <a href="#" class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]">
+              <svg class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+              </svg>
+              by Site
+            </a>
+            <a href="#" class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]">
+              <svg class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 3v18h18M7 14l4-4 4 4 5-5" />
+              </svg>
+              Data Explorer
+            </a>
+          </div>
+
+          <div class="mt-4">
+            <div class="mb-1 px-2 text-[10px] font-medium uppercase tracking-wider text-slate-500">
+              Insights
+            </div>
+            <a href="#" class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]">
+              <svg class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="6" cy="6" r="2" /><circle cx="18" cy="14" r="3" /><circle cx="10" cy="18" r="2" />
+              </svg>
+              Position vs CTR
+            </a>
+            <a href="#" class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]">
+              <svg class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="9" /><path d="M12 6v6l4 2" />
+              </svg>
+              Kannibalisierung
+            </a>
+
+            <!-- Active item -->
+            <a href="#" class="relative flex items-center gap-2 rounded-md bg-white/[0.07] px-2 py-1.5 text-white">
+              <span class="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-r bg-indigo-400"></span>
+              <svg class="h-3.5 w-3.5 text-indigo-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m7 17 5-5 5 5M7 7l5-5 5 5" />
+              </svg>
+              Top Mover
+            </a>
+
+            <a href="#" class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]">
+              <svg class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+              Internal Links
+            </a>
+            <a href="#" class="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-white/[0.04]">
+              <span class="flex items-center gap-2">
+                <svg class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                Chat Agent
+              </span>
+              <span class="mono rounded bg-violet-500/20 px-1 text-[9px] font-medium text-violet-300">AI</span>
+            </a>
+          </div>
+
+          <div class="mt-4">
+            <div class="mb-1 px-2 text-[10px] font-medium uppercase tracking-wider text-slate-500">
+              Tools
+            </div>
+            <a href="#" class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]">
+              <svg class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3" /><circle cx="19" cy="5" r="2" /><circle cx="5" cy="19" r="2" />
+                <path d="m14 10 3-3M7 17l3-3" />
+              </svg>
+              Clustering
+            </a>
+            <a href="#" class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]">
+              <svg class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              </svg>
+              NLP
+            </a>
+          </div>
+
+          <!-- Pinned saved view -->
+          <div class="mt-5">
+            <div class="mb-1 px-2 text-[10px] font-medium uppercase tracking-wider text-slate-500">
+              Gespeichert
+            </div>
+            <a href="#" class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]">
+              <span class="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+              Quick Wins 28T
+            </a>
+            <a href="#" class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]">
+              <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+              Top Loser /shop
+            </a>
+          </div>
+        </nav>
+
+        <!-- Bottom user -->
+        <div class="border-t border-white/[0.06] p-3">
+          <button class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white/[0.04]">
+            <div class="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-rose-500 text-[10px] font-bold text-white">M</div>
+            <div class="min-w-0 flex-1 text-left">
+              <div class="text-[12px] font-medium text-white">Marketing Team</div>
+              <div class="truncate text-[10px] text-slate-500">marketing@example.com</div>
+            </div>
+            <svg class="h-3.5 w-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" />
+            </svg>
+          </button>
+        </div>
+      </aside>
+
+      <!-- ===== MAIN ===== -->
+      <main class="min-w-0 flex-1 bg-slate-50/40">
+        <!-- Top bar -->
+        <header class="sticky top-0 z-30 flex h-12 items-center justify-between border-b border-slate-200 bg-white/80 px-5 backdrop-blur-xl">
+          <div class="flex items-center gap-2 text-[13px]">
+            <a href="./index.html" class="text-slate-500 hover:text-slate-900">Übersicht</a>
+            <svg class="h-3 w-3 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+            <span class="text-slate-500">Insights</span>
+            <svg class="h-3 w-3 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+            <span class="font-medium text-slate-900">Top Mover</span>
+            <span class="mono ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">v2</span>
+          </div>
+
+          <div class="flex items-center gap-1">
+            <button class="inline-flex h-7 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 text-[12px] font-medium text-slate-700 hover:bg-slate-50">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+              </svg>
+              Export
+              <kbd class="mono ml-1 rounded bg-slate-100 px-1 text-[9px] text-slate-500">⇧E</kbd>
+            </button>
+            <button class="inline-flex h-7 items-center gap-1.5 rounded-md bg-slate-900 px-2.5 text-[12px] font-medium text-white hover:bg-slate-800">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v16l7-3z" />
+              </svg>
+              Sicht speichern
+            </button>
+          </div>
+        </header>
+
+        <div class="px-5 py-5">
+          <!-- Hero / title -->
+          <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <h1 class="text-[22px] font-semibold tracking-tight text-slate-900">
+                  Top Mover
+                </h1>
+                <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">Live</span>
+              </div>
+              <p class="mt-1 text-[13px] text-slate-500">
+                Größte Positionsbewegungen zwischen den beiden Vergleichszeiträumen, impressionsgewichtet.
+              </p>
+            </div>
+            <div class="flex items-center gap-3 text-[12px] text-slate-500">
+              <span class="inline-flex items-center gap-1.5">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                Live · zuletzt aktualisiert vor 2 Min.
+              </span>
+              <span class="h-3 w-px bg-slate-200"></span>
+              <span class="mono">91 Tage · 12.241 Keywords</span>
+            </div>
+          </div>
+
+          <!-- =================== FILTER BAR (chip-style, Linear/Notion) =================== -->
+          <section class="mb-5 flex flex-wrap items-center gap-1.5">
+            <!-- Date filter chip -->
+            <button class="group inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-slate-700 shadow-sm hover:border-slate-300">
+              <svg class="h-3.5 w-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <path d="M16 2v4M8 2v4M3 10h18" />
+              </svg>
+              <span class="text-slate-500">Zeitraum</span>
+              <span class="text-slate-900">3 Monate</span>
+              <svg class="h-3 w-3 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+
+            <!-- Mode chip (Query vs Page) -->
+            <div class="inline-flex items-center rounded-md border border-slate-200 bg-white p-0.5 shadow-sm">
+              <button class="rounded-[5px] bg-slate-900 px-2 py-1 text-[11px] font-medium text-white">Query</button>
+              <button class="rounded-[5px] px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50">Page</button>
+            </div>
+
+            <!-- Compare chip -->
+            <button class="group inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-slate-700 shadow-sm hover:border-slate-300">
+              <svg class="h-3.5 w-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m7 17 5-5 5 5M7 7l5-5 5 5" />
+              </svg>
+              <span class="text-slate-500">Vergleich</span>
+              <span class="text-slate-900">Halbiert</span>
+              <svg class="h-3 w-3 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+
+            <!-- Active filter chip with X -->
+            <button class="group inline-flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[12px] font-medium text-indigo-800 shadow-sm">
+              <svg class="h-3.5 w-3.5 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 21V10M4 10V3M12 21V14M12 14V3M20 21v-4M20 10V3M1 14h6M9 6h6M17 17h6" />
+              </svg>
+              <span class="text-indigo-600">Min. Impr.</span>
+              <span class="mono">≥ 100</span>
+              <span class="text-indigo-400 hover:text-indigo-700">
+                <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </span>
+            </button>
+
+            <button class="group inline-flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[12px] font-medium text-indigo-800 shadow-sm">
+              <svg class="h-3.5 w-3.5 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+              </svg>
+              <span class="text-indigo-600">Enthält</span>
+              <span class="mono">"schuhe"</span>
+              <span class="text-indigo-400 hover:text-indigo-700">
+                <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </span>
+            </button>
+
+            <!-- Add filter -->
+            <button class="inline-flex items-center gap-1 rounded-md border border-dashed border-slate-300 px-2.5 py-1.5 text-[12px] font-medium text-slate-500 hover:border-slate-400 hover:bg-white hover:text-slate-700">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12h14M12 5v14" />
+              </svg>
+              Filter
+            </button>
+
+            <span class="mx-1 h-4 w-px bg-slate-200"></span>
+
+            <!-- Sort -->
+            <button class="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-slate-700 shadow-sm hover:border-slate-300">
+              <svg class="h-3.5 w-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h18M7 12h10M11 18h2" />
+              </svg>
+              <span class="text-slate-500">Sortiert nach</span>
+              <span class="text-slate-900">Δ Position</span>
+              <svg class="h-3 w-3 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="m6 15 6 6 6-6" />
+              </svg>
+            </button>
+
+            <!-- Group -->
+            <button class="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-slate-700 shadow-sm hover:border-slate-300">
+              <svg class="h-3.5 w-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+              </svg>
+              Gruppe: keine
+            </button>
+          </section>
+
+          <!-- =================== COMPACT STATS ROW =================== -->
+          <section class="mb-5 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-slate-200 lg:grid-cols-4">
+            <!-- Stat 1 -->
+            <div class="bg-white p-4">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-medium uppercase tracking-wider text-slate-500">Riser</span>
+                <svg class="h-3.5 w-3.5 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M3 17l6-6 4 4 8-8M17 7h4v4" />
+                </svg>
+              </div>
+              <div class="mt-1.5 flex items-baseline gap-2">
+                <span class="text-2xl font-semibold tracking-tight">427</span>
+                <span class="mono text-[11px] text-emerald-600">Ø −2.8</span>
+              </div>
+            </div>
+            <!-- Stat 2 -->
+            <div class="bg-white p-4">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-medium uppercase tracking-wider text-slate-500">Faller</span>
+                <svg class="h-3.5 w-3.5 text-rose-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M3 7l6 6 4-4 8 8M17 17h4v-4" />
+                </svg>
+              </div>
+              <div class="mt-1.5 flex items-baseline gap-2">
+                <span class="text-2xl font-semibold tracking-tight">318</span>
+                <span class="mono text-[11px] text-rose-600">Ø +3.4</span>
+              </div>
+            </div>
+            <!-- Stat 3 -->
+            <div class="bg-white p-4">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-medium uppercase tracking-wider text-slate-500">Neu in Top 10</span>
+                <svg class="h-3.5 w-3.5 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" />
+                </svg>
+              </div>
+              <div class="mt-1.5 flex items-baseline gap-2">
+                <span class="text-2xl font-semibold tracking-tight">62</span>
+                <span class="mono text-[11px] text-slate-500">+12.8K Klicks</span>
+              </div>
+            </div>
+            <!-- Stat 4 -->
+            <div class="bg-white p-4">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-medium uppercase tracking-wider text-slate-500">Out of Top 100</span>
+                <svg class="h-3.5 w-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m15 9-6 6M9 9l6 6" /><circle cx="12" cy="12" r="9" />
+                </svg>
+              </div>
+              <div class="mt-1.5 flex items-baseline gap-2">
+                <span class="text-2xl font-semibold tracking-tight">19</span>
+                <span class="mono text-[11px] text-slate-500">−4.1K Impr.</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- =================== DENSE TABLE =================== -->
+          <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <header class="flex items-center justify-between border-b border-slate-200 bg-slate-50/50 px-3 py-2">
+              <div class="flex items-center gap-3">
+                <h2 class="text-[13px] font-semibold tracking-tight">Bewegungen</h2>
+                <span class="text-[11px] text-slate-500">745 Treffer</span>
+              </div>
+              <div class="flex items-center gap-1 text-[11px]">
+                <button class="rounded px-2 py-1 font-medium text-slate-900 bg-slate-100">Alle</button>
+                <button class="rounded px-2 py-1 font-medium text-slate-500 hover:bg-slate-100">Riser</button>
+                <button class="rounded px-2 py-1 font-medium text-slate-500 hover:bg-slate-100">Faller</button>
+                <button class="rounded px-2 py-1 font-medium text-slate-500 hover:bg-slate-100">Volatil</button>
+                <span class="mx-1 h-3 w-px bg-slate-200"></span>
+                <button class="inline-flex items-center gap-1 rounded px-2 py-1 font-medium text-slate-500 hover:bg-slate-100">
+                  <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></svg>
+                </button>
+              </div>
+            </header>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-[12.5px]">
+                <thead>
+                  <tr class="border-b border-slate-200 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    <th class="px-3 py-2 w-8"></th>
+                    <th class="px-3 py-2">Query</th>
+                    <th class="px-3 py-2 text-right">Impr. P1</th>
+                    <th class="px-3 py-2 text-right">Impr. P2</th>
+                    <th class="px-3 py-2">Pos P1 → P2</th>
+                    <th class="px-3 py-2 text-right">Δ</th>
+                    <th class="px-3 py-2 text-right">CTR Δ</th>
+                    <th class="px-3 py-2 text-right">Klicks Δ</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 mono">
+                  <!-- Riser -->
+                  <tr class="hover:bg-slate-50/70">
+                    <td class="px-3 py-2 align-middle">
+                      <span class="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
+                        <svg class="h-3 w-3 text-emerald-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m18 15-6-6-6 6" /></svg>
+                      </span>
+                    </td>
+                    <td class="px-3 py-2 font-sans font-medium text-slate-900">winterschuhe damen</td>
+                    <td class="px-3 py-2 text-right text-slate-500">28,440</td>
+                    <td class="px-3 py-2 text-right text-slate-900">52,310</td>
+                    <td class="px-3 py-2">
+                      <!-- Dumbbell -->
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-slate-400 w-7 text-right">8.4</span>
+                        <div class="relative h-1.5 w-32 rounded-full bg-slate-100">
+                          <div class="absolute left-1/4 h-1.5 w-2/3 rounded-full bg-gradient-to-r from-rose-200 to-emerald-300"></div>
+                          <div class="absolute left-1/4 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-rose-400 ring-2 ring-white"></div>
+                          <div class="absolute left-[80%] top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-emerald-500 ring-2 ring-white"></div>
+                        </div>
+                        <span class="text-slate-900 w-7">3.2</span>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2 text-right font-semibold text-emerald-700">−5.2</td>
+                    <td class="px-3 py-2 text-right text-emerald-700">+1.8pp</td>
+                    <td class="px-3 py-2 text-right font-semibold text-slate-900">+1,841</td>
+                  </tr>
+
+                  <tr class="hover:bg-slate-50/70">
+                    <td class="px-3 py-2 align-middle">
+                      <span class="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
+                        <svg class="h-3 w-3 text-emerald-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m18 15-6-6-6 6" /></svg>
+                      </span>
+                    </td>
+                    <td class="px-3 py-2 font-sans font-medium text-slate-900">laufschuhe nike</td>
+                    <td class="px-3 py-2 text-right text-slate-500">19,120</td>
+                    <td class="px-3 py-2 text-right text-slate-900">28,894</td>
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-slate-400 w-7 text-right">12.1</span>
+                        <div class="relative h-1.5 w-32 rounded-full bg-slate-100">
+                          <div class="absolute left-[40%] h-1.5 w-[40%] rounded-full bg-gradient-to-r from-rose-200 to-emerald-300"></div>
+                          <div class="absolute left-[40%] top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-rose-400 ring-2 ring-white"></div>
+                          <div class="absolute left-[78%] top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-emerald-500 ring-2 ring-white"></div>
+                        </div>
+                        <span class="text-slate-900 w-7">7.5</span>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2 text-right font-semibold text-emerald-700">−4.6</td>
+                    <td class="px-3 py-2 text-right text-emerald-700">+0.9pp</td>
+                    <td class="px-3 py-2 text-right font-semibold text-slate-900">+1,204</td>
+                  </tr>
+
+                  <tr class="hover:bg-slate-50/70">
+                    <td class="px-3 py-2 align-middle">
+                      <span class="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100">
+                        <svg class="h-3 w-3 text-emerald-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m18 15-6-6-6 6" /></svg>
+                      </span>
+                    </td>
+                    <td class="px-3 py-2 font-sans font-medium text-slate-900">sneaker schwarz herren</td>
+                    <td class="px-3 py-2 text-right text-slate-500">14,228</td>
+                    <td class="px-3 py-2 text-right text-slate-900">21,840</td>
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-slate-400 w-7 text-right">11.8</span>
+                        <div class="relative h-1.5 w-32 rounded-full bg-slate-100">
+                          <div class="absolute left-[38%] h-1.5 w-[34%] rounded-full bg-gradient-to-r from-rose-200 to-emerald-300"></div>
+                          <div class="absolute left-[38%] top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-rose-400 ring-2 ring-white"></div>
+                          <div class="absolute left-[72%] top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-emerald-500 ring-2 ring-white"></div>
+                        </div>
+                        <span class="text-slate-900 w-7">7.5</span>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2 text-right font-semibold text-emerald-700">−4.3</td>
+                    <td class="px-3 py-2 text-right text-emerald-700">+0.6pp</td>
+                    <td class="px-3 py-2 text-right font-semibold text-slate-900">+892</td>
+                  </tr>
+
+                  <!-- Separator -->
+                  <tr>
+                    <td colspan="8" class="bg-slate-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                      Faller
+                    </td>
+                  </tr>
+
+                  <tr class="hover:bg-slate-50/70">
+                    <td class="px-3 py-2 align-middle">
+                      <span class="flex h-5 w-5 items-center justify-center rounded-full bg-rose-100">
+                        <svg class="h-3 w-3 text-rose-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6" /></svg>
+                      </span>
+                    </td>
+                    <td class="px-3 py-2 font-sans font-medium text-slate-900">stiefel braun damen</td>
+                    <td class="px-3 py-2 text-right text-slate-500">22,140</td>
+                    <td class="px-3 py-2 text-right text-slate-900">16,802</td>
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-slate-400 w-7 text-right">4.8</span>
+                        <div class="relative h-1.5 w-32 rounded-full bg-slate-100">
+                          <div class="absolute left-[15%] h-1.5 w-[40%] rounded-full bg-gradient-to-r from-emerald-300 to-rose-200"></div>
+                          <div class="absolute left-[15%] top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-emerald-500 ring-2 ring-white"></div>
+                          <div class="absolute left-[55%] top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-rose-400 ring-2 ring-white"></div>
+                        </div>
+                        <span class="text-slate-900 w-7">9.1</span>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2 text-right font-semibold text-rose-700">+4.3</td>
+                    <td class="px-3 py-2 text-right text-rose-700">−0.8pp</td>
+                    <td class="px-3 py-2 text-right font-semibold text-rose-700">−612</td>
+                  </tr>
+
+                  <tr class="hover:bg-slate-50/70">
+                    <td class="px-3 py-2 align-middle">
+                      <span class="flex h-5 w-5 items-center justify-center rounded-full bg-rose-100">
+                        <svg class="h-3 w-3 text-rose-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6" /></svg>
+                      </span>
+                    </td>
+                    <td class="px-3 py-2 font-sans font-medium text-slate-900">ballerinas leder</td>
+                    <td class="px-3 py-2 text-right text-slate-500">12,840</td>
+                    <td class="px-3 py-2 text-right text-slate-900">9,201</td>
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-slate-400 w-7 text-right">9.2</span>
+                        <div class="relative h-1.5 w-32 rounded-full bg-slate-100">
+                          <div class="absolute left-[30%] h-1.5 w-[28%] rounded-full bg-gradient-to-r from-emerald-300 to-rose-200"></div>
+                          <div class="absolute left-[30%] top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-emerald-500 ring-2 ring-white"></div>
+                          <div class="absolute left-[58%] top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-rose-400 ring-2 ring-white"></div>
+                        </div>
+                        <span class="text-slate-900 w-7">12.4</span>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2 text-right font-semibold text-rose-700">+3.2</td>
+                    <td class="px-3 py-2 text-right text-rose-700">−0.4pp</td>
+                    <td class="px-3 py-2 text-right font-semibold text-rose-700">−287</td>
+                  </tr>
+
+                  <tr class="hover:bg-slate-50/70">
+                    <td class="px-3 py-2 align-middle">
+                      <span class="flex h-5 w-5 items-center justify-center rounded-full bg-rose-100">
+                        <svg class="h-3 w-3 text-rose-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6" /></svg>
+                      </span>
+                    </td>
+                    <td class="px-3 py-2 font-sans font-medium text-slate-900">sandalen damen sommer</td>
+                    <td class="px-3 py-2 text-right text-slate-500">8,902</td>
+                    <td class="px-3 py-2 text-right text-slate-900">5,118</td>
+                    <td class="px-3 py-2">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-slate-400 w-7 text-right">14.2</span>
+                        <div class="relative h-1.5 w-32 rounded-full bg-slate-100">
+                          <div class="absolute left-[48%] h-1.5 w-[28%] rounded-full bg-gradient-to-r from-emerald-300 to-rose-200"></div>
+                          <div class="absolute left-[48%] top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-emerald-500 ring-2 ring-white"></div>
+                          <div class="absolute left-[76%] top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-rose-400 ring-2 ring-white"></div>
+                        </div>
+                        <span class="text-slate-900 w-7">17.1</span>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2 text-right font-semibold text-rose-700">+2.9</td>
+                    <td class="px-3 py-2 text-right text-rose-700">−0.3pp</td>
+                    <td class="px-3 py-2 text-right font-semibold text-rose-700">−198</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <footer class="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-3 py-2 text-[11px] text-slate-500">
+              <div class="flex items-center gap-3">
+                <span>Zeige 1–25 von 745</span>
+                <span class="h-3 w-px bg-slate-200"></span>
+                <button class="inline-flex items-center gap-1 hover:text-slate-700">
+                  Spalten <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+              </div>
+              <div class="flex items-center gap-0.5">
+                <button class="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-slate-700"><svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6" /></svg></button>
+                <button class="inline-flex h-6 w-6 items-center justify-center rounded bg-slate-200 text-slate-700">1</button>
+                <button class="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-200">2</button>
+                <button class="inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-200">3</button>
+                <button class="inline-flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-slate-700"><svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6" /></svg></button>
+              </div>
+            </footer>
+          </section>
+
+          <!-- Design notes -->
+          <section class="mt-5 rounded-xl border border-dashed border-slate-300 bg-white/60 p-4 text-[13px]">
+            <h3 class="mb-2 font-semibold text-slate-900">Design-Notizen · Linear Pro</h3>
+            <ul class="grid gap-1.5 text-slate-600 md:grid-cols-2">
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Dunkle Sidebar (Ink 950) trennt Navigation klar vom Inhalt</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Filter als Chip-Bar mit "+ Filter"-Pattern wie in Linear/Notion</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Aktive Filter (Indigo) vs. statische Filter (grau) visuell getrennt</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Dichte Tabelle: <code class="mono text-xs">text-[12.5px]</code>, kleinere Paddings, Monospace für Zahlen</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Inline Dumbbell-Chart in jeder Zeile (Position P1 → P2 visuell)</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Section-Header in Tabelle (Riser / Faller) als visuelle Gliederung</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Keyboard-Shortcuts sichtbar (<kbd class="mono rounded bg-slate-100 px-1 text-[10px]">⌘K</kbd>, <kbd class="mono rounded bg-slate-100 px-1 text-[10px]">⇧E</kbd>)</li>
+              <li class="flex gap-2"><span class="text-emerald-500">✓</span> Gespeicherte Sichten direkt in der Sidebar (Pinned Views)</li>
+            </ul>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
