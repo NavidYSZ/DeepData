@@ -93,6 +93,8 @@ export default function NlpPage() {
           if (json?.hint) parts.push(json.hint);
           if (json?.statusCode) parts.push(`HTTP ${json.statusCode}`);
           if (json?.model) parts.push(`model: ${json.model}`);
+          if (json?.url) parts.push(`url: ${json.url}`);
+          if (json?.baseURL) parts.push(`baseURL: ${json.baseURL}`);
           if (json?.responseBody) parts.push(`response: ${json.responseBody}`);
           setError(parts.join(" · "));
           if (json?.extracted) {
