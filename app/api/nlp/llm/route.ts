@@ -75,7 +75,7 @@ export async function POST(request: Request) {
   let resultText: string;
   try {
     const result = await generateText({
-      model: deepseek(modelId),
+      model: deepseek.chat(modelId),
       temperature: 0.1,
       messages: [
         { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
