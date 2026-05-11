@@ -89,7 +89,12 @@ export default function NlpPage() {
         });
         const json = await res.json();
         if (!res.ok) {
-          setError(json?.error ?? "LLM request failed");
+          const parts = [json?.error ?? "LLM request failed"];
+          if (json?.hint) parts.push(json.hint);
+          if (json?.statusCode) parts.push(`HTTP ${json.statusCode}`);
+          if (json?.model) parts.push(`model: ${json.model}`);
+          if (json?.responseBody) parts.push(`response: ${json.responseBody}`);
+          setError(parts.join(" · "));
           if (json?.extracted) {
             setLlmData({
               extracted: json.extracted,
@@ -168,7 +173,7 @@ export default function NlpPage() {
             <div className="text-xs text-muted-foreground">
               Modell:{" "}
               <span className="font-mono text-foreground">
-                {llmData?.model || "deepseek-chat"}
+                {llmData?.model || "deepseek-v4-pro"}
               </span>
               {" · "}konfigurierbar über{" "}
               <code className="rounded bg-muted px-1 py-0.5 text-[10px]">DEEPSEEK_MODEL</code>

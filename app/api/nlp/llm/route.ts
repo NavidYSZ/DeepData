@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Missing DEEPSEEK_API_KEY. Set DEEPSEEK_API_KEY in your .env.local. Optional: DEEPSEEK_BASE_URL (default https://api.deepseek.com/v1), DEEPSEEK_MODEL (default deepseek-chat)."
+          "Missing DEEPSEEK_API_KEY. Set DEEPSEEK_API_KEY in your .env.local. Optional: DEEPSEEK_BASE_URL (default https://api.deepseek.com), DEEPSEEK_MODEL (default deepseek-v4-pro, alt: deepseek-v4-flash)."
       },
       { status: 500 }
     );
@@ -65,9 +65,9 @@ export async function POST(request: Request) {
 
   const deepseek = createOpenAI({
     apiKey,
-    baseURL: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1"
+    baseURL: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com"
   });
-  const modelId = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+  const modelId = process.env.DEEPSEEK_MODEL || "deepseek-v4-pro";
 
   const userPrompt = `# Der zu analysierende Text:\n\n${truncated}`;
 
@@ -84,9 +84,25 @@ export async function POST(request: Request) {
     });
     resultText = result.text;
   } catch (err: any) {
+    const statusCode: number | undefined = err?.statusCode ?? err?.status;
+    const responseBody: string | undefined =
+      err?.responseBody ?? err?.data?.error?.message ?? err?.cause?.message;
+    const url: string | undefined = err?.url;
+    const hint =
+      statusCode === 404
+        ? `Model "${modelId}" or endpoint not found. Valid models: deepseek-v4-pro, deepseek-v4-flash. Base URL must be https://api.deepseek.com (no /v1).`
+        : statusCode === 401
+          ? "DeepSeek rejected the API key — check DEEPSEEK_API_KEY."
+          : undefined;
     return NextResponse.json(
       {
         error: err?.message ?? "DeepSeek request failed",
+        hint,
+        statusCode,
+        url,
+        responseBody,
+        model: modelId,
+        baseURL: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com",
         extracted
       },
       { status: 502 }
