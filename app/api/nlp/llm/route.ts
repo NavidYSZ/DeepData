@@ -6,18 +6,18 @@ import { fetchAndExtract } from "@/lib/nlp/extract";
 import { EXTRACTION_SYSTEM_PROMPT } from "@/lib/nlp/extraction-prompt";
 import type { ExtractionOutput } from "@/lib/nlp/types";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 // Bump this whenever the route logic changes so the client can confirm
 // the redeploy is live. Visible in the JSON response as `_routeVersion`.
-const ROUTE_VERSION = "2026-05-11.4-direct-fetch";
+const ROUTE_VERSION = "2026-05-11.5-json-mode-long-timeout";
 
 const bodySchema = z.object({
   url: z.string().url()
 });
 
 const MAX_TEXT_CHARS = 24_000;
-const DEEPSEEK_TIMEOUT_MS = 110_000;
+const DEEPSEEK_TIMEOUT_MS = 290_000;
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -94,6 +94,7 @@ export async function POST(request: Request) {
         model: modelId,
         temperature: 0.1,
         stream: false,
+        response_format: { type: "json_object" },
         messages: [
           { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
           { role: "user", content: `# Der zu analysierende Text:\n\n${truncated}` }
