@@ -13,7 +13,6 @@ const bodySchema = z.object({
   overlapThreshold: z.coerce.number().optional(),
   keywordScopeMode: z.enum(["project", "upload_source"]).optional(),
   uploadSourceId: z.string().optional(),
-  groupIntoParents: z.boolean().optional(),
   topResults: z
     .union([z.literal(7), z.literal(10), z.enum(["7", "10"]).transform((v) => Number(v))])
     .optional(),

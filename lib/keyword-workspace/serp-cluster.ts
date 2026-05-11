@@ -1,8 +1,6 @@
 import Graph from "graphology";
 import louvain from "graphology-communities-louvain";
 import { nanoid } from "nanoid";
-import { createOpenAI } from "@ai-sdk/openai";
-import { generateText } from "ai";
 import { prisma } from "@/lib/db";
 import { searchAnalyticsQuery } from "@/lib/gsc";
 import {
@@ -54,15 +52,10 @@ type SnapshotLite = {
   topUrlsJson: string | null;
 };
 
-type ParentJson = {
-  parents: { name: string; subclusterIds: string[]; rationale?: string }[];
-};
-
 const MAX_CONCURRENCY = 8;
 const MAX_FETCH_WAVES = 3;
 const SNAPSHOT_SCAN_LIMIT = 5;
 const GSC_DAYS = 180;
-const DEFAULT_MODEL = "gpt-4o";
 const FETCH_MAX_ATTEMPTS = 4;
 const FETCH_TIMEOUT_MS = 25_000;
 const FETCH_BASE_BACKOFF_MS = 1_500;
@@ -439,80 +432,6 @@ function clusterGraphAgglomerative(
   });
 }
 
-function fallbackParents(subclusters: ClusteredSubcluster[], reason: string) {
-  return subclusters.map((s) => ({
-    name: s.topDomains?.[0] ?? s.label,
-    subclusterIds: [s.id],
-    rationale: reason
-  }));
-}
-
-async function mapParentsWithLlm(subclusters: ClusteredSubcluster[]) {
-  if (!process.env.OPENAI_API_KEY) {
-    return fallbackParents(subclusters, "fallback_no_llm");
-  }
-
-  const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const results: ParentJson["parents"] = [];
-  const chunkSize = 30;
-
-  for (let i = 0; i < subclusters.length; i += chunkSize) {
-    const chunk = subclusters.slice(i, i + chunkSize);
-    const payload = chunk.map((c) => ({
-      id: c.id,
-      name: c.label,
-      topDomains: c.topDomains,
-      topKeywords: c.members
-        .slice()
-        .sort((a, b) => (b.demandMonthly ?? 0) - (a.demandMonthly ?? 0))
-        .slice(0, 5)
-        .map((k) => k.kwRaw),
-      keywordCount: c.keywordCount,
-      totalDemand: Math.round(c.totalDemand)
-    }));
-
-    const system =
-      "You group related keyword subclusters into parent clusters. Return STRICT JSON {\"parents\":[{\"name\":\"\",\"subclusterIds\":[],\"rationale\":\"optional\"}]}. " +
-      "Use only provided subclusterIds. Prefer concise, general names. Combine clearly overlapping topics; otherwise keep separate. Respond with compact parent names. " +
-      "IMPORTANT: All parent cluster names MUST be in German (Deutsch). Use natural, concise German terms.";
-    const user = `Subclusters:\n${JSON.stringify(payload, null, 2)}`;
-
-    try {
-      const res = await generateText({
-        model: openai(DEFAULT_MODEL),
-        temperature: 0.2,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user }
-        ]
-      });
-      const start = res.text.indexOf("{");
-      const end = res.text.lastIndexOf("}");
-      const parsed = JSON.parse(res.text.slice(start, end + 1)) as ParentJson;
-      if (parsed?.parents) results.push(...parsed.parents);
-    } catch (e) {
-      console.warn("LLM parent mapping fallback", e);
-      return fallbackParents(subclusters, "llm_parse_fallback");
-    }
-  }
-
-  if (!results.length) return fallbackParents(subclusters, "llm_empty");
-
-  // merge duplicates by name
-  const merged = new Map<string, { name: string; subclusterIds: Set<string>; rationale?: string }>();
-  results.forEach((p) => {
-    const key = p.name.trim().toLowerCase();
-    const entry = merged.get(key) ?? { name: p.name, subclusterIds: new Set<string>(), rationale: p.rationale };
-    p.subclusterIds.forEach((id) => entry.subclusterIds.add(id));
-    merged.set(key, entry);
-  });
-  return Array.from(merged.values()).map((p) => ({
-    name: p.name,
-    subclusterIds: Array.from(p.subclusterIds),
-    rationale: p.rationale
-  }));
-}
-
 function toIso(value: Date) {
   return value.toISOString().slice(0, 10);
 }
@@ -525,7 +444,6 @@ export async function runSerpClustering(params: {
   gscSiteUrl?: string;
   keywordScopeMode?: "project" | "upload_source";
   uploadSourceId?: string;
-  groupIntoParents?: boolean;
   minDemand?: number;
   overlapThreshold?: number;
   topResults?: number;
@@ -541,7 +459,6 @@ export async function runSerpClustering(params: {
     gscSiteUrl,
     keywordScopeMode = "project",
     uploadSourceId,
-    groupIntoParents = false,
     minDemand = 5,
     overlapThreshold = 0.3,
     topResults = 10,
@@ -566,7 +483,6 @@ export async function runSerpClustering(params: {
   let resolvedKeywordCount = 0;
   let usedKeywordCount = 0;
   let waveCount = 0;
-  let promptModel: string | null = null;
 
   const eligibleKeywordWhere =
     keywordScopeMode === "upload_source" && uploadSourceId
@@ -785,27 +701,7 @@ export async function runSerpClustering(params: {
 
     const subclusters: ClusteredSubcluster[] = clustered.map((s) => ({ ...s, id: nanoid() }));
 
-    // ── Phase 5: Optional parent grouping ──
-    const parents = groupIntoParents
-      ? await (async () => {
-          await updateStatus("mapping_parents", {
-            zyteRequested,
-            zyteSucceeded,
-            zyteCached,
-            missingSnapshotCount,
-            fetchedMissingCount,
-            eligibleKeywordCount,
-            resolvedKeywordCount,
-            usedKeywordCount,
-            waveCount
-          });
-          const mappedParents = await mapParentsWithLlm(subclusters);
-          promptModel = process.env.OPENAI_API_KEY ? DEFAULT_MODEL : null;
-          return mappedParents;
-        })()
-      : [];
-
-    // ── Phase 6: Persist results ──
+    // ── Phase 5: Persist results ──
     await prisma.$transaction(async (tx) => {
       for (const sub of subclusters) {
         await tx.serpSubcluster.create({
@@ -828,39 +724,6 @@ export async function runSerpClustering(params: {
         });
       }
 
-      for (const parent of parents) {
-        const parentId = nanoid();
-        const subs = subclusters.filter((s) => parent.subclusterIds.includes(s.id));
-        const totalDemand = subs.reduce((s, c) => s + c.totalDemand, 0);
-        const keywordCount = subs.reduce((s, c) => s + c.keywordCount, 0);
-        const topDomainsCount = new Map<string, number>();
-        subs.forEach((s) => {
-          (s.topDomains ?? []).forEach((d) => topDomainsCount.set(d, (topDomainsCount.get(d) ?? 0) + 1));
-        });
-        const topDomains = Array.from(topDomainsCount.entries())
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([d]) => d);
-
-        await tx.serpParentCluster.create({
-          data: {
-            id: parentId,
-            runId,
-            projectId,
-            name: parent.name,
-            rationale: parent.rationale ?? null,
-            totalDemand,
-            keywordCount,
-            topDomainsJson: JSON.stringify(topDomains),
-            subclusters: {
-              createMany: {
-                data: subs.map((s) => ({ subclusterId: s.id }))
-              }
-            }
-          }
-        });
-      }
-
       await tx.serpClusterRun.update({
         where: { id: runId },
         data: {
@@ -874,7 +737,7 @@ export async function runSerpClustering(params: {
           zyteRequested,
           zyteSucceeded,
           zyteCached,
-          promptModel,
+          promptModel: null,
           eligibleKeywordCount,
           resolvedKeywordCount,
           usedKeywordCount,
@@ -894,7 +757,7 @@ export async function runSerpClustering(params: {
       await prisma.serpClusterRun.deleteMany({ where: { id: { in: oldRuns.map((r) => r.id) } } });
     }
 
-    return { runId, counts: { zyteRequested, zyteSucceeded, zyteCached }, parents, subclusters };
+    return { runId, counts: { zyteRequested, zyteSucceeded, zyteCached }, subclusters };
   } catch (e) {
     await prisma.serpClusterRun.update({
       where: { id: runId },
@@ -910,7 +773,7 @@ export async function runSerpClustering(params: {
         snapshotReuseMode,
         missingSnapshotCount,
         fetchedMissingCount,
-        promptModel,
+        promptModel: null,
         eligibleKeywordCount,
         resolvedKeywordCount,
         usedKeywordCount,

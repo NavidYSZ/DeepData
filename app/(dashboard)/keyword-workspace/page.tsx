@@ -6,16 +6,13 @@ import ReactFlow, { Background, Controls, Edge, Node, NodeProps, ReactFlowInstan
 import "reactflow/dist/style.css";
 import * as XLSX from "xlsx";
 import { ChevronDown, Columns3, Download, FileSpreadsheet, FileText, LayoutGrid, Loader2, Menu, Play, RefreshCw, Search, Settings2, Upload, X } from "lucide-react";
-import dagre from "dagre";
 import { useSite } from "@/components/dashboard/site-context";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -159,9 +156,8 @@ type KeywordClusterExportRow = {
 type KeywordExportColumn = { key: keyof KeywordClusterExportRow; header: string; width: number };
 type OptionalKeywordExportColumnKey = Exclude<keyof KeywordClusterExportRow, "topicalCluster" | "cluster" | "keyword">;
 type KeywordScopeMode = "project" | "upload_source";
-type ClusterView = "subclusters" | "parents";
 
-const ACTIVE_STATUSES = ["pending", "importing_gsc", "fetching_serps", "clustering", "mapping_parents", "running"];
+const ACTIVE_STATUSES = ["pending", "importing_gsc", "fetching_serps", "clustering", "running"];
 const SERP_DEBUG = true;
 
 const STATUS_LABELS: Record<string, string> = {
@@ -169,7 +165,6 @@ const STATUS_LABELS: Record<string, string> = {
   importing_gsc: "GSC-Daten werden importiert (6 Monate)...",
   fetching_serps: "SERP-Daten werden von Google geholt...",
   clustering: "Keywords werden geclustert...",
-  mapping_parents: "Themen werden mit KI gruppiert...",
   running: "Clustering läuft..."
 };
 
@@ -177,9 +172,6 @@ const PARENT_WIDTH = 280;
 const PARENT_HEIGHT = 120;
 const DETAIL_WIDTH = 360;
 const DETAIL_HEIGHT = 520;
-const SUB_MIN_W = 260;
-const SUB_MAX_W = 380;
-const SUB_HEIGHT = 150;
 const GRID_COLS = 4;
 const GRID_GAP_X = 40;
 const GRID_GAP_Y = 40;
@@ -296,9 +288,6 @@ function ParentNode({ data }: NodeProps) {
             </div>
           </div>
         </div>
-        <div className="mt-3 text-xs text-muted-foreground">
-          {data.subclusterCount} Subcluster
-        </div>
         <div className="mt-3 space-y-1 flex-1 min-h-0">
           <div className="text-sm font-medium">Keywords</div>
           <ScrollArea className="h-[340px] rounded border">
@@ -340,154 +329,23 @@ function ParentNode({ data }: NodeProps) {
       <div className="text-sm font-semibold truncate">{data.name}</div>
       <div className="text-xs text-muted-foreground">Demand {Math.round(data.totalDemand)}</div>
       <div className="text-xs text-muted-foreground">Keywords {data.keywordCount}</div>
-      <div className="text-xs text-muted-foreground mt-1">{data.subclusterCount} Subcluster</div>
     </div>
-  );
-}
-
-/* ── Custom Node: Subcluster ── */
-function SubclusterNode({ data }: NodeProps) {
-  const isVisible = data.reveal !== false;
-  const delayMs = typeof data.delayMs === "number" ? `${data.delayMs}ms` : undefined;
-  return (
-    <div
-      className={[
-        "rounded-lg border bg-accent px-3 py-2 shadow-sm transition-[opacity,transform] duration-300",
-        isVisible ? "opacity-100 translate-x-0 hover:-translate-y-1" : "opacity-0 translate-x-6 pointer-events-none"
-      ].join(" ")}
-      style={{ width: data.subWidth ?? 256, minWidth: 256, transitionDelay: delayMs }}
-    >
-      <div className="text-sm font-semibold truncate">{data.name}</div>
-      <div className="text-xs text-muted-foreground">
-        Demand {Math.round(data.totalDemand)} · {data.keywordCount} KW
-      </div>
-      {typeof data.overlapScore === "number" ? (
-        <div className="text-[11px] text-muted-foreground">Avg Overlap {(data.overlapScore * 100).toFixed(0)}%</div>
-      ) : null}
-      <ScrollArea className="mt-1 max-h-32">
-        <div className="text-xs text-muted-foreground space-y-0.5 pr-1">
-          {data.keywords?.map((k: SerpKeyword) => (
-            <div key={k.id} className="flex min-w-0 items-center justify-between gap-1">
-              <span className="flex min-w-0 flex-1 items-center gap-1">
-                {k.demandSource === "upload" && <ExternalBadge />}
-                <span className="truncate">{k.kwRaw}</span>
-              </span>
-              <span className="shrink-0 tabular-nums">{Math.round(k.demandMonthly)}</span>
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
-    </div>
-  );
-}
-
-function SubclusterCard({ subcluster }: { subcluster: SerpSubcluster }) {
-  const keywordsSorted = [...(subcluster.keywords ?? [])].sort(
-    (a, b) => (b.demandMonthly ?? 0) - (a.demandMonthly ?? 0)
-  );
-  const keywordPreview = keywordsSorted.slice(0, 14);
-
-  return (
-    <Card className="h-full rounded-2xl border-border/70 bg-card/95 shadow-sm">
-      <CardHeader className="space-y-3 pb-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <CardTitle className="truncate text-base">{subcluster.name}</CardTitle>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              {subcluster.parentName ? (
-                <Badge variant="outline" className="max-w-[220px] truncate">
-                  Parent: {subcluster.parentName}
-                </Badge>
-              ) : (
-                <Badge variant="outline">Direkter Cluster</Badge>
-              )}
-              {typeof subcluster.overlapScore === "number" ? (
-                <span>Avg Overlap {(subcluster.overlapScore * 100).toFixed(0)}%</span>
-              ) : null}
-            </div>
-          </div>
-          <div className="rounded-xl border border-border/70 bg-muted/30 px-3 py-2 text-right">
-            <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-              Demand
-            </div>
-            <div className="text-lg font-semibold">
-              {Math.round(subcluster.totalDemand ?? 0).toLocaleString("de-DE")}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-          <span>{subcluster.keywordCount} Keywords</span>
-          {subcluster.topDomains?.length ? (
-            <span>Top Domains: {subcluster.topDomains.slice(0, 3).join(" · ")}</span>
-          ) : null}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Keyword Preview
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {keywordPreview.map((keyword) => (
-              <span
-                key={keyword.id}
-                className="inline-flex max-w-full items-center gap-1 rounded-full border border-border/70 bg-background px-2.5 py-1 text-xs"
-              >
-                {keyword.demandSource === "upload" ? <ExternalBadge /> : null}
-                <span className="truncate">{keyword.kwRaw}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {subcluster.topUrls?.length ? (
-          <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Top URLs
-            </div>
-            <div className="space-y-1 text-xs text-muted-foreground">
-              {subcluster.topUrls.slice(0, 4).map((url) => (
-                <div key={url} className="truncate">
-                  {url}
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
   );
 }
 
 const nodeTypes = {
-  parentNode: ParentNode,
-  subNode: SubclusterNode
+  parentNode: ParentNode
 };
-
-/* ── Estimate optimal subcluster node width based on longest keyword ── */
-function estimateSubWidth(keywords: SerpKeyword[]): number {
-  if (!keywords.length) return SUB_MIN_W;
-  const longest = Math.max(
-    ...keywords.map((k) => {
-      const badgeW = k.demandSource === "upload" ? 20 : 0;
-      // ~6.5px per char at text-xs, + badge + gap + demand number + container padding
-      return k.kwRaw.length * 6.5 + badgeW + 54;
-    })
-  );
-  return Math.min(Math.max(Math.ceil(longest), SUB_MIN_W), SUB_MAX_W);
-}
 
 /* ── Layout builder ── */
 function buildFlowGraph(
-  parents: SerpParent[],
-  selectedParent: string | null,
+  subclusters: SerpSubcluster[],
+  selectedId: string | null,
   onSelect: (id: string) => void,
   dockTarget: { x: number; y: number } | null,
-  clickFeedbackParentId: string | null,
-  revealSubclusters: boolean
+  clickFeedbackId: string | null
 ): { nodes: Node[]; edges: Edge[] } {
-  if (!parents.length) return { nodes: [], edges: [] };
+  if (!subclusters.length) return { nodes: [], edges: [] };
 
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -499,141 +357,78 @@ function buildFlowGraph(
     transitionDelay: `${delayMs}ms`
   });
 
-  if (!selectedParent) {
-    // ── Overview: grid of parent nodes ──
-    parents.forEach((p, idx) => {
+  if (!selectedId) {
+    subclusters.forEach((s, idx) => {
       const col = idx % GRID_COLS;
       const row = Math.floor(idx / GRID_COLS);
       nodes.push({
-        id: `parent-${p.id}`,
+        id: `parent-${s.id}`,
         type: "parentNode",
         position: {
           x: col * (PARENT_WIDTH + GRID_GAP_X),
           y: row * (PARENT_HEIGHT + GRID_GAP_Y)
         },
         data: {
-          parentId: p.id,
-          name: p.name,
-          totalDemand: p.totalDemand,
-          keywordCount: p.keywordCount,
-          subclusterCount: p.subclusters.length,
-          clickFeedback: clickFeedbackParentId === p.id,
+          parentId: s.id,
+          name: s.name,
+          totalDemand: s.totalDemand,
+          keywordCount: s.keywordCount,
+          clickFeedback: clickFeedbackId === s.id,
           onSelect
         },
         style: transitionStyle(idx * OVERVIEW_STAGGER_MS),
         draggable: false
       });
     });
-  } else {
-    // ── Focus mode ──
-    const selected = parents.find((p) => p.id === selectedParent);
-    if (!selected) return { nodes: [], edges: [] };
+    return { nodes, edges };
+  }
 
-    // Flat keywords for detail node
-    const keywordsFlat = selected.subclusters
-      .flatMap((s) => s.keywords)
-      .sort((a, b) => (b.demandMonthly ?? 0) - (a.demandMonthly ?? 0));
+  const selected = subclusters.find((s) => s.id === selectedId);
+  if (!selected) return { nodes: [], edges: [] };
 
-    const selectedNodeId = `parent-${selected.id}`;
+  const keywordsFlat = [...selected.keywords].sort(
+    (a, b) => (b.demandMonthly ?? 0) - (a.demandMonthly ?? 0)
+  );
 
-    // Selected parent → expanded detail (left side, same node ID for smooth transition)
+  nodes.push({
+    id: `parent-${selected.id}`,
+    type: "parentNode",
+    position: { x: 0, y: 0 },
+    data: {
+      parentId: selected.id,
+      name: selected.name,
+      totalDemand: selected.totalDemand,
+      keywordCount: selected.keywordCount,
+      expanded: true,
+      keywordsFlat,
+      totalKeywords: selected.keywordCount,
+      onSelect
+    },
+    style: { ...transitionStyle(), zIndex: 10 },
+    draggable: false
+  });
+
+  const rest = subclusters.filter((s) => s.id !== selectedId);
+  const dockX = (dockTarget?.x ?? DETAIL_WIDTH + 200) - PARENT_WIDTH / 2;
+  const dockY = (dockTarget?.y ?? 0) - PARENT_HEIGHT / 2;
+
+  rest.forEach((s, idx) => {
     nodes.push({
-      id: selectedNodeId,
+      id: `parent-${s.id}`,
       type: "parentNode",
-      position: { x: 0, y: 0 },
+      position: { x: dockX, y: dockY },
       data: {
-        parentId: selected.id,
-        name: selected.name,
-        totalDemand: selected.totalDemand,
-        keywordCount: selected.keywordCount,
-        subclusterCount: selected.subclusters.length,
-        expanded: true,
-        keywordsFlat,
-        totalKeywords: selected.keywordCount,
+        parentId: s.id,
+        name: s.name,
+        totalDemand: s.totalDemand,
+        keywordCount: s.keywordCount,
+        docked: true,
         onSelect
       },
-      style: { ...transitionStyle(), zIndex: 10 },
+      style: { ...transitionStyle(idx * FLOW_OUT_STAGGER_MS, FLOW_OUT_MS), zIndex: 1 },
       draggable: false
     });
-
-    // Subcluster nodes (right, dagre layout)
-    let maxSubX = DETAIL_WIDTH + 120;
-    const sortedSubclusters = [...selected.subclusters].sort((a, b) => (b.totalDemand ?? 0) - (a.totalDemand ?? 0));
-    if (sortedSubclusters.length) {
-      const g = new dagre.graphlib.Graph();
-      g.setDefaultEdgeLabel(() => ({}));
-      g.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 60 });
-
-      const subWidths = new Map<string, number>();
-      sortedSubclusters.forEach((s) => {
-        const w = estimateSubWidth(s.keywords ?? []);
-        subWidths.set(s.id, w);
-        g.setNode(`sub-${s.id}`, { width: w, height: SUB_HEIGHT });
-      });
-      dagre.layout(g);
-
-      const xOffset = DETAIL_WIDTH + 120;
-
-      sortedSubclusters.forEach((s, idx) => {
-        const subW = subWidths.get(s.id) ?? SUB_MIN_W;
-        const pos = g.node(`sub-${s.id}`);
-        const nx = xOffset + (pos?.x - subW / 2 || 0);
-        if (nx + subW > maxSubX) maxSubX = nx + subW;
-        const nodeId = `sub-${s.id}`;
-        const keywordsSorted = [...(s.keywords ?? [])].sort((a, b) => (b.demandMonthly ?? 0) - (a.demandMonthly ?? 0));
-        nodes.push({
-          id: nodeId,
-          type: "subNode",
-          position: {
-            x: nx,
-            y: pos?.y - SUB_HEIGHT / 2 || 0
-          },
-          data: { ...s, keywords: keywordsSorted, subWidth: subW, reveal: revealSubclusters, delayMs: revealSubclusters ? idx * 45 : 0 },
-          style: transitionStyle(),
-          draggable: false
-        });
-      });
-      if (revealSubclusters) {
-        sortedSubclusters.forEach((s) => {
-          const nodeId = `sub-${s.id}`;
-          edges.push({
-            id: `e-${selectedNodeId}-${nodeId}`,
-            source: selectedNodeId,
-            target: nodeId,
-            animated: true,
-            style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5, opacity: 0.4 }
-          });
-        });
-      }
-    }
-
-    // Dock remaining parent nodes into top-right return button target
-    const rest = parents.filter((p) => p.id !== selectedParent);
-    const dockX = (dockTarget?.x ?? maxSubX + 120) - PARENT_WIDTH / 2;
-    const dockY = (dockTarget?.y ?? 0) - PARENT_HEIGHT / 2;
-
-    rest.forEach((p, idx) => {
-      nodes.push({
-        id: `parent-${p.id}`,
-        type: "parentNode",
-        position: {
-          x: dockX,
-          y: dockY
-        },
-        data: {
-          parentId: p.id,
-          name: p.name,
-          totalDemand: p.totalDemand,
-          keywordCount: p.keywordCount,
-          subclusterCount: p.subclusters.length,
-          docked: true,
-          onSelect
-        },
-        style: { ...transitionStyle(idx * FLOW_OUT_STAGGER_MS, FLOW_OUT_MS), zIndex: 1 },
-        draggable: false
-      });
-    });
-  }
+  });
 
   return { nodes, edges };
 }
@@ -657,11 +452,8 @@ export default function KeywordWorkspacePage() {
   const [topResults, setTopResults] = useState<7 | 10>(10);
   const [overlapThreshold, setOverlapThreshold] = useState(0.3);
   const [clusterAlgorithm, setClusterAlgorithm] = useState<"louvain" | "agglomerative_single_link">("louvain");
-  const [groupIntoParents, setGroupIntoParents] = useState(false);
-  const [clusterView, setClusterView] = useState<ClusterView>("subclusters");
-  const [selectedParent, setSelectedParent] = useState<string | null>(null);
-  const [clickFeedbackParentId, setClickFeedbackParentId] = useState<string | null>(null);
-  const [revealSubclusters, setRevealSubclusters] = useState(false);
+  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
+  const [clickFeedbackClusterId, setClickFeedbackClusterId] = useState<string | null>(null);
   const [pollInterval, setPollInterval] = useState(0);
   const wasRunningRef = useRef(false);
   const flowRef = useRef<ReactFlowInstance | null>(null);
@@ -754,9 +546,7 @@ export default function KeywordWorkspacePage() {
   const handleRunChange = useCallback(
     (runId: string) => {
       setSelectedRunId(runId);
-      setClusterView("subclusters");
-      setSelectedParent(null);
-      setRevealSubclusters(false);
+      setSelectedClusterId(null);
       mutateSerp();
       mutateStatus();
     },
@@ -857,17 +647,11 @@ export default function KeywordWorkspacePage() {
       minDemand: serpData?.minDemand,
       fetchedMissingCount: serpData?.fetchedMissingCount,
       keywordCoverage: serpData?.keywordCoverage,
-      parents: serpData?.parents?.map((p) => ({
-        id: p.id,
-        name: p.name,
-        totalDemand: p.totalDemand,
-        keywordCount: p.keywordCount,
-        subclusters: p.subclusters.length
-      })),
-      selectedParent
+      subclusterCount: serpData?.subclusters?.length ?? 0,
+      selectedClusterId
     });
     console.groupEnd();
-  }, [serpData, selectedParent]);
+  }, [serpData, selectedClusterId]);
 
   async function triggerRun() {
     if (!projectId) return;
@@ -884,7 +668,6 @@ export default function KeywordWorkspacePage() {
           overlapThreshold,
           topResults,
           clusterAlgorithm,
-          groupIntoParents,
           keywordScopeMode,
           uploadScopeSourceId,
           ts: new Date().toISOString()
@@ -899,7 +682,6 @@ export default function KeywordWorkspacePage() {
           overlapThreshold,
           topResults,
           clusterAlgorithm,
-          groupIntoParents,
           keywordScopeMode,
           uploadSourceId: keywordScopeMode === "upload_source" ? uploadScopeSourceId : undefined
         })
@@ -920,13 +702,7 @@ export default function KeywordWorkspacePage() {
   }
 
   const subclusters = serpData?.subclusters ?? [];
-  const parents = serpData?.parents ?? [];
-  const hasParentClusters = (serpData?.parentClustersAvailable ?? false) && parents.length > 0;
   const hasClusterData = subclusters.length > 0;
-  const currentParent = useMemo(
-    () => (selectedParent ? parents.find((parent) => parent.id === selectedParent) ?? null : null),
-    [parents, selectedParent]
-  );
   const subclustersSorted = useMemo(
     () =>
       [...subclusters].sort((a, b) => {
@@ -937,6 +713,10 @@ export default function KeywordWorkspacePage() {
       }),
     [subclusters]
   );
+  const selectedSubcluster = useMemo(
+    () => (selectedClusterId ? subclustersSorted.find((s) => s.id === selectedClusterId) ?? null : null),
+    [subclustersSorted, selectedClusterId]
+  );
   const keywordScopeLabel =
     keywordScopeMode === "upload_source"
       ? uploadScopeSourceName
@@ -944,9 +724,9 @@ export default function KeywordWorkspacePage() {
         : "Nur Upload"
       : "GSC + Uploads";
   const scopedSubclustersForExport = useMemo(() => {
-    if (exportScope === "all" || !currentParent) return subclustersSorted;
-    return currentParent.subclusters;
-  }, [exportScope, currentParent, subclustersSorted]);
+    if (exportScope === "all" || !selectedSubcluster) return subclustersSorted;
+    return [selectedSubcluster];
+  }, [exportScope, selectedSubcluster, subclustersSorted]);
   const scopedExportRows = useMemo(
     () => buildKeywordExportRows(scopedSubclustersForExport),
     [scopedSubclustersForExport]
@@ -993,12 +773,6 @@ export default function KeywordWorkspacePage() {
     });
   }, [searchQuery, subclustersSorted]);
 
-  useEffect(() => {
-    if (hasParentClusters) return;
-    if (clusterView !== "subclusters") setClusterView("subclusters");
-    if (selectedParent) setSelectedParent(null);
-  }, [clusterView, hasParentClusters, selectedParent]);
-
   const activeExportColumns = useMemo<KeywordExportColumn[]>(
     () => [
       ...FIXED_KEYWORD_EXPORT_COLUMNS,
@@ -1043,7 +817,7 @@ export default function KeywordWorkspacePage() {
     const scopePart =
       exportScope === "all"
         ? "alle-cluster"
-        : slugifyFilenamePart(currentParent?.name ?? "aktuelle-ansicht");
+        : slugifyFilenamePart(selectedSubcluster?.name ?? "aktuelle-ansicht");
     const baseFilename = `keyword-cluster-export-${scopePart}-${timestamp}`;
     const serializedRows = serializeKeywordExportRows(scopedExportRows, activeExportColumns);
     const worksheet = XLSX.utils.json_to_sheet(serializedRows, { skipHeader: false });
@@ -1066,7 +840,7 @@ export default function KeywordWorkspacePage() {
 
     setExportDialogOpen(false);
     toast.success(`Export erstellt: ${scopedExportRows.length.toLocaleString("de-DE")} Keywords.`);
-  }, [scopedExportRows, activeExportColumns, exportScope, currentParent, exportFormat]);
+  }, [scopedExportRows, activeExportColumns, exportScope, selectedSubcluster, exportFormat]);
 
   const updateOptionalColumns = useCallback((next: Set<OptionalKeywordExportColumnKey>) => {
     setSelectedOptionalColumns(
@@ -1085,11 +859,11 @@ export default function KeywordWorkspacePage() {
   );
 
   const handleSelect = useCallback((id: string) => {
-    setClickFeedbackParentId(id);
+    setClickFeedbackClusterId(id);
     if (selectTimerRef.current) window.clearTimeout(selectTimerRef.current);
     selectTimerRef.current = window.setTimeout(() => {
-      setSelectedParent(id);
-      setClickFeedbackParentId(null);
+      setSelectedClusterId(id);
+      setClickFeedbackClusterId(null);
       selectTimerRef.current = null;
     }, 130);
   }, []);
@@ -1099,44 +873,33 @@ export default function KeywordWorkspacePage() {
       window.clearTimeout(selectTimerRef.current);
       selectTimerRef.current = null;
     }
-    setClickFeedbackParentId(null);
-    setSelectedParent(null);
+    setClickFeedbackClusterId(null);
+    setSelectedClusterId(null);
   }, []);
 
   // Reliable click handler at ReactFlow level (backup for node onClick)
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      if (selectedParent) return;
+      if (selectedClusterId) return;
       if (node.type !== "parentNode") return;
       if (node.data.parentId) {
         handleSelect(node.data.parentId);
       }
     },
-    [selectedParent, handleSelect]
+    [selectedClusterId, handleSelect]
   );
 
   const { nodes: flowNodes, edges: flowEdges } = useMemo(
     () =>
       buildFlowGraph(
-        parents,
-        selectedParent,
+        subclustersSorted,
+        selectedClusterId,
         handleSelect,
         dockTarget,
-        clickFeedbackParentId,
-        revealSubclusters
+        clickFeedbackClusterId
       ),
-    [parents, selectedParent, handleSelect, dockTarget, clickFeedbackParentId, revealSubclusters]
+    [subclustersSorted, selectedClusterId, handleSelect, dockTarget, clickFeedbackClusterId]
   );
-
-  useEffect(() => {
-    if (!selectedParent) {
-      setRevealSubclusters(false);
-      return;
-    }
-    setRevealSubclusters(false);
-    const timerId = window.setTimeout(() => setRevealSubclusters(true), 280);
-    return () => window.clearTimeout(timerId);
-  }, [selectedParent]);
 
   useEffect(
     () => () => {
@@ -1149,17 +912,17 @@ export default function KeywordWorkspacePage() {
   const prevNodeKeyRef = useRef<string>("");
   useEffect(() => {
     if (!flowRef.current || !flowNodes.length) return;
-    const nodeKey = `${selectedParent ?? "overview"}:${flowNodes.length}`;
+    const nodeKey = `${selectedClusterId ?? "overview"}:${flowNodes.length}`;
     if (prevNodeKeyRef.current === nodeKey) return;
     prevNodeKeyRef.current = nodeKey;
 
-    const visibleNodeIds = selectedParent
+    const visibleNodeIds = selectedClusterId
       ? flowNodes
-          .filter((node) => node.id === `parent-${selectedParent}` || node.type === "subNode")
+          .filter((node) => node.id === `parent-${selectedClusterId}`)
           .map((node) => ({ id: node.id }))
       : flowNodes.map((node) => ({ id: node.id }));
 
-    const delay = selectedParent ? FITVIEW_DELAY_MS : 0;
+    const delay = selectedClusterId ? FITVIEW_DELAY_MS : 0;
     const timer = window.setTimeout(() => {
       requestAnimationFrame(() => {
         flowRef.current?.fitView({ padding: 0.15, duration: FITVIEW_ANIM_MS, nodes: visibleNodeIds });
@@ -1169,12 +932,12 @@ export default function KeywordWorkspacePage() {
       });
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [selectedParent, flowNodes, updateDockTarget]);
+  }, [selectedClusterId, flowNodes, updateDockTarget]);
 
   useEffect(() => {
     const rafId = requestAnimationFrame(() => updateDockTarget());
     return () => cancelAnimationFrame(rafId);
-  }, [selectedParent, updateDockTarget]);
+  }, [selectedClusterId, updateDockTarget]);
 
   useEffect(() => {
     window.addEventListener("resize", updateDockTarget);
@@ -1255,7 +1018,7 @@ export default function KeywordWorkspacePage() {
               </button>
             )}
           </div>
-          {clusterView === "parents" && searchQuery.trim() && (
+          {searchQuery.trim() && (
             <div className="mt-2 w-full max-h-[60vh] overflow-y-auto rounded-xl border border-border/70 bg-card/95 shadow-2xl backdrop-blur-md">
               {searchResults.length === 0 ? (
                 <div className="px-4 py-6 text-center text-sm text-muted-foreground">
@@ -1269,10 +1032,7 @@ export default function KeywordWorkspacePage() {
                       className="px-4 py-3 hover:bg-muted/30 cursor-pointer transition-colors"
                       onClick={() => {
                         setSearchQuery("");
-                        if (subcluster.parentId) {
-                          handleSelect(subcluster.parentId);
-                          setClusterView("parents");
-                        }
+                        handleSelect(subcluster.id);
                       }}
                     >
                       <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
@@ -1316,38 +1076,13 @@ export default function KeywordWorkspacePage() {
       )}
 
       <div className="absolute top-4 right-4 z-20 flex gap-2">
-        {!isRunning && hasParentClusters ? (
-          <div className="flex items-center gap-1 rounded-full border border-border/70 bg-card/90 p-1 shadow-2xl backdrop-blur-md">
-            <Button
-              type="button"
-              size="sm"
-              variant={clusterView === "subclusters" ? "default" : "ghost"}
-              className="h-8 rounded-full px-3 text-xs"
-              onClick={() => {
-                setClusterView("subclusters");
-                setSelectedParent(null);
-              }}
-            >
-              Cluster
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={clusterView === "parents" ? "default" : "ghost"}
-              className="h-8 rounded-full px-3 text-xs"
-              onClick={() => setClusterView("parents")}
-            >
-              Parent
-            </Button>
-          </div>
-        ) : null}
-        {clusterView === "parents" && selectedParent && !isRunning && hasParentClusters ? (
+        {selectedClusterId && !isRunning && hasClusterData ? (
           <Button
             type="button"
             size="icon"
             className="h-11 w-11 rounded-full border border-primary/70 bg-primary text-primary-foreground shadow-2xl transition-transform duration-200 hover:scale-105"
             onClick={handleBack}
-            aria-label="Zur Parent-Cluster-Übersicht"
+            aria-label="Zur Cluster-Übersicht"
           >
             <LayoutGrid className="h-4 w-4" />
           </Button>
@@ -1402,48 +1137,6 @@ export default function KeywordWorkspacePage() {
           <Button size="sm" onClick={triggerRun} disabled={!projectId}>
             Jetzt starten
           </Button>
-        </div>
-      ) : clusterView === "subclusters" ? (
-        <div className="h-full overflow-hidden px-4 pb-24 pt-20">
-          <ScrollArea className="h-full">
-            <div className="mx-auto flex max-w-7xl flex-col gap-4 pb-10">
-              <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/95 p-4 shadow-sm md:flex-row md:items-end md:justify-between">
-                <div className="space-y-1">
-                  <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Standardansicht
-                  </div>
-                  <div className="text-lg font-semibold">Normale Cluster, sortiert nach Demand</div>
-                  <p className="text-sm text-muted-foreground">
-                    Die Liste zeigt direkt die ermittelten Subcluster. Parent-Cluster sind nur noch
-                    eine optionale zweite Ansicht.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                  <Badge variant="outline">
-                    {filteredSubclusters.length.toLocaleString("de-DE")} Cluster sichtbar
-                  </Badge>
-                  <Badge variant="outline">
-                    {subclustersSorted
-                      .reduce((sum, subcluster) => sum + Math.round(subcluster.totalDemand ?? 0), 0)
-                      .toLocaleString("de-DE")}{" "}
-                    Demand gesamt
-                  </Badge>
-                </div>
-              </div>
-
-              {filteredSubclusters.length === 0 ? (
-                <div className="rounded-2xl border border-border/70 bg-card/95 p-8 text-center text-sm text-muted-foreground shadow-sm">
-                  Keine Cluster passen zu &ldquo;{searchQuery.trim()}&rdquo;.
-                </div>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-                  {filteredSubclusters.map((subcluster) => (
-                    <SubclusterCard key={subcluster.id} subcluster={subcluster} />
-                  ))}
-                </div>
-              )}
-            </div>
-          </ScrollArea>
         </div>
       ) : (
         <ReactFlow
@@ -1535,20 +1228,6 @@ export default function KeywordWorkspacePage() {
                   >
                     Agglomerative
                   </Button>
-                </div>
-              </div>
-              <div className="space-y-2 rounded-lg border border-border/70 bg-muted/20 p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                      Parent Cluster
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Optionaler KI-Schritt oberhalb der normalen Cluster. Wenn aus, endet der Run
-                      direkt nach den Subclustern.
-                    </p>
-                  </div>
-                  <Switch checked={groupIntoParents} onCheckedChange={setGroupIntoParents} />
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground">Einstellungen gelten für den nächsten Run. Bestehende Runs bleiben unverändert.</p>
@@ -1654,8 +1333,8 @@ export default function KeywordWorkspacePage() {
                   <span className="space-y-0.5">
                     <span className="block text-sm font-medium">Aktuelle Ansicht</span>
                     <span className="block text-xs text-muted-foreground">
-                      {currentParent
-                        ? `Exportiert nur "${currentParent.name}".`
+                      {selectedSubcluster
+                        ? `Exportiert nur "${selectedSubcluster.name}".`
                         : "Aktuell ist keine Parent-Ebene geöffnet, daher entspricht dies allen Clustern."}
                     </span>
                   </span>
