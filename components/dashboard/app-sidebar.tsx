@@ -13,7 +13,8 @@ import {
   Settings,
   Network,
   Search,
-  Waypoints
+  Waypoints,
+  Languages
 } from "lucide-react";
 
 import {
@@ -53,7 +54,10 @@ const navGroups = [
   },
   {
     label: "Tools",
-    items: [{ href: "/keyword-workspace", label: "Clustering", icon: Network }]
+    items: [
+      { href: "/keyword-workspace", label: "Clustering", icon: Network },
+      { href: "/nlp", label: "NLP", icon: Languages }
+    ]
   }
 ];
 

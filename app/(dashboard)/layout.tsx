@@ -18,6 +18,7 @@ const pageTitles: Record<string, string> = {
   "/seo-bubble": "Position vs CTR",
   "/chat-agent": "Chat Agent",
   "/keyword-workspace": "Clustering",
+  "/nlp": "NLP Playground",
   "/settings": "Settings",
   "/dashboard": "Dashboard"
 };
