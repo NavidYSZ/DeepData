@@ -10,7 +10,7 @@ export const maxDuration = 300;
 
 // Bump this whenever the route logic changes so the client can confirm
 // the redeploy is live. Visible in the JSON response as `_routeVersion`.
-const ROUTE_VERSION = "2026-05-11.5-json-mode-long-timeout";
+const ROUTE_VERSION = "2026-05-11.6-thinking-disabled-streamed";
 
 const bodySchema = z.object({
   url: z.string().url()
@@ -74,70 +74,86 @@ export async function POST(request: Request) {
   const endpoint = `${baseURL}/chat/completions`;
   const modelId = process.env.DEEPSEEK_MODEL || "deepseek-v4-pro";
 
-  console.log(`[nlp/llm ${ROUTE_VERSION}] POST ${endpoint} model=${modelId}`);
+  const disableThinking = (process.env.DEEPSEEK_DISABLE_THINKING ?? "true").toLowerCase() !== "false";
+
+  const requestBody: Record<string, unknown> = {
+    model: modelId,
+    temperature: 0.1,
+    stream: true,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+      { role: "user", content: `# Der zu analysierende Text:\n\n${truncated}` }
+    ]
+  };
+  if (disableThinking) {
+    // deepseek-v4-pro runs thinking-mode by default which can take minutes.
+    // For structured JSON extraction we don't need reasoning tokens.
+    requestBody.thinking = { type: "disabled" };
+  }
+
+  console.log(
+    `[nlp/llm ${ROUTE_VERSION}] POST ${endpoint} model=${modelId} thinking=${disableThinking ? "disabled" : "enabled"} stream=true`
+  );
 
   const started = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DEEPSEEK_TIMEOUT_MS);
 
   let upstreamRes: Response;
-  let upstreamText: string;
   try {
     upstreamRes = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
-        Accept: "application/json"
+        Accept: "text/event-stream"
       },
-      body: JSON.stringify({
-        model: modelId,
-        temperature: 0.1,
-        stream: false,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
-          { role: "user", content: `# Der zu analysierende Text:\n\n${truncated}` }
-        ]
-      }),
+      body: JSON.stringify(requestBody),
       signal: controller.signal
     });
-    upstreamText = await upstreamRes.text();
   } catch (err: any) {
     clearTimeout(timer);
     return NextResponse.json(
       {
         _routeVersion: ROUTE_VERSION,
-        error: err?.name === "AbortError" ? "DeepSeek request timed out" : err?.message ?? "Network error calling DeepSeek",
+        error:
+          err?.name === "AbortError"
+            ? "DeepSeek request timed out (no response headers within timeout)"
+            : err?.message ?? "Network error calling DeepSeek",
         endpoint,
         model: modelId
       },
       { status: 502 }
     );
   }
-  clearTimeout(timer);
 
+  const headersAt = Date.now();
   console.log(
-    `[nlp/llm ${ROUTE_VERSION}] response status=${upstreamRes.status} bytes=${upstreamText.length} in ${Date.now() - started}ms`
+    `[nlp/llm ${ROUTE_VERSION}] headers status=${upstreamRes.status} in ${headersAt - started}ms`
   );
 
   if (!upstreamRes.ok) {
-    let parsedBody: unknown = upstreamText;
+    clearTimeout(timer);
+    const errText = await upstreamRes.text().catch(() => "");
+    let parsedBody: unknown = errText;
     try {
-      parsedBody = JSON.parse(upstreamText);
+      parsedBody = JSON.parse(errText);
     } catch {
       /* keep as raw text */
     }
     const hint =
-      upstreamRes.status === 404
-        ? `Endpoint or model not found. Verify base URL (${baseURL}) and model "${modelId}". Valid models: deepseek-v4-pro, deepseek-v4-flash.`
+      upstreamRes.status === 400
+        ? "Bad request — check thinking/response_format support for this model or set DEEPSEEK_DISABLE_THINKING=false."
         : upstreamRes.status === 401
           ? "DeepSeek rejected the API key — check DEEPSEEK_API_KEY."
           : upstreamRes.status === 402
             ? "DeepSeek payment required — top up your account balance."
-            : upstreamRes.status === 429
-              ? "DeepSeek rate-limit or quota exceeded."
-              : undefined;
+            : upstreamRes.status === 404
+              ? `Endpoint or model not found. Verify base URL (${baseURL}) and model "${modelId}".`
+              : upstreamRes.status === 429
+                ? "DeepSeek rate-limit or quota exceeded."
+                : undefined;
     return NextResponse.json(
       {
         _routeVersion: ROUTE_VERSION,
@@ -155,29 +171,86 @@ export async function POST(request: Request) {
     );
   }
 
-  let upstreamJson: any;
+  if (!upstreamRes.body) {
+    clearTimeout(timer);
+    return NextResponse.json(
+      { _routeVersion: ROUTE_VERSION, error: "DeepSeek returned empty stream", extracted },
+      { status: 502 }
+    );
+  }
+
+  let resultText = "";
+  let firstChunkAt: number | null = null;
+  let usage: unknown = null;
+  let finishReason: string | null = null;
+  const reader = upstreamRes.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
   try {
-    upstreamJson = JSON.parse(upstreamText);
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (firstChunkAt === null) {
+        firstChunkAt = Date.now();
+        console.log(
+          `[nlp/llm ${ROUTE_VERSION}] first chunk after ${firstChunkAt - started}ms`
+        );
+      }
+      buffer += decoder.decode(value, { stream: true });
+      // SSE: events separated by \n\n, each event has one or more `data: ...` lines.
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+      for (const evt of events) {
+        for (const line of evt.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(payload);
+            const delta = parsed?.choices?.[0]?.delta?.content;
+            if (typeof delta === "string") resultText += delta;
+            const fr = parsed?.choices?.[0]?.finish_reason;
+            if (fr) finishReason = fr;
+            if (parsed?.usage) usage = parsed.usage;
+          } catch {
+            /* ignore malformed event */
+          }
+        }
+      }
+    }
   } catch (err: any) {
+    clearTimeout(timer);
     return NextResponse.json(
       {
         _routeVersion: ROUTE_VERSION,
-        error: "DeepSeek returned non-JSON response",
-        details: err?.message ?? String(err),
-        raw: upstreamText.slice(0, 2000),
+        error:
+          err?.name === "AbortError"
+            ? `DeepSeek stream timed out after ${Math.round((Date.now() - started) / 1000)}s (first chunk: ${firstChunkAt ? `${firstChunkAt - started}ms` : "never"})`
+            : err?.message ?? "Stream read error",
+        endpoint,
+        model: modelId,
+        firstChunkMs: firstChunkAt ? firstChunkAt - started : null,
+        partial: resultText.slice(0, 2000),
         extracted
       },
       { status: 502 }
     );
   }
+  clearTimeout(timer);
 
-  const resultText: string | undefined = upstreamJson?.choices?.[0]?.message?.content;
-  if (typeof resultText !== "string" || !resultText.length) {
+  console.log(
+    `[nlp/llm ${ROUTE_VERSION}] stream complete in ${Date.now() - started}ms, ${resultText.length} chars, finish=${finishReason}`
+  );
+
+  if (!resultText) {
     return NextResponse.json(
       {
         _routeVersion: ROUTE_VERSION,
-        error: "DeepSeek response missing choices[0].message.content",
-        upstream: upstreamJson,
+        error: "DeepSeek stream produced no content",
+        endpoint,
+        model: modelId,
+        firstChunkMs: firstChunkAt ? firstChunkAt - started : null,
         extracted
       },
       { status: 502 }
@@ -210,7 +283,9 @@ export async function POST(request: Request) {
     extraction: parsed,
     model: modelId,
     durationMs: Date.now() - started,
-    usage: upstreamJson?.usage ?? null
+    firstChunkMs: firstChunkAt ? firstChunkAt - started : null,
+    usage,
+    finishReason
   });
 }
 

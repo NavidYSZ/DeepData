@@ -96,6 +96,8 @@ export default function NlpPage() {
           if (json?.endpoint || json?.url) parts.push(`endpoint: ${json.endpoint ?? json.url}`);
           if (json?.baseURL) parts.push(`baseURL: ${json.baseURL}`);
           if (json?._routeVersion) parts.push(`route: ${json._routeVersion}`);
+          if (json?.firstChunkMs != null) parts.push(`first chunk: ${json.firstChunkMs}ms`);
+          if (json?.partial) parts.push(`partial: ${String(json.partial).slice(0, 200)}…`);
           if (json?.responseBody) {
             const rb =
               typeof json.responseBody === "string"
