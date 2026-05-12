@@ -376,3 +376,72 @@ Beispiele plausibler Trees (NICHT 1:1 übernehmen, nur Stil):
 - SaaS-B2B: Pillar "/" → "/produkt" → Feature-Pages, + "/anwendungsfaelle/<branche>", + "/preise", + "/blog/<thema>".`,
   `# Output-Format\n\n${NO_PREAMBLE}\n\n{\n${SITEMAP_SCHEMA}\n}`
 ].join("\n\n");
+
+// ----------------------------------------------------------------------------
+// Keyword Map-Reduce pipeline (keyword mode only)
+// ----------------------------------------------------------------------------
+// Phase 1 (5× parallel per SERP URL): EXTRACTION_PROMPT_PER_URL_LIGHT
+//   → entities + relations + schema.categories (no meta, no seo, no sitemap)
+// Phase 2 (programmatic merge in JS): dedupe entities by canonical_name,
+//   dedupe relations by (subject, predicate, object), union categories.
+// Phase 3 (1× LLM): EXTRACTION_PROMPT_KEYWORD_SYNTHESIS
+//   → consolidated meta + seo from merged structured data + source headers.
+// Phase 4 (1× LLM): EXTRACTION_PROMPT_SITEMAP (reused, no text input).
+
+export const EXTRACTION_PROMPT_PER_URL_LIGHT = [
+  `Du analysierst EINEN von mehreren Webseiten-Texten, die alle in den Top-Suchergebnissen für ein gemeinsames Keyword ranken. Deine Extraktion wird später mit denen aus den anderen Quellen zu einer konsolidierten Topic-Map gemerged.
+
+Im User-Message bekommst du das gemeinsame Keyword UND den Body-Text DIESER einen Quelle. Konzentriere dich auf den Body-Text — das Keyword dient nur als Domänen-Hinweis.
+
+Arbeite die folgenden Phasen strikt nacheinander ab. SEO-Signale, page_type/intent/audience und Sitemap werden in SEPARATEN späteren Aufrufen aus der gemergten Sicht synthetisiert — extrahiere sie hier NICHT.`,
+  `# Phase 1 (intern) — Domäne erkennen
+
+Bestimme die Domäne dieser Quelle nur intern, um Kategorien sauber ableiten zu können. Gib sie NICHT als Feld aus.`,
+  PHASE_2,
+  PHASE_3,
+  PHASE_4,
+  `# Output-Format\n\n${NO_PREAMBLE}\n\n{\n  "schema": {\n    "categories": ["<kat1>", "<kat2>"]\n  },\n${ENTITIES_SCHEMA},\n${RELATIONS_SCHEMA}\n}`
+].join("\n\n");
+
+export const EXTRACTION_PROMPT_KEYWORD_SYNTHESIS = [
+  `Du synthetisierst die konsolidierte semantische Sicht auf ein Keyword aus den bereits aus den Top-SERP-Ergebnissen extrahierten Strukturdaten.
+
+Im User-Message bekommst du:
+- Das Keyword
+- Die Headers der Top-5 SERP-Quellen (URL, title, description, position)
+- Die bereits gemergten \`entities\` (über alle Quellen dedupliziert nach canonical_name)
+- Die bereits gemergten \`relations\` (über alle Quellen dedupliziert nach subject+predicate+object)
+- Die gemergten \`categories\` (Union der per-Quelle Kategorien-Sets)
+
+Du erhältst NICHT die Original-Texte der Quellen — arbeite ausschließlich mit dem bereitgestellten strukturierten Material plus den Quell-Headers.
+
+Deine Aufgabe: produziere meta + schema + seo für die GESAMTE Topic-Map des Keywords (nicht für eine einzelne Quelle). Die Sitemap kommt in einem SEPARATEN späteren Aufruf — entwirf sie hier NICHT.`,
+  `# Phase 1 — Konsolidierte Meta
+
+- language: ISO 639-1, abgeleitet aus den Quell-Headers (alle deutsch → "de", alle englisch → "en", gemischt → dominante Sprache)
+- domain: das Fachgebiet des Keywords spezifisch (5–10 Wörter), z.B. "B2B-Industriefertigung Behälter- und Tankbau"
+- page_type: IMMER "pillar_page" — diese konsolidierte Sicht IST die Pillar-Topic-Map zum Keyword
+- intent: was suchen User typischerweise mit DIESEM Keyword? informational | commercial | transactional | navigational
+- audience: gemeinsame Zielgruppe der Top-SERP-Quellen (kurze Beschreibung)`,
+  `# Phase 2 — Konsolidiertes Schema
+
+Bereinige und verdichte die im User-Message bereitgestellten \`categories\` zu 6–12 finalen Kategorien:
+- Duplikate/Synonyme verschmelzen ("Material" + "Werkstoff" → "Werkstoff")
+- Generische Labels entfernen ("Entity", "Thing", "OTHER")
+- An die Domäne anpassen, in der Sprache aus meta.language
+
+VERBOTEN sind generische Labels: "Entity", "Thing", "Concept", "Topic", "Item", "Object", "OTHER".`,
+  `# Phase 3 — Konsolidierte SEO Topic Signals
+
+Leite ausschließlich aus den bereitgestellten Strukturdaten (entities + relations + source headers + keyword) ab:
+
+- pillar_topic: das EINE dominante Thema des Keywords (3–6 Wörter, Sprache aus meta.language). Bevorzuge die canonical_names der Entities mit semantic_role="pillar".
+- subtopics: 3–8 Sub-Themen, ableitbar aus pillar-Entities + ihren Relations + Quell-Titles
+- semantic_field: 10–20 thematisch eng verwandte Begriffe (kann Begriffe enthalten, die nicht in entities stehen, aber semantisch klar mitschwingen)
+- coverage_depth: "shallow" | "moderate" | "deep" — wie tief decken die Top-5 SERPs zusammen das Thema ab? shallow=meist Landing-Pages mit wenig Tiefe, moderate=Pillar + einige Subtopics, deep=mehrere ausführliche Pillar-Pages.
+- content_gaps: 3–8 Aspekte/Subtopics, die in den Quell-Headers/entities ERWÄHNT aber kaum belegt sind — also Ranking-Lücken, die eine eigene Seite schließen könnte
+- related_clusters: 3–5 angrenzende Topic-Cluster, zu denen interne Verlinkung Sinn machen würde
+- competing_topics: 0–3 Themen, die in den Quellen mitlaufen aber den Keyword-Fokus VERWÄSSERN (leer wenn Fokus klar)
+- target_queries: 3–6 Suchanfragen rund um das Keyword, für die die Pillar-Page ranken sollte. Das Keyword selbst MUSS unter target_queries auftauchen.`,
+  `# Output-Format\n\n${NO_PREAMBLE}\n\n{\n${META_SCHEMA},\n${SEO_SCHEMA}\n}`
+].join("\n\n");

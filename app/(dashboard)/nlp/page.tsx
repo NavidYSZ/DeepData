@@ -14,7 +14,8 @@ import {
   CheckCircle2,
   ChevronRight,
   Zap,
-  Layers
+  Layers,
+  GitBranch
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,7 +109,28 @@ type LlmResponse = {
 
 type Mode = "google" | "llm";
 type LlmInput = "url" | "keyword";
-type Pipeline = "single" | "2step" | "3step" | "4step";
+type Pipeline = "single" | "2step" | "3step" | "4step" | "mapreduce";
+
+function formatLlmError(json: any): string {
+  const parts: string[] = [json?.error ?? "LLM request failed"];
+  if (json?.hint) parts.push(json.hint);
+  if (json?.failedStep) parts.push(`failedStep: ${json.failedStep}`);
+  if (json?.statusCode) parts.push(`HTTP ${json.statusCode}`);
+  if (json?.model) parts.push(`model: ${json.model}`);
+  if (json?.endpoint || json?.url) parts.push(`endpoint: ${json.endpoint ?? json.url}`);
+  if (json?.baseURL) parts.push(`baseURL: ${json.baseURL}`);
+  if (json?._routeVersion) parts.push(`route: ${json._routeVersion}`);
+  if (json?.firstChunkMs != null) parts.push(`first chunk: ${json.firstChunkMs}ms`);
+  if (json?.partial) parts.push(`partial: ${String(json.partial).slice(0, 200)}…`);
+  if (json?.responseBody) {
+    const rb =
+      typeof json.responseBody === "string"
+        ? json.responseBody
+        : JSON.stringify(json.responseBody);
+    parts.push(`response: ${rb}`);
+  }
+  return parts.join(" · ");
+}
 
 export default function NlpPage() {
   const [mode, setMode] = useState<Mode>("google");
@@ -123,12 +145,20 @@ export default function NlpPage() {
   const [error, setError] = useState<string | null>(null);
   const [googleData, setGoogleData] = useState<GoogleResponse | null>(null);
   const [llmData, setLlmData] = useState<LlmResponse | null>(null);
+  const [runningStep, setRunningStep] = useState<string | null>(null);
+
+  function handleLlmInputChange(v: LlmInput) {
+    setLlmInput(v);
+    // mapreduce is keyword-only; snap back to "single" when switching to URL.
+    if (v === "url" && pipeline === "mapreduce") setPipeline("single");
+  }
 
   async function analyze() {
     setLoading(true);
     setError(null);
     setGoogleData(null);
     setLlmData(null);
+    setRunningStep(null);
     try {
       if (mode === "google") {
         const res = await fetch("/api/nlp", {
@@ -146,36 +176,17 @@ export default function NlpPage() {
         } else {
           setGoogleData(json);
         }
+      } else if (llmInput === "keyword") {
+        await analyzeKeywordStream();
       } else {
-        const endpoint = llmInput === "keyword" ? "/api/nlp/keyword" : "/api/nlp/llm";
-        const payload =
-          llmInput === "keyword"
-            ? { keyword: url.trim(), pipeline }
-            : { url: url.trim(), pipeline };
-        const res = await fetch(endpoint, {
+        const res = await fetch("/api/nlp/llm", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ url: url.trim(), pipeline })
         });
         const json = await res.json();
         if (!res.ok) {
-          const parts = [json?.error ?? "LLM request failed"];
-          if (json?.hint) parts.push(json.hint);
-          if (json?.statusCode) parts.push(`HTTP ${json.statusCode}`);
-          if (json?.model) parts.push(`model: ${json.model}`);
-          if (json?.endpoint || json?.url) parts.push(`endpoint: ${json.endpoint ?? json.url}`);
-          if (json?.baseURL) parts.push(`baseURL: ${json.baseURL}`);
-          if (json?._routeVersion) parts.push(`route: ${json._routeVersion}`);
-          if (json?.firstChunkMs != null) parts.push(`first chunk: ${json.firstChunkMs}ms`);
-          if (json?.partial) parts.push(`partial: ${String(json.partial).slice(0, 200)}…`);
-          if (json?.responseBody) {
-            const rb =
-              typeof json.responseBody === "string"
-                ? json.responseBody
-                : JSON.stringify(json.responseBody);
-            parts.push(`response: ${rb}`);
-          }
-          setError(parts.join(" · "));
+          setError(formatLlmError(json));
           if (json?.extracted) {
             setLlmData({
               extracted: json.extracted,
@@ -192,6 +203,114 @@ export default function NlpPage() {
       setError(err?.message ?? "Network error");
     } finally {
       setLoading(false);
+      setRunningStep(null);
+    }
+  }
+
+  async function analyzeKeywordStream() {
+    const res = await fetch("/api/nlp/keyword", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keyword: url.trim(), pipeline })
+    });
+
+    // Pre-stream errors (auth / validation / env) come back as plain JSON.
+    if (!res.ok || !res.body) {
+      try {
+        const json = await res.json();
+        setError(formatLlmError(json));
+      } catch {
+        setError(`HTTP ${res.status}`);
+      }
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let acc: Partial<LlmResponse> = {
+      mode: "keyword",
+      keyword: url.trim(),
+      pipeline: { mode: pipeline, steps: [], totalDurationMs: 0 }
+    };
+    const flush = () => setLlmData({ ...(acc as LlmResponse) });
+    flush();
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const segments = buffer.split("\n\n");
+      buffer = segments.pop() ?? "";
+
+      for (const seg of segments) {
+        if (!seg.trim() || seg.startsWith(":")) continue;
+        const lines = seg.split("\n");
+        let eventName = "message";
+        let dataStr = "";
+        for (const line of lines) {
+          if (line.startsWith("event:")) eventName = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+        }
+        if (!dataStr) continue;
+        let data: any;
+        try {
+          data = JSON.parse(dataStr);
+        } catch {
+          continue;
+        }
+
+        switch (eventName) {
+          case "serp-done":
+            acc.serpDurationMs = data.durationMs;
+            flush();
+            break;
+          case "crawl-done":
+            acc.sources = data.sources;
+            acc.fetchDurationMs = data.durationMs;
+            flush();
+            break;
+          case "pipeline-start":
+            acc.keyword = data.keyword;
+            acc.analyzedChars = data.analyzedChars;
+            if (acc.pipeline) {
+              acc.pipeline = { ...acc.pipeline, mode: data.mode };
+            }
+            flush();
+            break;
+          case "step-start":
+            setRunningStep(data.step);
+            break;
+          case "step-done":
+            if (acc.pipeline) {
+              acc.pipeline = {
+                ...acc.pipeline,
+                steps: [...acc.pipeline.steps, data.metric]
+              };
+            }
+            setRunningStep(null);
+            flush();
+            break;
+          case "step-failed":
+            if (acc.pipeline) {
+              acc.pipeline = { ...acc.pipeline, failedStep: data.step };
+            }
+            setRunningStep(null);
+            flush();
+            break;
+          case "result":
+            acc = data;
+            flush();
+            break;
+          case "error":
+            setError(formatLlmError(data));
+            if (data?.sources) {
+              acc.sources = data.sources;
+              flush();
+            }
+            break;
+        }
+      }
     }
   }
 
@@ -233,8 +352,17 @@ export default function NlpPage() {
         <div className="space-y-3">
           {mode === "llm" ? (
             <div className="flex flex-wrap items-center gap-2">
-              <LlmInputSwitch value={llmInput} onChange={setLlmInput} disabled={loading} />
-              <PipelineSelector value={pipeline} onChange={setPipeline} disabled={loading} />
+              <LlmInputSwitch
+                value={llmInput}
+                onChange={handleLlmInputChange}
+                disabled={loading}
+              />
+              <PipelineSelector
+                value={pipeline}
+                onChange={setPipeline}
+                disabled={loading}
+                inputMode={llmInput}
+              />
             </div>
           ) : null}
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -319,9 +447,31 @@ export default function NlpPage() {
         <GoogleResults result={googleData.nlp} />
       ) : null}
 
-      {mode === "llm" && llmData?.pipeline && llmData.pipeline.mode !== "single" ? (
-        <PipelineStepsCard pipeline={llmData.pipeline} />
-      ) : null}
+      {(() => {
+        const isKeyword = mode === "llm" && llmInput === "keyword";
+        if (isKeyword && (loading || llmData?.pipeline)) {
+          return (
+            <PipelineStepsCard
+              pipeline={
+                llmData?.pipeline ?? {
+                  mode: pipeline,
+                  steps: [],
+                  totalDurationMs: 0
+                }
+              }
+              runningStep={runningStep}
+            />
+          );
+        }
+        if (
+          mode === "llm" &&
+          llmData?.pipeline &&
+          llmData.pipeline.mode !== "single"
+        ) {
+          return <PipelineStepsCard pipeline={llmData.pipeline} runningStep={null} />;
+        }
+        return null;
+      })()}
 
       {mode === "llm" && llmData?.extraction ? (
         <Tabs defaultValue="profile" className="space-y-4">
@@ -536,6 +686,7 @@ const PIPELINE_OPTIONS: Array<{
   label: string;
   hint: string;
   icon: ReactNode;
+  availableIn?: LlmInput[];
 }> = [
   {
     value: "single",
@@ -560,25 +711,37 @@ const PIPELINE_OPTIONS: Array<{
     label: "4-Step",
     hint: "Entities, Relations, SEO, Sitemap (+Reasoning)",
     icon: <Layers className="h-3.5 w-3.5" />
+  },
+  {
+    value: "mapreduce",
+    label: "Map-Reduce",
+    hint: "Pro-URL parallel extrahieren, dann konsolidieren (keyword-only, schnellster Modus)",
+    icon: <GitBranch className="h-3.5 w-3.5" />,
+    availableIn: ["keyword"]
   }
 ];
 
 function PipelineSelector({
   value,
   onChange,
-  disabled
+  disabled,
+  inputMode
 }: {
   value: Pipeline;
   onChange: (v: Pipeline) => void;
   disabled?: boolean;
+  inputMode: LlmInput;
 }) {
+  const visibleOptions = PIPELINE_OPTIONS.filter(
+    (opt) => !opt.availableIn || opt.availableIn.includes(inputMode)
+  );
   return (
     <div
       className="inline-flex overflow-hidden rounded-md border bg-background text-xs"
       role="group"
       aria-label="Pipeline-Modus"
     >
-      {PIPELINE_OPTIONS.map((opt, i) => (
+      {visibleOptions.map((opt, i) => (
         <button
           key={opt.value}
           type="button"
@@ -601,17 +764,42 @@ function PipelineSelector({
   );
 }
 
-function PipelineStepsCard({ pipeline }: { pipeline: PipelineInfo }) {
+function PipelineStepsCard({
+  pipeline,
+  runningStep
+}: {
+  pipeline: PipelineInfo;
+  runningStep: string | null;
+}) {
   const stepCount = pipeline.steps.length;
   const expectedCount =
-    pipeline.mode === "2step" ? 2 : pipeline.mode === "3step" ? 3 : pipeline.mode === "4step" ? 4 : 1;
+    pipeline.mode === "2step"
+      ? 2
+      : pipeline.mode === "3step"
+        ? 3
+        : pipeline.mode === "4step"
+          ? 4
+          : pipeline.mode === "mapreduce"
+            ? 8 // 5 per-URL + merge + synthesis + sitemap
+            : 1;
   const completedAll = !pipeline.failedStep && stepCount === expectedCount;
+  const totalDurationLabel = pipeline.totalDurationMs
+    ? `${(pipeline.totalDurationMs / 1000).toFixed(1)}s total`
+    : "läuft…";
+  const showRunning =
+    runningStep && !pipeline.steps.some((s) => s.step === runningStep);
   return (
     <SectionCard
       title={`Pipeline · ${pipeline.mode.toUpperCase()}`}
-      description={`${stepCount}/${expectedCount} Steps · ${(
-        pipeline.totalDurationMs / 1000
-      ).toFixed(1)}s total${pipeline.failedStep ? ` · Fehler in ${pipeline.failedStep}` : completedAll ? " · Reasoning aktiviert" : ""}`}
+      description={`${stepCount}/${expectedCount} Steps · ${totalDurationLabel}${
+        pipeline.failedStep
+          ? ` · Fehler in ${pipeline.failedStep}`
+          : completedAll
+            ? " · Reasoning aktiviert"
+            : runningStep
+              ? ` · läuft: ${runningStep}`
+              : ""
+      }`}
     >
       <ol className="flex flex-wrap items-center gap-x-2 gap-y-2 text-sm">
         {pipeline.steps.map((s, i) => (
@@ -628,17 +816,25 @@ function PipelineStepsCard({ pipeline }: { pipeline: PipelineInfo }) {
               <span className="text-muted-foreground">
                 {(s.durationMs / 1000).toFixed(1)}s
               </span>
-              {s.finishReason && s.finishReason !== "stop" ? (
+              {s.finishReason && s.finishReason !== "stop" && s.finishReason !== "merge" ? (
                 <Badge variant="outline" className="text-[10px]">
                   {s.finishReason}
                 </Badge>
               ) : null}
             </span>
-            {i < pipeline.steps.length - 1 ? (
+            {i < pipeline.steps.length - 1 || showRunning ? (
               <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
             ) : null}
           </li>
         ))}
+        {showRunning ? (
+          <li className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-xs text-primary">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span className="font-mono">{runningStep}</span>
+            </span>
+          </li>
+        ) : null}
         {pipeline.failedStep ? (
           <li className="text-xs text-destructive">
             ✗ Pipeline abgebrochen bei <code className="font-mono">{pipeline.failedStep}</code>

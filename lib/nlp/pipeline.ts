@@ -1,12 +1,14 @@
 import {
   EXTRACTION_PROMPT_ENTITIES,
+  EXTRACTION_PROMPT_KEYWORD_SYNTHESIS,
   EXTRACTION_PROMPT_KG,
   EXTRACTION_PROMPT_KG_AND_SEO,
+  EXTRACTION_PROMPT_PER_URL_LIGHT,
   EXTRACTION_PROMPT_RELATIONS,
   EXTRACTION_PROMPT_SEO,
   EXTRACTION_PROMPT_SITEMAP
 } from "./extraction-prompt";
-import { runDeepSeekJsonCall } from "./deepseek";
+import { runDeepSeekJsonCall, type DeepSeekJsonCallOptions } from "./deepseek";
 import type {
   ExtractionEntity,
   ExtractionMeta,
@@ -16,9 +18,15 @@ import type {
   RecommendedSitemap
 } from "./types";
 
-export type PipelineMode = "single" | "2step" | "3step" | "4step";
+export type PipelineMode = "single" | "2step" | "3step" | "4step" | "mapreduce";
 
-export const PIPELINE_MODES: PipelineMode[] = ["single", "2step", "3step", "4step"];
+export const PIPELINE_MODES: PipelineMode[] = [
+  "single",
+  "2step",
+  "3step",
+  "4step",
+  "mapreduce"
+];
 
 export function isPipelineMode(value: unknown): value is PipelineMode {
   return typeof value === "string" && PIPELINE_MODES.includes(value as PipelineMode);
@@ -52,6 +60,11 @@ export type PipelineFailure = {
 
 export type PipelineResult = PipelineSuccess | PipelineFailure;
 
+export type PipelineProgressEvent =
+  | { type: "step-start"; step: string }
+  | { type: "step-done"; metric: PipelineStepMetric }
+  | { type: "step-failed"; step: string; error: string };
+
 export type PipelineOptions = {
   text: string;
   routeVersion: string;
@@ -67,6 +80,11 @@ export type PipelineOptions = {
    * multi-step pipelines (user opted in via UI).
    */
   enableThinking?: boolean;
+  /**
+   * Optional progress callback fired before each step starts and after
+   * it completes. Routes use this to push SSE events to the client.
+   */
+  onProgress?: (event: PipelineProgressEvent) => void;
 };
 
 // Per-step max output tokens. DeepSeek v4-pro supports up to 380k output
@@ -164,6 +182,33 @@ function failure(
   };
 }
 
+type ProgressEmitter = {
+  onProgress?: (event: PipelineProgressEvent) => void;
+};
+
+async function executeStep<T>(
+  emitter: ProgressEmitter,
+  steps: PipelineStepMetric[],
+  startedAt: number,
+  step: string,
+  callArgs: DeepSeekJsonCallOptions
+): Promise<{ ok: true; data: T } | PipelineFailure> {
+  emitter.onProgress?.({ type: "step-start", step });
+  const result = await runDeepSeekJsonCall<T>(callArgs);
+  if (!result.ok) {
+    emitter.onProgress?.({
+      type: "step-failed",
+      step,
+      error: String((result.body as Record<string, unknown>)?.error ?? "step failed")
+    });
+    return failure(step, result.status, result.body, steps, startedAt);
+  }
+  const metric = metricFromCall(step, result);
+  steps.push(metric);
+  emitter.onProgress?.({ type: "step-done", metric });
+  return { ok: true, data: result.data };
+}
+
 // ---------- Pipeline orchestrators ----------
 
 /**
@@ -176,34 +221,44 @@ export async function run2StepPipeline(options: PipelineOptions): Promise<Pipeli
   const startedAt = Date.now();
   const steps: PipelineStepMetric[] = [];
 
-  const stepA = await runDeepSeekJsonCall<Step1KGAndSeoData>({
-    systemPrompt: EXTRACTION_PROMPT_KG_AND_SEO,
-    userMessage: buildUserMessage(options.text),
-    routeVersion: options.routeVersion,
-    routeLogPrefix: options.routeLogPrefix,
-    maxTokens: TOKENS.kgAndSeo,
-    enableThinking: options.enableThinking,
-    stepLabel: "2step/A-kg+seo"
-  });
-  if (!stepA.ok) return failure("2step/A-kg+seo", stepA.status, stepA.body, steps, startedAt);
-  steps.push(metricFromCall("2step/A-kg+seo", stepA));
+  const stepA = await executeStep<Step1KGAndSeoData>(
+    options,
+    steps,
+    startedAt,
+    "2step/A-kg+seo",
+    {
+      systemPrompt: EXTRACTION_PROMPT_KG_AND_SEO,
+      userMessage: buildUserMessage(options.text),
+      routeVersion: options.routeVersion,
+      routeLogPrefix: options.routeLogPrefix,
+      maxTokens: TOKENS.kgAndSeo,
+      enableThinking: options.enableThinking,
+      stepLabel: "2step/A-kg+seo"
+    }
+  );
+  if (!stepA.ok) return stepA;
 
-  const stepB = await runDeepSeekJsonCall<StepSitemapData>({
-    systemPrompt: EXTRACTION_PROMPT_SITEMAP,
-    userMessage: buildSitemapUserMessage({
-      meta: stepA.data.meta,
-      entities: stepA.data.entities,
-      relations: stepA.data.relations,
-      seo: stepA.data.seo
-    }),
-    routeVersion: options.routeVersion,
-    routeLogPrefix: options.routeLogPrefix,
-    maxTokens: TOKENS.sitemap,
-    enableThinking: options.enableThinking,
-    stepLabel: "2step/B-sitemap"
-  });
-  if (!stepB.ok) return failure("2step/B-sitemap", stepB.status, stepB.body, steps, startedAt);
-  steps.push(metricFromCall("2step/B-sitemap", stepB));
+  const stepB = await executeStep<StepSitemapData>(
+    options,
+    steps,
+    startedAt,
+    "2step/B-sitemap",
+    {
+      systemPrompt: EXTRACTION_PROMPT_SITEMAP,
+      userMessage: buildSitemapUserMessage({
+        meta: stepA.data.meta,
+        entities: stepA.data.entities,
+        relations: stepA.data.relations,
+        seo: stepA.data.seo
+      }),
+      routeVersion: options.routeVersion,
+      routeLogPrefix: options.routeLogPrefix,
+      maxTokens: TOKENS.sitemap,
+      enableThinking: options.enableThinking,
+      stepLabel: "2step/B-sitemap"
+    }
+  );
+  if (!stepB.ok) return stepB;
 
   return {
     ok: true,
@@ -232,7 +287,7 @@ export async function run3StepPipeline(options: PipelineOptions): Promise<Pipeli
   const startedAt = Date.now();
   const steps: PipelineStepMetric[] = [];
 
-  const stepA = await runDeepSeekJsonCall<Step1KGData>({
+  const stepA = await executeStep<Step1KGData>(options, steps, startedAt, "3step/A-kg", {
     systemPrompt: EXTRACTION_PROMPT_KG,
     userMessage: buildUserMessage(options.text),
     routeVersion: options.routeVersion,
@@ -241,10 +296,9 @@ export async function run3StepPipeline(options: PipelineOptions): Promise<Pipeli
     enableThinking: options.enableThinking,
     stepLabel: "3step/A-kg"
   });
-  if (!stepA.ok) return failure("3step/A-kg", stepA.status, stepA.body, steps, startedAt);
-  steps.push(metricFromCall("3step/A-kg", stepA));
+  if (!stepA.ok) return stepA;
 
-  const stepB = await runDeepSeekJsonCall<StepSeoData>({
+  const stepB = await executeStep<StepSeoData>(options, steps, startedAt, "3step/B-seo", {
     systemPrompt: EXTRACTION_PROMPT_SEO,
     userMessage: buildSeoUserMessage({
       text: options.text,
@@ -258,25 +312,29 @@ export async function run3StepPipeline(options: PipelineOptions): Promise<Pipeli
     enableThinking: options.enableThinking,
     stepLabel: "3step/B-seo"
   });
-  if (!stepB.ok) return failure("3step/B-seo", stepB.status, stepB.body, steps, startedAt);
-  steps.push(metricFromCall("3step/B-seo", stepB));
+  if (!stepB.ok) return stepB;
 
-  const stepC = await runDeepSeekJsonCall<StepSitemapData>({
-    systemPrompt: EXTRACTION_PROMPT_SITEMAP,
-    userMessage: buildSitemapUserMessage({
-      meta: stepA.data.meta,
-      entities: stepA.data.entities,
-      relations: stepA.data.relations,
-      seo: stepB.data.seo
-    }),
-    routeVersion: options.routeVersion,
-    routeLogPrefix: options.routeLogPrefix,
-    maxTokens: TOKENS.sitemap,
-    enableThinking: options.enableThinking,
-    stepLabel: "3step/C-sitemap"
-  });
-  if (!stepC.ok) return failure("3step/C-sitemap", stepC.status, stepC.body, steps, startedAt);
-  steps.push(metricFromCall("3step/C-sitemap", stepC));
+  const stepC = await executeStep<StepSitemapData>(
+    options,
+    steps,
+    startedAt,
+    "3step/C-sitemap",
+    {
+      systemPrompt: EXTRACTION_PROMPT_SITEMAP,
+      userMessage: buildSitemapUserMessage({
+        meta: stepA.data.meta,
+        entities: stepA.data.entities,
+        relations: stepA.data.relations,
+        seo: stepB.data.seo
+      }),
+      routeVersion: options.routeVersion,
+      routeLogPrefix: options.routeLogPrefix,
+      maxTokens: TOKENS.sitemap,
+      enableThinking: options.enableThinking,
+      stepLabel: "3step/C-sitemap"
+    }
+  );
+  if (!stepC.ok) return stepC;
 
   return {
     ok: true,
@@ -306,35 +364,45 @@ export async function run4StepPipeline(options: PipelineOptions): Promise<Pipeli
   const startedAt = Date.now();
   const steps: PipelineStepMetric[] = [];
 
-  const stepA = await runDeepSeekJsonCall<Step1EntitiesData>({
-    systemPrompt: EXTRACTION_PROMPT_ENTITIES,
-    userMessage: buildUserMessage(options.text),
-    routeVersion: options.routeVersion,
-    routeLogPrefix: options.routeLogPrefix,
-    maxTokens: TOKENS.entities,
-    enableThinking: options.enableThinking,
-    stepLabel: "4step/A-entities"
-  });
-  if (!stepA.ok) return failure("4step/A-entities", stepA.status, stepA.body, steps, startedAt);
-  steps.push(metricFromCall("4step/A-entities", stepA));
+  const stepA = await executeStep<Step1EntitiesData>(
+    options,
+    steps,
+    startedAt,
+    "4step/A-entities",
+    {
+      systemPrompt: EXTRACTION_PROMPT_ENTITIES,
+      userMessage: buildUserMessage(options.text),
+      routeVersion: options.routeVersion,
+      routeLogPrefix: options.routeLogPrefix,
+      maxTokens: TOKENS.entities,
+      enableThinking: options.enableThinking,
+      stepLabel: "4step/A-entities"
+    }
+  );
+  if (!stepA.ok) return stepA;
 
-  const stepB = await runDeepSeekJsonCall<StepRelationsData>({
-    systemPrompt: EXTRACTION_PROMPT_RELATIONS,
-    userMessage: buildRelationsUserMessage({
-      text: options.text,
-      entities: stepA.data.entities,
-      buildBaseUserMessage: buildUserMessage
-    }),
-    routeVersion: options.routeVersion,
-    routeLogPrefix: options.routeLogPrefix,
-    maxTokens: TOKENS.relations,
-    enableThinking: options.enableThinking,
-    stepLabel: "4step/B-relations"
-  });
-  if (!stepB.ok) return failure("4step/B-relations", stepB.status, stepB.body, steps, startedAt);
-  steps.push(metricFromCall("4step/B-relations", stepB));
+  const stepB = await executeStep<StepRelationsData>(
+    options,
+    steps,
+    startedAt,
+    "4step/B-relations",
+    {
+      systemPrompt: EXTRACTION_PROMPT_RELATIONS,
+      userMessage: buildRelationsUserMessage({
+        text: options.text,
+        entities: stepA.data.entities,
+        buildBaseUserMessage: buildUserMessage
+      }),
+      routeVersion: options.routeVersion,
+      routeLogPrefix: options.routeLogPrefix,
+      maxTokens: TOKENS.relations,
+      enableThinking: options.enableThinking,
+      stepLabel: "4step/B-relations"
+    }
+  );
+  if (!stepB.ok) return stepB;
 
-  const stepC = await runDeepSeekJsonCall<StepSeoData>({
+  const stepC = await executeStep<StepSeoData>(options, steps, startedAt, "4step/C-seo", {
     systemPrompt: EXTRACTION_PROMPT_SEO,
     userMessage: buildSeoUserMessage({
       text: options.text,
@@ -348,25 +416,29 @@ export async function run4StepPipeline(options: PipelineOptions): Promise<Pipeli
     enableThinking: options.enableThinking,
     stepLabel: "4step/C-seo"
   });
-  if (!stepC.ok) return failure("4step/C-seo", stepC.status, stepC.body, steps, startedAt);
-  steps.push(metricFromCall("4step/C-seo", stepC));
+  if (!stepC.ok) return stepC;
 
-  const stepD = await runDeepSeekJsonCall<StepSitemapData>({
-    systemPrompt: EXTRACTION_PROMPT_SITEMAP,
-    userMessage: buildSitemapUserMessage({
-      meta: stepA.data.meta,
-      entities: stepA.data.entities,
-      relations: stepB.data.relations,
-      seo: stepC.data.seo
-    }),
-    routeVersion: options.routeVersion,
-    routeLogPrefix: options.routeLogPrefix,
-    maxTokens: TOKENS.sitemap,
-    enableThinking: options.enableThinking,
-    stepLabel: "4step/D-sitemap"
-  });
-  if (!stepD.ok) return failure("4step/D-sitemap", stepD.status, stepD.body, steps, startedAt);
-  steps.push(metricFromCall("4step/D-sitemap", stepD));
+  const stepD = await executeStep<StepSitemapData>(
+    options,
+    steps,
+    startedAt,
+    "4step/D-sitemap",
+    {
+      systemPrompt: EXTRACTION_PROMPT_SITEMAP,
+      userMessage: buildSitemapUserMessage({
+        meta: stepA.data.meta,
+        entities: stepA.data.entities,
+        relations: stepB.data.relations,
+        seo: stepC.data.seo
+      }),
+      routeVersion: options.routeVersion,
+      routeLogPrefix: options.routeLogPrefix,
+      maxTokens: TOKENS.sitemap,
+      enableThinking: options.enableThinking,
+      stepLabel: "4step/D-sitemap"
+    }
+  );
+  if (!stepD.ok) return stepD;
 
   return {
     ok: true,
@@ -385,7 +457,7 @@ export async function run4StepPipeline(options: PipelineOptions): Promise<Pipeli
 }
 
 export async function runPipeline(
-  mode: Exclude<PipelineMode, "single">,
+  mode: Exclude<PipelineMode, "single" | "mapreduce">,
   options: PipelineOptions
 ): Promise<PipelineResult> {
   switch (mode) {
@@ -445,4 +517,314 @@ function buildSitemapUserMessage(args: {
     null,
     2
   )}\n\`\`\``;
+}
+
+// ============================================================================
+// Keyword Map-Reduce pipeline (keyword mode only)
+// ----------------------------------------------------------------------------
+// Phase 1 (5× parallel): per-URL light extraction (entities + relations + categories)
+// Phase 2 (programmatic): merge entities/relations/categories across URLs
+// Phase 3 (1× LLM): consolidated meta + schema + seo from merged structured data
+// Phase 4 (1× LLM): sitemap from all structured data (existing prompt reused)
+// ============================================================================
+
+export type KeywordMapReduceSource = {
+  position: number;
+  finalUrl: string | null;
+  title: string | null;
+  description: string | null;
+  text: string;
+};
+
+export type KeywordMapReduceOptions = {
+  keyword: string;
+  sources: KeywordMapReduceSource[];
+  routeVersion: string;
+  routeLogPrefix: string;
+  enableThinking?: boolean;
+  onProgress?: (event: PipelineProgressEvent) => void;
+};
+
+type PerUrlExtraction = {
+  schema: { categories: string[] };
+  entities: ExtractionEntity[];
+  relations: ExtractionRelation[];
+};
+
+type MapReduceSynthesisData = {
+  meta: ExtractionMeta;
+  schema: { categories: string[] };
+  seo: ExtractionSeo;
+};
+
+function mergeEntities(all: ExtractionEntity[]): ExtractionEntity[] {
+  const groups = new Map<string, ExtractionEntity[]>();
+  for (const e of all) {
+    const key = e.canonical_name?.trim();
+    if (!key) continue;
+    const arr = groups.get(key) ?? [];
+    arr.push(e);
+    groups.set(key, arr);
+  }
+  const merged: ExtractionEntity[] = [];
+  for (const [canonical_name, entries] of groups) {
+    const totalMentions = entries.reduce((s, e) => s + (e.mentions || 0), 0);
+    const rep = entries.reduce((best, e) =>
+      (e.mentions || 0) > (best.mentions || 0) ? e : best
+    );
+    const catCount = new Map<string, number>();
+    for (const e of entries) {
+      const c = e.category;
+      if (!c) continue;
+      catCount.set(c, (catCount.get(c) ?? 0) + 1);
+    }
+    const category =
+      [...catCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? rep.category;
+    const roles = new Set(entries.map((e) => e.semantic_role));
+    const semantic_role: ExtractionEntity["semantic_role"] = roles.has("pillar")
+      ? "pillar"
+      : roles.has("supporting")
+        ? "supporting"
+        : "peripheral";
+    const definition_in_text =
+      entries.find((e) => e.definition_in_text)?.definition_in_text ?? null;
+    merged.push({
+      name: rep.name,
+      canonical_name,
+      category,
+      mentions: totalMentions,
+      definition_in_text,
+      semantic_role
+    });
+  }
+  return merged.sort((a, b) => b.mentions - a.mentions);
+}
+
+function mergeRelations(all: ExtractionRelation[]): ExtractionRelation[] {
+  const seen = new Map<string, ExtractionRelation>();
+  for (const r of all) {
+    const subj = r.subject?.trim();
+    const pred = r.predicate?.trim();
+    const obj = r.object?.trim();
+    if (!subj || !pred || !obj) continue;
+    const key = `${subj}|||${pred}|||${obj}`;
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, r);
+    } else if (!existing.evidence?.trim() && r.evidence?.trim()) {
+      seen.set(key, r);
+    }
+  }
+  return [...seen.values()];
+}
+
+function mergeCategories(all: string[]): string[] {
+  const seen = new Map<string, string>();
+  for (const c of all) {
+    const t = c?.trim();
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (!seen.has(key)) seen.set(key, t);
+  }
+  return [...seen.values()];
+}
+
+function buildKeywordSynthesisUserMessage(args: {
+  keyword: string;
+  sources: KeywordMapReduceSource[];
+  entities: ExtractionEntity[];
+  relations: ExtractionRelation[];
+  categories: string[];
+}): string {
+  const compactEntities = compactEntitiesForContext(args.entities);
+  const compactRelations = compactRelationsForContext(args.relations);
+  const sourceHeaders = args.sources.map((s) => ({
+    position: s.position,
+    finalUrl: s.finalUrl,
+    title: s.title,
+    description: s.description
+  }));
+  return [
+    `# Keyword\n\n${args.keyword}`,
+    `# SERP-Quellen (Headers)\n\n\`\`\`json\n${JSON.stringify(sourceHeaders, null, 2)}\n\`\`\``,
+    `# Gemergte Kategorien (Phase 2)\n\n\`\`\`json\n${JSON.stringify(args.categories, null, 2)}\n\`\`\``,
+    `# Gemergte Entities (Phase 2)\n\n\`\`\`json\n${JSON.stringify(compactEntities, null, 2)}\n\`\`\``,
+    `# Gemergte Relations (Phase 2)\n\n\`\`\`json\n${JSON.stringify(compactRelations, null, 2)}\n\`\`\``
+  ].join("\n\n");
+}
+
+async function runPerUrlLightExtraction(
+  source: KeywordMapReduceSource,
+  index: number,
+  options: KeywordMapReduceOptions
+): Promise<
+  | { ok: true; data: PerUrlExtraction; metric: PipelineStepMetric }
+  | { ok: false; error: string; metric: PipelineStepMetric }
+> {
+  const step = `mapreduce/1-extract-${index + 1}`;
+  options.onProgress?.({ type: "step-start", step });
+  const userMessage = [
+    `# Keyword (gemeinsamer Topic der Top-SERP-Quellen)\n\n${options.keyword}`,
+    `# Diese Quelle\n\nPosition: ${source.position}\nURL: ${source.finalUrl ?? "?"}\nTitle: ${source.title ?? "?"}\n\n## Body-Text\n\n${source.text}`
+  ].join("\n\n");
+  const result = await runDeepSeekJsonCall<PerUrlExtraction>({
+    systemPrompt: EXTRACTION_PROMPT_PER_URL_LIGHT,
+    userMessage,
+    routeVersion: options.routeVersion,
+    routeLogPrefix: options.routeLogPrefix,
+    maxTokens: TOKENS.entities,
+    enableThinking: options.enableThinking,
+    stepLabel: step
+  });
+  if (!result.ok) {
+    const error = String((result.body as Record<string, unknown>)?.error ?? "extract failed");
+    const metric: PipelineStepMetric = {
+      step,
+      model: "",
+      durationMs: 0,
+      firstChunkMs: null,
+      finishReason: null,
+      usage: { error }
+    };
+    options.onProgress?.({ type: "step-failed", step, error });
+    return { ok: false, error, metric };
+  }
+  const metric = metricFromCall(step, result);
+  options.onProgress?.({ type: "step-done", metric });
+  return { ok: true, data: result.data, metric };
+}
+
+/**
+ * Map-Reduce pipeline for keyword mode:
+ *   Phase 1: 5× parallel light extraction per SERP URL (entities + relations + categories)
+ *   Phase 2: programmatic merge in JS (dedupe + union)
+ *   Phase 3: LLM synthesis → consolidated meta + schema + seo
+ *   Phase 4: LLM sitemap from structured data only
+ */
+export async function runKeywordMapReducePipeline(
+  options: KeywordMapReduceOptions
+): Promise<PipelineResult> {
+  const startedAt = Date.now();
+  const steps: PipelineStepMetric[] = [];
+
+  // ---------- Phase 1: per-URL light extraction (parallel) ----------
+  const perUrlResults = await Promise.all(
+    options.sources.map((s, i) => runPerUrlLightExtraction(s, i, options))
+  );
+  for (const r of perUrlResults) steps.push(r.metric);
+  const successful = perUrlResults
+    .map((r, i) => (r.ok ? { source: options.sources[i], data: r.data } : null))
+    .filter(
+      (x): x is { source: KeywordMapReduceSource; data: PerUrlExtraction } => x !== null
+    );
+
+  if (successful.length === 0) {
+    return failure(
+      "mapreduce/1-extract",
+      502,
+      {
+        _routeVersion: options.routeVersion,
+        error: "All per-URL extractions failed",
+        details: perUrlResults.map((r, i) => ({
+          position: options.sources[i].position,
+          finalUrl: options.sources[i].finalUrl,
+          error: r.ok ? null : r.error
+        }))
+      },
+      steps,
+      startedAt
+    );
+  }
+
+  // ---------- Phase 2: programmatic merge ----------
+  const mergeStart = Date.now();
+  const mergeStep = "mapreduce/2-merge";
+  options.onProgress?.({ type: "step-start", step: mergeStep });
+  const allEntities = successful.flatMap((s) => s.data.entities);
+  const allRelations = successful.flatMap((s) => s.data.relations);
+  const allCategories = successful.flatMap((s) => s.data.schema.categories);
+  const mergedEntities = mergeEntities(allEntities);
+  const mergedRelations = mergeRelations(allRelations);
+  const mergedCategories = mergeCategories(allCategories);
+  const mergeMetric: PipelineStepMetric = {
+    step: mergeStep,
+    model: "programmatic",
+    durationMs: Date.now() - mergeStart,
+    firstChunkMs: null,
+    finishReason: "merge",
+    usage: {
+      sources_succeeded: successful.length,
+      sources_total: options.sources.length,
+      entities_before: allEntities.length,
+      entities_after: mergedEntities.length,
+      relations_before: allRelations.length,
+      relations_after: mergedRelations.length,
+      categories_before: allCategories.length,
+      categories_after: mergedCategories.length
+    }
+  };
+  steps.push(mergeMetric);
+  options.onProgress?.({ type: "step-done", metric: mergeMetric });
+
+  // ---------- Phase 3: LLM synthesis (meta + schema + seo) ----------
+  const stepSynthesis = await executeStep<MapReduceSynthesisData>(
+    options,
+    steps,
+    startedAt,
+    "mapreduce/3-synthesis",
+    {
+      systemPrompt: EXTRACTION_PROMPT_KEYWORD_SYNTHESIS,
+      userMessage: buildKeywordSynthesisUserMessage({
+        keyword: options.keyword,
+        sources: options.sources,
+        entities: mergedEntities,
+        relations: mergedRelations,
+        categories: mergedCategories
+      }),
+      routeVersion: options.routeVersion,
+      routeLogPrefix: options.routeLogPrefix,
+      maxTokens: TOKENS.kg,
+      enableThinking: options.enableThinking,
+      stepLabel: "mapreduce/3-synthesis"
+    }
+  );
+  if (!stepSynthesis.ok) return stepSynthesis;
+
+  // ---------- Phase 4: Sitemap from structured data only ----------
+  const stepSitemap = await executeStep<StepSitemapData>(
+    options,
+    steps,
+    startedAt,
+    "mapreduce/4-sitemap",
+    {
+      systemPrompt: EXTRACTION_PROMPT_SITEMAP,
+      userMessage: buildSitemapUserMessage({
+        meta: stepSynthesis.data.meta,
+        entities: mergedEntities,
+        relations: mergedRelations,
+        seo: stepSynthesis.data.seo
+      }),
+      routeVersion: options.routeVersion,
+      routeLogPrefix: options.routeLogPrefix,
+      maxTokens: TOKENS.sitemap,
+      enableThinking: options.enableThinking,
+      stepLabel: "mapreduce/4-sitemap"
+    }
+  );
+  if (!stepSitemap.ok) return stepSitemap;
+
+  return {
+    ok: true,
+    mode: "mapreduce",
+    extraction: {
+      meta: stepSynthesis.data.meta,
+      schema: { categories: stepSynthesis.data.schema.categories },
+      entities: mergedEntities,
+      relations: mergedRelations,
+      seo: stepSynthesis.data.seo,
+      recommended_sitemap: stepSitemap.data.recommended_sitemap
+    },
+    steps,
+    totalDurationMs: Date.now() - startedAt
+  };
 }
