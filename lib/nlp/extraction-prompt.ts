@@ -1,4 +1,4 @@
-export const EXTRACTION_SYSTEM_PROMPT = `Du analysierst einen einzelnen Webseiten-Text und extrahierst dessen semantische Struktur für SEO Topic Cluster Analyse und Themenautoritäts-Bewertung. Arbeite die folgenden 5 Phasen strikt nacheinander ab.
+export const EXTRACTION_SYSTEM_PROMPT = `Du analysierst einen einzelnen Webseiten-Text und extrahierst dessen semantische Struktur für SEO Topic Cluster Analyse und Themenautoritäts-Bewertung. Arbeite die folgenden 6 Phasen strikt nacheinander ab.
 
 # Phase 1 — Domänen-Erkennung
 
@@ -63,6 +63,35 @@ REGELN:
 - competing_topics: 0–3 Themen, die zusätzlich behandelt werden und den Fokus VERWÄSSERN (leer lassen wenn Fokus klar ist)
 - target_queries: 3–6 Suchanfragen, für die diese Seite plausibel ranken sollte/könnte
 
+# Phase 6 — Empfohlene Sitemap (Site-Tree für SEO Topical Authority)
+
+Basierend auf Phase 1 (Domäne), Phase 3 (Entities) und Phase 5 (Pillar, Subtopics, Content Gaps): entwirf einen IDEALEN Site-Tree für die Domäne dieser Seite. Ziel: vollständige Themen-Abdeckung, klare Hub-Spoke-Struktur, jede Page hat einen eindeutigen Slug und eine H1.
+
+Die Seitenstruktur hat genau EINE Pillar-Page (Wurzel, slug "/") und 2–4 Ebenen darunter. Höchstens 30 Pages gesamt.
+
+Für JEDE empfohlene Page:
+- slug: URL-Pfad ab Domain-Root, immer mit führendem "/". Pillar = "/". Sonst lowercase, kebab-case, sprachspezifisch ("/leistungen/implantologie", nicht "/services/implants" wenn die Seite deutsch ist). Slugs MÜSSEN eindeutig sein.
+- parent_slug: Slug der Eltern-Page. NULL nur für die Pillar-Page. Jeder andere parent_slug MUSS einer in dieser Liste vorkommenden Slug sein.
+- h1: vorgeschlagene Hauptüberschrift, 2–8 Wörter, in der Sprache des Textes.
+- page_role: "pillar" | "cluster_overview" | "service_page" | "info_page" | "location_page" | "about_page" | "faq" | "blog_article"
+- status: "covered_on_page" wenn die analysierte URL diese Page IST oder ihren Inhalt vollständig abdeckt; "content_gap" wenn ein Phase-5-content_gap diese Page motiviert ODER die Page klar nötig wäre und im Text nicht behandelt wird; "likely_exists_elsewhere" wenn diese Page typischerweise auf der Website existiert (z.B. /impressum, /team, /kontakt), aber im analysierten Text nicht behandelt wird.
+- target_queries: 1–3 Suchanfragen, für die diese Page ranken soll. Leer für Pillar/Cluster-Overview wenn nicht eindeutig.
+- covers_entities: Liste der canonical_names aus Phase 3, die diese Page abdecken sollte. Kann leer sein.
+- covers_subtopics: Liste der Subtopics aus Phase 5 (subtopics oder content_gaps), die diese Page abdeckt. Kann leer sein.
+- rationale: ein Satz, warum diese Page existieren sollte (1 Halbsatz, in der Sprache des Textes).
+
+REGELN:
+- Genau eine Page mit parent_slug = null (die Pillar).
+- Die analysierte URL (extrahiert aus Phase 1: page_type + Inhalt) MUSS als EINE der Pages auftauchen mit status = "covered_on_page". Falls die analysierte Seite eine Child-Page ist und keine Pillar-Übersicht existiert, schlage die Pillar trotzdem als "content_gap" oder "likely_exists_elsewhere" vor.
+- Keine zirkulären Eltern-Referenzen.
+- Keine Self-References (page.parent_slug != page.slug).
+- Slugs sind hypothetisch und KEIN Garant, dass die URL real existiert. Status "likely_exists_elsewhere" markiert genau diese Vermutung.
+- Wenn der Text fast keinen verwertbaren SEO-Kontext liefert (z.B. nur ein Kontaktformular), gib eine minimale Sitemap mit 1–3 Pages aus statt zu halluzinieren.
+
+Beispiele plausibler Trees (NICHT 1:1 übernehmen, nur Stil):
+- Zahnarzt-Praxis: Pillar "/" → Cluster "/leistungen" → Service-Pages "/leistungen/implantologie", "/leistungen/prophylaxe", ... + Cluster "/praxis" → "/praxis/team", "/praxis/anfahrt" + "/notfall" + "/preise".
+- SaaS-B2B: Pillar "/" → "/produkt" → Feature-Pages, + "/anwendungsfaelle/<branche>", + "/preise", + "/blog/<thema>".
+
 # Output-Format
 
 Gib AUSSCHLIESSLICH dieses JSON-Objekt zurück. Kein Preamble, keine Markdown-Fences, keine Erklärungen.
@@ -105,5 +134,20 @@ Gib AUSSCHLIESSLICH dieses JSON-Objekt zurück. Kein Preamble, keine Markdown-Fe
     "related_clusters": ["<string>"],
     "competing_topics": ["<string>"],
     "target_queries": ["<string>"]
+  },
+  "recommended_sitemap": {
+    "pages": [
+      {
+        "slug": "<string>",
+        "parent_slug": "<string|null>",
+        "h1": "<string>",
+        "page_role": "<pillar|cluster_overview|service_page|info_page|location_page|about_page|faq|blog_article>",
+        "status": "<covered_on_page|content_gap|likely_exists_elsewhere>",
+        "target_queries": ["<string>"],
+        "covers_entities": ["<canonical_name>"],
+        "covers_subtopics": ["<string>"],
+        "rationale": "<string>"
+      }
+    ]
   }
 }`;

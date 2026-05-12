@@ -10,7 +10,7 @@ export const maxDuration = 300;
 
 // Bump this whenever the route logic changes so the client can confirm
 // the redeploy is live. Visible in the JSON response as `_routeVersion`.
-const ROUTE_VERSION = "2026-05-11.6-thinking-disabled-streamed";
+const ROUTE_VERSION = "2026-05-12.1-phase6-sitemap";
 
 const bodySchema = z.object({
   url: z.string().url()

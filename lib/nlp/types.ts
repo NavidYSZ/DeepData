@@ -44,10 +44,42 @@ export type ExtractionSeo = {
   target_queries: string[];
 };
 
+export type SitemapPageStatus =
+  | "covered_on_page"
+  | "content_gap"
+  | "likely_exists_elsewhere";
+
+export type SitemapPageRole =
+  | "pillar"
+  | "cluster_overview"
+  | "service_page"
+  | "info_page"
+  | "location_page"
+  | "about_page"
+  | "faq"
+  | "blog_article";
+
+export type RecommendedPage = {
+  slug: string;
+  parent_slug: string | null;
+  h1: string;
+  page_role: SitemapPageRole | string;
+  status: SitemapPageStatus | string;
+  target_queries: string[];
+  covers_entities: string[];
+  covers_subtopics: string[];
+  rationale: string;
+};
+
+export type RecommendedSitemap = {
+  pages: RecommendedPage[];
+};
+
 export type ExtractionOutput = {
   meta: ExtractionMeta;
   schema: { categories: string[] };
   entities: ExtractionEntity[];
   relations: ExtractionRelation[];
   seo: ExtractionSeo;
+  recommended_sitemap?: RecommendedSitemap;
 };

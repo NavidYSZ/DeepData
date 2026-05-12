@@ -1,19 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Sparkles, ExternalLink, Brain, Cloud, Tag } from "lucide-react";
+import {
+  Loader2,
+  Sparkles,
+  ExternalLink,
+  Brain,
+  Cloud,
+  Tag,
+  FileText,
+  Network,
+  Map as MapIcon
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader, SectionCard } from "@/components/dashboard/page-shell";
 import { EntityMap } from "@/components/entity-graph/entity-map";
 import { EntityDetailPanel } from "@/components/nlp/entity-detail-panel";
 import { SeoInsightsPanel } from "@/components/nlp/seo-insights-panel";
 import { PageProfile } from "@/components/nlp/page-profile";
-import type { ExtractionOutput } from "@/lib/nlp/types";
+import { SitemapMap } from "@/components/sitemap-graph/sitemap-map";
+import { SitemapFilterBar } from "@/components/sitemap-graph/sitemap-filter-bar";
+import { SitemapDetailPanel } from "@/components/nlp/sitemap-detail-panel";
+import type { ExtractionOutput, RecommendedPage } from "@/lib/nlp/types";
 
 type AnnotateResponse = {
   documentSentiment?: { score: number; magnitude: number };
@@ -208,43 +222,168 @@ export default function NlpPage() {
       ) : null}
 
       {mode === "llm" && llmData?.extraction ? (
-        <>
-          <SectionCard title="Page Profile">
-            <PageProfile data={llmData.extraction} />
-          </SectionCard>
-          <SectionCard
-            title="Entity Map"
-            description={`${llmData.extraction.entities.length} Entities · ${llmData.extraction.relations.length} Relationen · in ${(
-              llmData.durationMs / 1000
-            ).toFixed(1)}s extrahiert. Pillar-Entities sind gelb umrandet.`}
-            contentClassName="!p-0"
-          >
-            <EntityMap
-              data={llmData.extraction}
-              renderSidebar={({ selectedEntity, onSelectEntity, categoryColors }) => ({
-                collapsedLabel: selectedEntity?.canonical_name ?? "Insights",
-                headerTitle: selectedEntity?.canonical_name ?? "SEO Insights",
-                headerIcon: selectedEntity ? (
-                  <Tag className="h-4 w-4 shrink-0 text-muted-foreground" />
-                ) : (
-                  <Sparkles className="h-4 w-4 shrink-0 text-muted-foreground" />
-                ),
-                body: selectedEntity ? (
-                  <EntityDetailPanel
-                    entity={selectedEntity}
-                    color={categoryColors[selectedEntity.category] ?? "#64748b"}
-                    relations={llmData.extraction.relations}
-                    onSelectEntity={onSelectEntity}
-                  />
-                ) : (
-                  <SeoInsightsPanel data={llmData.extraction} />
-                ),
-                showCloseButton: selectedEntity !== null
-              })}
-            />
-          </SectionCard>
-        </>
+        <Tabs defaultValue="profile" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="profile" className="gap-1.5">
+              <FileText className="h-3.5 w-3.5" />
+              Page Profile
+            </TabsTrigger>
+            <TabsTrigger value="entities" className="gap-1.5">
+              <Network className="h-3.5 w-3.5" />
+              Entity Map
+              <Badge variant="secondary" className="ml-1 text-[10px]">
+                {llmData.extraction.entities.length}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="sitemap" className="gap-1.5">
+              <MapIcon className="h-3.5 w-3.5" />
+              Sitemap Map
+              {llmData.extraction.recommended_sitemap?.pages?.length ? (
+                <Badge variant="secondary" className="ml-1 text-[10px]">
+                  {llmData.extraction.recommended_sitemap.pages.length}
+                </Badge>
+              ) : null}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="profile">
+            <SectionCard title="Page Profile">
+              <PageProfile data={llmData.extraction} />
+            </SectionCard>
+          </TabsContent>
+
+          <TabsContent value="entities">
+            <SectionCard
+              title="Entity Map"
+              description={`${llmData.extraction.entities.length} Entities · ${llmData.extraction.relations.length} Relationen · in ${(
+                llmData.durationMs / 1000
+              ).toFixed(1)}s extrahiert. Pillar-Entities sind gelb umrandet.`}
+              contentClassName="!p-0"
+            >
+              <EntityMap
+                data={llmData.extraction}
+                renderSidebar={({ selectedEntity, onSelectEntity, categoryColors }) => ({
+                  collapsedLabel: selectedEntity?.canonical_name ?? "Insights",
+                  headerTitle: selectedEntity?.canonical_name ?? "SEO Insights",
+                  headerIcon: selectedEntity ? (
+                    <Tag className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  ),
+                  body: selectedEntity ? (
+                    <EntityDetailPanel
+                      entity={selectedEntity}
+                      color={categoryColors[selectedEntity.category] ?? "#64748b"}
+                      relations={llmData.extraction.relations}
+                      onSelectEntity={onSelectEntity}
+                    />
+                  ) : (
+                    <SeoInsightsPanel data={llmData.extraction} />
+                  ),
+                  showCloseButton: selectedEntity !== null
+                })}
+              />
+            </SectionCard>
+          </TabsContent>
+
+          <TabsContent value="sitemap">
+            <SitemapTab extraction={llmData.extraction} />
+          </TabsContent>
+        </Tabs>
       ) : null}
+    </div>
+  );
+}
+
+function SitemapTab({ extraction }: { extraction: ExtractionOutput }) {
+  const sitemap = extraction.recommended_sitemap;
+  const pages = sitemap?.pages ?? [];
+
+  if (!sitemap || pages.length === 0) {
+    return (
+      <SectionCard title="Empfohlene Sitemap">
+        <div className="flex flex-col items-center gap-3 py-12 text-center">
+          <MapIcon className="h-10 w-10 text-muted-foreground/40" />
+          <div className="space-y-1">
+            <div className="text-sm font-medium">Noch keine Sitemap-Empfehlung verfügbar</div>
+            <p className="max-w-md text-xs text-muted-foreground">
+              Diese Analyse enthält keine <code>recommended_sitemap</code>. Vermutlich wurde die URL
+              mit einem älteren Backend-Stand analysiert oder die LLM hat Phase 6 weggelassen — bitte
+              oben erneut auf <em>Semantik extrahieren</em> klicken.
+            </p>
+          </div>
+        </div>
+      </SectionCard>
+    );
+  }
+
+  return (
+    <SectionCard
+      title="Empfohlene Sitemap"
+      description="Top-Down-Baum: Pillar → Cluster → Service-Pages. Status farbcodiert. Klick auf eine Page für Details."
+      contentClassName="!p-3"
+    >
+      <SitemapMap
+        sitemap={sitemap}
+        renderFilterBar={(args) => <SitemapFilterBar sitemap={sitemap} {...args} />}
+        renderSidebar={({ selectedPage, onSelectPage }) => ({
+          collapsedLabel: selectedPage?.h1 ?? "Sitemap",
+          headerTitle: selectedPage?.h1 ?? "Sitemap-Übersicht",
+          headerIcon: selectedPage ? (
+            <Tag className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <MapIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ),
+          body: selectedPage ? (
+            <SitemapDetailPanel
+              page={selectedPage}
+              allPages={pages}
+              entities={extraction.entities}
+              onSelectPage={onSelectPage}
+            />
+          ) : (
+            <SitemapOverviewPanel pages={pages} />
+          ),
+          showCloseButton: selectedPage !== null
+        })}
+      />
+    </SectionCard>
+  );
+}
+
+function SitemapOverviewPanel({ pages }: { pages: RecommendedPage[] }) {
+  const total = pages.length;
+  const covered = pages.filter((p) => p.status === "covered_on_page").length;
+  const gap = pages.filter((p) => p.status === "content_gap").length;
+  const likely = pages.filter((p) => p.status === "likely_exists_elsewhere").length;
+  return (
+    <div className="space-y-4 text-sm">
+      <p className="text-xs text-muted-foreground">
+        Empfohlene Site-Struktur. Klick auf eine Page-Card im Graph, um Details (H1, Slug,
+        Target-Queries, abgedeckte Entities, Begründung) zu sehen.
+      </p>
+      <div className="grid grid-cols-2 gap-2 text-center">
+        <div className="rounded-md border bg-background/60 p-2">
+          <div className="text-lg font-bold">{total}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Pages gesamt</div>
+        </div>
+        <div className="rounded-md border border-emerald-300 bg-emerald-50/60 p-2 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+          <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{covered}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">auf dieser Seite</div>
+        </div>
+        <div className="rounded-md border border-amber-300 bg-amber-50/60 p-2 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <div className="text-lg font-bold text-amber-700 dark:text-amber-300">{gap}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Content Gaps</div>
+        </div>
+        <div className="rounded-md border bg-zinc-50/60 p-2 dark:bg-zinc-800/40">
+          <div className="text-lg font-bold text-zinc-600 dark:text-zinc-300">{likely}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">likely exists</div>
+        </div>
+      </div>
+      <p className="text-[11px] text-muted-foreground italic">
+        Slugs und H1s sind LLM-Empfehlungen. Crawl-Verifikation, ob diese URLs real existieren, ist
+        nicht Teil dieser Version.
+      </p>
     </div>
   );
 }
