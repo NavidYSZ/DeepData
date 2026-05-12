@@ -11,16 +11,24 @@ export const PAGE_NODE_HEIGHT = 120;
 
 const MAX_DEPTH = 10;
 
+const TIDY_H_GAP = 32;
+const TIDY_V_GAP = 180;
+const RADIAL_RING_STEP = 220;
+const RADIAL_MIN_INNER_RADIUS = 0;
+
 export const STATUS_COLORS: Record<SitemapPageStatus, string> = {
   covered_on_page: "#10b981",
   content_gap: "#f59e0b",
   likely_exists_elsewhere: "#a1a1aa"
 };
 
+export type SitemapLayout = "TB" | "LR" | "tidy" | "radial";
+
 export type SitemapNodeData = {
   page: RecommendedPage;
   childCount: number;
   isRoot: boolean;
+  layout: SitemapLayout;
 };
 
 export type SitemapEdgeData = {
@@ -47,12 +55,12 @@ export type SitemapGraphResult = {
   edges: Edge<SitemapEdgeData>[];
   orphans: SitemapOrphan[];
   stats: SitemapStats;
-  direction: "TB" | "LR";
+  layout: SitemapLayout;
   rootSlug: string | null;
 };
 
 export type SitemapTransformOptions = {
-  direction?: "TB" | "LR";
+  layout?: SitemapLayout;
 };
 
 function emptyStats(pages: RecommendedPage[]): SitemapStats {
@@ -95,11 +103,169 @@ function depthFromRoot(
   return depth;
 }
 
+type Position = { x: number; y: number };
+
+function layoutDagre(
+  validPages: RecommendedPage[],
+  edgeSpecs: { source: string; target: string }[],
+  rankdir: "TB" | "LR"
+): Map<string, Position> {
+  const g = new dagre.graphlib.Graph();
+  g.setGraph({
+    rankdir,
+    nodesep: 40,
+    ranksep: 90,
+    marginx: 24,
+    marginy: 24,
+    align: "UL"
+  });
+  g.setDefaultEdgeLabel(() => ({}));
+
+  for (const p of validPages) {
+    g.setNode(p.slug, { width: PAGE_NODE_WIDTH, height: PAGE_NODE_HEIGHT });
+  }
+  for (const e of edgeSpecs) {
+    g.setEdge(e.source, e.target);
+  }
+  dagre.layout(g);
+
+  const positions = new Map<string, Position>();
+  for (const p of validPages) {
+    const pos = g.node(p.slug);
+    positions.set(p.slug, {
+      x: (pos?.x ?? 0) - PAGE_NODE_WIDTH / 2,
+      y: (pos?.y ?? 0) - PAGE_NODE_HEIGHT / 2
+    });
+  }
+  return positions;
+}
+
+function buildChildrenMap(
+  validPages: RecommendedPage[],
+  rootSlug: string
+): Map<string, string[]> {
+  const children = new Map<string, string[]>();
+  for (const p of validPages) children.set(p.slug, []);
+  for (const p of validPages) {
+    if (p.slug === rootSlug || p.parent_slug === null) continue;
+    const arr = children.get(p.parent_slug);
+    if (arr) arr.push(p.slug);
+  }
+  return children;
+}
+
+function layoutTidy(
+  rootSlug: string,
+  validPages: RecommendedPage[]
+): Map<string, Position> {
+  const children = buildChildrenMap(validPages, rootSlug);
+
+  // Compute width of each subtree (post-order).
+  const subtreeWidth = new Map<string, number>();
+  function computeWidth(slug: string): number {
+    const c = children.get(slug) ?? [];
+    if (c.length === 0) {
+      subtreeWidth.set(slug, PAGE_NODE_WIDTH);
+      return PAGE_NODE_WIDTH;
+    }
+    let total = 0;
+    for (let i = 0; i < c.length; i++) {
+      total += computeWidth(c[i]);
+      if (i > 0) total += TIDY_H_GAP;
+    }
+    const w = Math.max(PAGE_NODE_WIDTH, total);
+    subtreeWidth.set(slug, w);
+    return w;
+  }
+  computeWidth(rootSlug);
+
+  // Pre-order placement.
+  const positions = new Map<string, Position>();
+  function place(slug: string, centerX: number, depth: number) {
+    positions.set(slug, {
+      x: centerX - PAGE_NODE_WIDTH / 2,
+      y: depth * TIDY_V_GAP
+    });
+    const c = children.get(slug) ?? [];
+    if (c.length === 0) return;
+    let totalChildren = 0;
+    for (let i = 0; i < c.length; i++) {
+      totalChildren += subtreeWidth.get(c[i]) ?? PAGE_NODE_WIDTH;
+      if (i > 0) totalChildren += TIDY_H_GAP;
+    }
+    let x = centerX - totalChildren / 2;
+    for (const ch of c) {
+      const w = subtreeWidth.get(ch) ?? PAGE_NODE_WIDTH;
+      place(ch, x + w / 2, depth + 1);
+      x += w + TIDY_H_GAP;
+    }
+  }
+  place(rootSlug, 0, 0);
+  return positions;
+}
+
+function layoutRadial(
+  rootSlug: string,
+  validPages: RecommendedPage[]
+): Map<string, Position> {
+  const children = buildChildrenMap(validPages, rootSlug);
+
+  // 1) Find leaves in DFS order and assign them angles.
+  const leafOrder: string[] = [];
+  function collectLeaves(slug: string) {
+    const c = children.get(slug) ?? [];
+    if (c.length === 0) {
+      leafOrder.push(slug);
+      return;
+    }
+    for (const ch of c) collectLeaves(ch);
+  }
+  collectLeaves(rootSlug);
+  if (leafOrder.length === 0) leafOrder.push(rootSlug);
+
+  const angleOf = new Map<string, number>();
+  for (let i = 0; i < leafOrder.length; i++) {
+    // Spread leaves evenly around the circle, starting from -π/2 (top).
+    angleOf.set(
+      leafOrder[i],
+      -Math.PI / 2 + (i / leafOrder.length) * 2 * Math.PI
+    );
+  }
+
+  // 2) Internal nodes: angle = average of children angles.
+  const depthOf = new Map<string, number>();
+  function computeInternal(slug: string, depth: number): number {
+    depthOf.set(slug, depth);
+    const c = children.get(slug) ?? [];
+    if (c.length === 0) return angleOf.get(slug) ?? 0;
+    let sum = 0;
+    for (const ch of c) sum += computeInternal(ch, depth + 1);
+    const avg = sum / c.length;
+    angleOf.set(slug, avg);
+    return avg;
+  }
+  computeInternal(rootSlug, 0);
+
+  // 3) Polar → cartesian.
+  const positions = new Map<string, Position>();
+  for (const p of validPages) {
+    const depth = depthOf.get(p.slug) ?? 0;
+    const angle = angleOf.get(p.slug) ?? 0;
+    const radius =
+      depth === 0 ? RADIAL_MIN_INNER_RADIUS : depth * RADIAL_RING_STEP;
+    positions.set(p.slug, {
+      x: radius * Math.cos(angle) - PAGE_NODE_WIDTH / 2,
+      y: radius * Math.sin(angle) - PAGE_NODE_HEIGHT / 2
+    });
+  }
+  return positions;
+}
+
 export function transformSitemapToReactFlow(
   sitemap: RecommendedSitemap,
   options: SitemapTransformOptions = {}
 ): SitemapGraphResult {
-  const direction = options.direction ?? "TB";
+  const layout = options.layout ?? "TB";
   const orphans: SitemapOrphan[] = [];
 
   // Step 1: Dedup slugs.
@@ -126,7 +292,7 @@ export function transformSitemapToReactFlow(
       edges: [],
       orphans,
       stats: emptyStats([]),
-      direction,
+      layout,
       rootSlug: null
     };
   }
@@ -142,7 +308,6 @@ export function transformSitemapToReactFlow(
       slugMap.set(other.slug, { ...other, parent_slug: rootSlug });
     }
   } else {
-    // No root — pick the first page as implicit root.
     rootSlug = dedupedPages[0].slug;
     slugMap.set(rootSlug, { ...slugMap.get(rootSlug)!, parent_slug: null });
   }
@@ -157,7 +322,6 @@ export function transformSitemapToReactFlow(
       continue;
     }
     if (p.parent_slug === null) {
-      // Shouldn't happen after step 2 but guard anyway.
       validPages.push(p);
       continue;
     }
@@ -177,64 +341,54 @@ export function transformSitemapToReactFlow(
     validPages.push(p);
   }
 
-  // Step 4: Layout with dagre.
-  const g = new dagre.graphlib.Graph();
-  g.setGraph({
-    rankdir: direction,
-    nodesep: 40,
-    ranksep: 90,
-    marginx: 24,
-    marginy: 24,
-    align: "UL"
-  });
-  g.setDefaultEdgeLabel(() => ({}));
-
-  for (const p of validPages) {
-    g.setNode(p.slug, { width: PAGE_NODE_WIDTH, height: PAGE_NODE_HEIGHT });
-  }
-
+  // Step 4: Build edge specs and child counts.
   const childCount = new Map<string, number>();
   const edgeSpecs: { source: string; target: string }[] = [];
-
   for (const p of validPages) {
     if (p.parent_slug === null || p.slug === rootSlug) continue;
-    g.setEdge(p.parent_slug, p.slug);
     edgeSpecs.push({ source: p.parent_slug, target: p.slug });
     childCount.set(p.parent_slug, (childCount.get(p.parent_slug) ?? 0) + 1);
   }
 
-  dagre.layout(g);
+  // Step 5: Compute positions per layout.
+  let positions: Map<string, Position>;
+  if (layout === "TB" || layout === "LR") {
+    positions = layoutDagre(validPages, edgeSpecs, layout);
+  } else if (layout === "tidy") {
+    positions = layoutTidy(rootSlug, validPages);
+  } else {
+    positions = layoutRadial(rootSlug, validPages);
+  }
 
-  // Step 5: Build React Flow nodes/edges.
+  // Step 6: React Flow nodes/edges.
   const nodes: Node<SitemapNodeData>[] = validPages.map((p) => {
-    const pos = g.node(p.slug);
+    const pos = positions.get(p.slug) ?? { x: 0, y: 0 };
     return {
       id: p.slug,
       type: "pageCard",
-      position: {
-        x: (pos?.x ?? 0) - PAGE_NODE_WIDTH / 2,
-        y: (pos?.y ?? 0) - PAGE_NODE_HEIGHT / 2
-      },
+      position: pos,
       data: {
         page: p,
         childCount: childCount.get(p.slug) ?? 0,
-        isRoot: p.slug === rootSlug
+        isRoot: p.slug === rootSlug,
+        layout
       },
       draggable: true,
       connectable: false
     };
   });
 
+  const edgeType = layout === "radial" ? "straight" : "smoothstep";
   const edges: Edge<SitemapEdgeData>[] = edgeSpecs.map((spec, i) => ({
     id: `sm${i}-${spec.source}->${spec.target}`,
     source: spec.source,
     target: spec.target,
-    type: "smoothstep",
+    type: edgeType,
     animated: false,
     data: { kind: "is_child_of" }
   }));
 
-  // Step 6: Stats — max depth over valid pages.
+  // Step 7: Stats with max depth over valid pages.
   const stats = emptyStats(validPages);
   let maxDepth = 0;
   for (const p of validPages) {
@@ -243,7 +397,7 @@ export function transformSitemapToReactFlow(
   }
   stats.maxDepth = maxDepth;
 
-  return { nodes, edges, orphans, stats, direction, rootSlug };
+  return { nodes, edges, orphans, stats, layout, rootSlug };
 }
 
 export function findChildPages(slug: string, pages: RecommendedPage[]): RecommendedPage[] {
@@ -264,4 +418,54 @@ export function findPageBySlug(
   pages: RecommendedPage[]
 ): RecommendedPage | null {
   return pages.find((p) => p.slug === slug) ?? null;
+}
+
+/**
+ * Flatten the sitemap into a depth-annotated list for the indented-tree view.
+ * Pre-order DFS so parents come before children.
+ */
+export function flattenSitemapForIndentedView(
+  sitemap: RecommendedSitemap
+): { page: RecommendedPage; depth: number }[] {
+  const pages = sitemap.pages ?? [];
+  if (pages.length === 0) return [];
+
+  const slugMap = new Map<string, RecommendedPage>();
+  for (const p of pages) {
+    const slug = p.slug?.trim();
+    if (slug && !slugMap.has(slug)) slugMap.set(slug, { ...p, slug });
+  }
+
+  const rootsRaw = Array.from(slugMap.values()).filter((p) => p.parent_slug === null);
+  const rootSlug = rootsRaw[0]?.slug ?? Array.from(slugMap.values())[0]?.slug;
+  if (!rootSlug) return [];
+
+  const children = new Map<string, string[]>();
+  for (const p of Array.from(slugMap.values())) children.set(p.slug, []);
+  for (const p of Array.from(slugMap.values())) {
+    if (p.parent_slug === null || p.slug === rootSlug) continue;
+    if (slugMap.has(p.parent_slug)) {
+      const arr = children.get(p.parent_slug);
+      if (arr) arr.push(p.slug);
+    }
+  }
+
+  const out: { page: RecommendedPage; depth: number }[] = [];
+  const seen = new Set<string>();
+  function walk(slug: string, depth: number) {
+    if (seen.has(slug) || depth > MAX_DEPTH) return;
+    seen.add(slug);
+    const page = slugMap.get(slug);
+    if (!page) return;
+    out.push({ page, depth });
+    for (const ch of children.get(slug) ?? []) walk(ch, depth + 1);
+  }
+  walk(rootSlug, 0);
+
+  // Append orphans (parents that don't resolve) flat at depth 0.
+  for (const p of Array.from(slugMap.values())) {
+    if (!seen.has(p.slug)) out.push({ page: p, depth: 0 });
+  }
+
+  return out;
 }

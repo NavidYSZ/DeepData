@@ -55,9 +55,15 @@ function resolveStatusStyle(status: string): StatusStyle {
 }
 
 function PageCardNodeInner({ data, selected }: NodeProps<SitemapNodeData>) {
-  const { page, isRoot, childCount } = data;
+  const { page, isRoot, childCount, layout } = data;
   const style = resolveStatusStyle(page.status);
   const { Icon } = style;
+
+  // For LR layout: handles on Left (target) / Right (source).
+  // For TB / tidy: handles on Top (target) / Bottom (source).
+  // For radial: keep top/bottom but they barely matter visually.
+  const targetPos = layout === "LR" ? Position.Left : Position.Top;
+  const sourcePos = layout === "LR" ? Position.Right : Position.Bottom;
 
   return (
     <div
@@ -73,12 +79,12 @@ function PageCardNodeInner({ data, selected }: NodeProps<SitemapNodeData>) {
     >
       <Handle
         type="target"
-        position={Position.Top}
+        position={targetPos}
         className="!h-2 !w-2 !border-0 !bg-muted-foreground/40"
       />
       <Handle
         type="source"
-        position={Position.Bottom}
+        position={sourcePos}
         className="!h-2 !w-2 !border-0 !bg-muted-foreground/40"
       />
 
