@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup A+B — Tree mit Entity-Zuordnung</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; }
+</style>
+</head>
+<body class="bg-zinc-50 text-zinc-900 min-h-screen">
+
+<!-- Top bar -->
+<div class="border-b border-zinc-200 bg-white">
+  <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="text-sm text-zinc-500">
+      <span class="hover:text-zinc-900 cursor-pointer">NLP Playground</span>
+      <span class="mx-2 text-zinc-300">/</span>
+      <span class="text-zinc-900 font-medium">Topical Map mit Entities (Mockup A+B)</span>
+    </div>
+    <a href="./index.html" class="px-3 py-1.5 rounded-md border border-zinc-200 hover:bg-zinc-50 text-xs">← Alle Varianten</a>
+  </div>
+</div>
+
+<div class="max-w-7xl mx-auto px-6 py-8 space-y-6">
+
+  <!-- Header -->
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight">Variante A + B — Tree mit Entity-Zuordnung</h1>
+    <p class="text-sm text-zinc-500 mt-1">
+      Wie Variante A, plus ein neues Feld <code class="text-xs bg-zinc-100 px-1 py-0.5 rounded">belongs_to_subtopic</code> in Phase 3 des Prompts.
+      Jede extrahierte Entity wird einem Phase-5-Subtopic zugeordnet. Daraus entsteht ein <strong>echter dreistufiger Baum</strong>:
+      Pillar → Subtopic → Entity.
+    </p>
+  </div>
+
+  <!-- Analyzed page card -->
+  <div class="bg-white border border-zinc-200 rounded-lg p-4 flex items-start justify-between">
+    <div>
+      <div class="text-xs uppercase tracking-wide text-zinc-500 mb-1">Analysierte Seite</div>
+      <div class="font-medium">Ihr Zahnarzt in Tornesch — Praxis Sabah-Dentalmedizin</div>
+      <a href="#" class="text-sm text-blue-600 hover:underline">https://www.sabah-dentalmedizin.de/</a>
+    </div>
+    <div class="flex gap-2">
+      <span class="inline-flex items-center rounded-md border border-sky-300 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800">Child-Page / Spoke</span>
+      <span class="inline-flex items-center rounded-md border border-zinc-300 bg-zinc-50 px-2 py-0.5 text-xs font-medium text-zinc-700">commercial</span>
+      <span class="inline-flex items-center rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">depth: shallow</span>
+    </div>
+  </div>
+
+  <!-- THE TREE -->
+  <div class="bg-white border border-zinc-200 rounded-lg p-8">
+    <div class="flex items-center justify-between mb-6">
+      <div class="text-xs uppercase tracking-wide text-zinc-500">Topical Map (3 Ebenen: Pillar → Subtopic → Entity)</div>
+      <div class="flex gap-3 text-xs">
+        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>Pillar</span>
+        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>Subtopic</span>
+        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-zinc-400"></span>Entity</span>
+      </div>
+    </div>
+
+    <!-- Pillar root -->
+    <div class="flex justify-center mb-2">
+      <div class="bg-amber-50 border-2 border-amber-400 rounded-xl px-8 py-5 shadow-sm">
+        <div class="text-[10px] text-amber-700 uppercase tracking-wider font-bold mb-1">Pillar Topic</div>
+        <div class="text-2xl font-bold text-amber-900">Zahnarzt in Tornesch</div>
+      </div>
+    </div>
+
+    <div class="h-6 w-px bg-zinc-300 mx-auto"></div>
+
+    <!-- Subtopic rows -->
+    <div class="space-y-3 max-w-4xl mx-auto">
+
+      <!-- Subtopic block: Implantologie -->
+      <div class="border border-zinc-200 rounded-lg overflow-hidden">
+        <div class="bg-blue-50/60 px-4 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+            <span class="font-semibold text-blue-900">Implantologie</span>
+            <span class="text-xs text-zinc-500">3 Entities</span>
+          </div>
+          <button class="text-xs text-zinc-500 hover:text-zinc-900">▾</button>
+        </div>
+        <div class="px-4 py-3 flex flex-wrap gap-2 border-t border-zinc-100">
+          <span class="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            Einzelzahn-Implantat <span class="text-zinc-400">·2×</span>
+          </span>
+          <span class="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            Knochenaufbau <span class="text-zinc-400">·1×</span>
+          </span>
+          <span class="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            All-on-4 <span class="text-zinc-400">·1×</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Subtopic block: Prophylaxe -->
+      <div class="border border-zinc-200 rounded-lg overflow-hidden">
+        <div class="bg-blue-50/60 px-4 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+            <span class="font-semibold text-blue-900">Prophylaxe</span>
+            <span class="text-xs text-zinc-500">2 Entities</span>
+          </div>
+        </div>
+        <div class="px-4 py-3 flex flex-wrap gap-2 border-t border-zinc-100">
+          <span class="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            Professionelle Zahnreinigung <span class="text-zinc-400">·3×</span>
+          </span>
+          <span class="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            Mundhygiene-Beratung <span class="text-zinc-400">·1×</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Subtopic block: Ästhetische Zahnheilkunde -->
+      <div class="border border-zinc-200 rounded-lg overflow-hidden">
+        <div class="bg-blue-50/60 px-4 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+            <span class="font-semibold text-blue-900">Ästhetische Zahnheilkunde</span>
+            <span class="text-xs text-zinc-500">2 Entities</span>
+          </div>
+        </div>
+        <div class="px-4 py-3 flex flex-wrap gap-2 border-t border-zinc-100">
+          <span class="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            Bleaching <span class="text-zinc-400">·1×</span>
+          </span>
+          <span class="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            Veneers <span class="text-zinc-400">·1×</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Subtopic block: Wurzelbehandlung -->
+      <div class="border border-zinc-200 rounded-lg overflow-hidden">
+        <div class="bg-blue-50/60 px-4 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+            <span class="font-semibold text-blue-900">Wurzelbehandlung</span>
+            <span class="text-xs text-zinc-500">2 Entities</span>
+          </div>
+        </div>
+        <div class="px-4 py-3 flex flex-wrap gap-2 border-t border-zinc-100">
+          <span class="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            Endodontie <span class="text-zinc-400">·2×</span>
+          </span>
+          <span class="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            Mikroskop-gestützte Behandlung <span class="text-zinc-400">·1×</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Subtopic block: Zahnersatz -->
+      <div class="border border-zinc-200 rounded-lg overflow-hidden">
+        <div class="bg-blue-50/60 px-4 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+            <span class="font-semibold text-blue-900">Zahnersatz</span>
+            <span class="text-xs text-zinc-500">3 Entities</span>
+          </div>
+        </div>
+        <div class="px-4 py-3 flex flex-wrap gap-2 border-t border-zinc-100">
+          <span class="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            Krone <span class="text-zinc-400">·2×</span>
+          </span>
+          <span class="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            Brücke <span class="text-zinc-400">·1×</span>
+          </span>
+          <span class="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            Teilprothese <span class="text-zinc-400">·1×</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Subtopic block: Kinderzahnheilkunde -->
+      <div class="border border-zinc-200 rounded-lg overflow-hidden">
+        <div class="bg-blue-50/60 px-4 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+            <span class="font-semibold text-blue-900">Kinderzahnheilkunde</span>
+            <span class="text-xs text-zinc-500">2 Entities</span>
+          </div>
+        </div>
+        <div class="px-4 py-3 flex flex-wrap gap-2 border-t border-zinc-100">
+          <span class="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            Kindgerechte Behandlung <span class="text-zinc-400">·1×</span>
+          </span>
+          <span class="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
+            Prophylaxe für Kinder <span class="text-zinc-400">·1×</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Collapsed (rest) -->
+      <div class="border border-dashed border-zinc-300 rounded-lg p-3 text-center text-xs text-zinc-500 hover:bg-zinc-50 cursor-pointer">
+        + 3 weitere Subtopics anzeigen (Prothetik · Zahnfleischbehandlung · Zahnkorrektur)
+      </div>
+
+    </div>
+
+    <!-- Orphans warning -->
+    <div class="mt-6 max-w-4xl mx-auto border border-amber-200 bg-amber-50/40 rounded-lg p-3 flex items-start gap-2 text-xs">
+      <svg class="w-4 h-4 text-amber-600 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"/></svg>
+      <div>
+        <span class="font-medium text-amber-900">2 Entities ohne Subtopic-Zuordnung</span>
+        <span class="text-zinc-600">— die LLM hat sie keinem Phase-5-Subtopic zugeordnet. Beispiele: "Ahrenloher-Straße 27" (Standort), "Sabah Dentalmedizin" (Brand). Werden in einer separaten Sektion gesammelt.</span>
+      </div>
+    </div>
+
+    <!-- Below: gaps + clusters compact -->
+    <div class="h-px bg-zinc-200 my-8"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+      <div>
+        <div class="text-xs uppercase tracking-wide text-amber-700 font-semibold mb-2">Content Gaps</div>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="text-xs bg-amber-50 border border-amber-200 text-amber-900 px-2 py-1 rounded">Kostenübersicht</span>
+          <span class="text-xs bg-amber-50 border border-amber-200 text-amber-900 px-2 py-1 rounded">Notfall-Sprechstunde</span>
+          <span class="text-xs bg-amber-50 border border-amber-200 text-amber-900 px-2 py-1 rounded">Patientenstimmen</span>
+          <span class="text-xs bg-amber-50 border border-amber-200 text-amber-900 px-2 py-1 rounded">Anfahrt / Parken</span>
+        </div>
+      </div>
+      <div>
+        <div class="text-xs uppercase tracking-wide text-violet-700 font-semibold mb-2">Verwandte Cluster</div>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="text-xs bg-violet-50 border border-violet-200 text-violet-900 px-2 py-1 rounded">Zahnarzt Pinneberg</span>
+          <span class="text-xs bg-violet-50 border border-violet-200 text-violet-900 px-2 py-1 rounded">Kieferorthopädie Tornesch</span>
+          <span class="text-xs bg-violet-50 border border-violet-200 text-violet-900 px-2 py-1 rounded">Mundhygiene-Ratgeber</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom explainer -->
+  <div class="bg-blue-50 border border-blue-200 rounded-lg p-5 text-sm">
+    <div class="flex items-start gap-3">
+      <svg class="w-5 h-5 text-blue-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <div>
+        <div class="font-semibold text-blue-900 mb-1">Was diese Variante kann (und was nicht)</div>
+        <div class="text-blue-900/80 space-y-1">
+          <p><strong>✓</strong> Echter dreistufiger Baum, der zeigt was alles unter welchem Subtopic abgedeckt ist.</p>
+          <p><strong>✓</strong> Subtopics ohne Entities ("nur erwähnt") fallen sofort auf — Indikator für oberflächliche Coverage.</p>
+          <p><strong>✓</strong> Aus den Entity-Listen pro Subtopic siehst du, was die Tiefe einer potenziellen Cluster-Page ausmachen würde.</p>
+          <p><strong>✗</strong> Sagt dir nicht: "und so sollte deine URL-Struktur aussehen" oder "diese Page solltest du neu anlegen". Das ergänzt Variante A+B+C.</p>
+          <p><strong>!</strong> Prompt-Erweiterung nötig: Phase 3 bekommt <code class="bg-white px-1 rounded">belongs_to_subtopic: string | null</code>. Resolver-Trick für Namens-Matching (analog <code class="bg-white px-1 rounded">canonical_name</code>).</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

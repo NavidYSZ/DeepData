@@ -17,3 +17,4 @@ deployment logs/
 .omx/
 tsconfig.tsbuildinfo
 *.html
+!mockups/**/*.html

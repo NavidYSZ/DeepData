@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup D — Parent-Pillar Hypothese</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; }
+</style>
+</head>
+<body class="bg-zinc-50 text-zinc-900 min-h-screen">
+
+<!-- Top bar -->
+<div class="border-b border-zinc-200 bg-white">
+  <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="text-sm text-zinc-500">
+      <span class="hover:text-zinc-900 cursor-pointer">NLP Playground</span>
+      <span class="mx-2 text-zinc-300">/</span>
+      <span class="text-zinc-900 font-medium">Parent-Pillar Hypothese (Mockup D)</span>
+    </div>
+    <a href="./index.html" class="px-3 py-1.5 rounded-md border border-zinc-200 hover:bg-zinc-50 text-xs">← Alle Varianten</a>
+  </div>
+</div>
+
+<div class="max-w-7xl mx-auto px-6 py-8 space-y-6">
+
+  <!-- Header -->
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight">Variante D — Parent-Pillar Hypothese</h1>
+    <p class="text-sm text-zinc-500 mt-1">
+      Statt einer neuen Topical-Map-Sicht: <strong>fixt die Hub/Child-Logik</strong> direkt im Page Profile.
+      Wenn das Tool eine Seite als Child-Page erkennt, projiziert die LLM zusätzlich:
+      <strong>welche Pillar-Page müsste über dieser hängen</strong>, und
+      <strong>welche Geschwister-Pages müssten daneben existieren</strong>?
+      Beantwortet "wo sitzt diese Seite im implizierten Cluster?" — was der aktuelle Three-Pillar-Salat (Zahnarzt + Tornesch + Brand) nicht beantwortet.
+    </p>
+  </div>
+
+  <!-- Analyzed page card -->
+  <div class="bg-white border border-zinc-200 rounded-lg p-4 flex items-start justify-between">
+    <div>
+      <div class="text-xs uppercase tracking-wide text-zinc-500 mb-1">Analysierte Seite</div>
+      <div class="font-medium">Ihr Zahnarzt in Tornesch — Praxis Sabah-Dentalmedizin</div>
+      <a href="#" class="text-sm text-blue-600 hover:underline">https://www.sabah-dentalmedizin.de/</a>
+    </div>
+    <div class="flex gap-2">
+      <span class="inline-flex items-center rounded-md border border-sky-300 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800">Child-Page / Spoke</span>
+      <span class="inline-flex items-center rounded-md border border-zinc-300 bg-zinc-50 px-2 py-0.5 text-xs font-medium text-zinc-700">commercial</span>
+      <span class="inline-flex items-center rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">depth: shallow</span>
+    </div>
+  </div>
+
+  <!-- THE HYPOTHESIS BLOCK -->
+  <div class="bg-white border border-zinc-200 rounded-lg p-8">
+    <div class="text-xs uppercase tracking-wide text-zinc-500 mb-6 flex items-center gap-2">
+      <span>Position der Seite im impliziten Cluster</span>
+      <span class="text-zinc-300">·</span>
+      <span class="text-zinc-400">Hypothese aus Phase 5+6</span>
+    </div>
+
+    <!-- Parent Pillar (hypothesized) -->
+    <div class="flex justify-center">
+      <div class="relative max-w-md">
+        <div class="absolute -top-3 left-1/2 -translate-x-1/2 z-10 whitespace-nowrap">
+          <span class="inline-flex items-center gap-1 rounded-full bg-amber-500/90 text-white px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+            Hypothetischer Parent Pillar
+          </span>
+        </div>
+        <div class="bg-amber-50/60 border-2 border-dashed border-amber-400 rounded-xl px-8 py-5 text-center">
+          <div class="text-2xl font-bold text-amber-900">Zahnarzt in Tornesch</div>
+          <div class="text-xs text-amber-800/80 mt-2">
+            Echte Übersichtsseite, die das Cluster ganzheitlich abdeckt.<br>
+            <span class="font-medium">Existiert vermutlich noch nicht / ist nur durch die aktuelle Brand-Landing ersetzt.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connectors down -->
+    <div class="relative h-12 my-2">
+      <div class="absolute top-0 left-1/2 w-px h-full bg-zinc-300"></div>
+      <div class="absolute top-1/2 left-[10%] right-[10%] h-px bg-zinc-300"></div>
+      <div class="absolute top-1/2 left-[10%] w-px h-1/2 bg-zinc-300"></div>
+      <div class="absolute top-1/2 right-[10%] w-px h-1/2 bg-zinc-300"></div>
+    </div>
+
+    <!-- Siblings row -->
+    <div class="grid grid-cols-4 gap-3">
+      <!-- This page -->
+      <div class="border-2 border-sky-500 bg-sky-50/50 rounded-lg p-3 relative">
+        <span class="absolute -top-2 left-2 bg-sky-500 text-white text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded">Du bist hier</span>
+        <div class="text-[10px] uppercase tracking-wide text-sky-700 font-semibold mb-1 mt-1">Brand / Landing</div>
+        <div class="text-sm font-semibold text-zinc-900 leading-tight">Sabah-Dentalmedizin</div>
+        <div class="text-[11px] text-zinc-600 mt-1">(diese Seite)</div>
+        <div class="text-[10px] text-amber-700 mt-2 font-medium">⚠ deckt aktuell auch Übersichts-Rolle ab → shallow</div>
+      </div>
+
+      <!-- Hypothesized siblings -->
+      <div class="border-2 border-dashed border-amber-300 bg-amber-50/30 rounded-lg p-3 relative">
+        <span class="absolute -top-2 left-2 bg-amber-100 border border-amber-300 text-amber-800 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded">Sollte existieren</span>
+        <div class="text-[10px] uppercase tracking-wide text-amber-700 font-semibold mb-1 mt-1">Service-Page</div>
+        <div class="text-sm font-semibold text-zinc-900 leading-tight">Implantologie Tornesch</div>
+        <div class="text-[11px] text-zinc-600 mt-1">eigene Cluster-Page für eine Kernleistung</div>
+        <div class="text-[10px] text-amber-700 mt-2 font-medium">⚠ Content Gap</div>
+      </div>
+
+      <div class="border-2 border-dashed border-amber-300 bg-amber-50/30 rounded-lg p-3 relative">
+        <span class="absolute -top-2 left-2 bg-amber-100 border border-amber-300 text-amber-800 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded">Sollte existieren</span>
+        <div class="text-[10px] uppercase tracking-wide text-amber-700 font-semibold mb-1 mt-1">Service-Page</div>
+        <div class="text-sm font-semibold text-zinc-900 leading-tight">Prophylaxe / PZR</div>
+        <div class="text-[11px] text-zinc-600 mt-1">eigene Cluster-Page für eine Kernleistung</div>
+        <div class="text-[10px] text-amber-700 mt-2 font-medium">⚠ Content Gap</div>
+      </div>
+
+      <div class="border-2 border-dashed border-amber-300 bg-amber-50/30 rounded-lg p-3 relative">
+        <span class="absolute -top-2 left-2 bg-amber-100 border border-amber-300 text-amber-800 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded">Sollte existieren</span>
+        <div class="text-[10px] uppercase tracking-wide text-amber-700 font-semibold mb-1 mt-1">+5 weitere</div>
+        <div class="text-sm font-semibold text-zinc-900 leading-tight">Ästhetik · Wurzelbehandlung · Zahnersatz · Kinder · …</div>
+        <div class="text-[11px] text-zinc-600 mt-1">je eine Service-Page pro Subtopic</div>
+      </div>
+    </div>
+
+    <!-- Interpretation -->
+    <div class="mt-8 border-t border-zinc-200 pt-6">
+      <div class="text-xs uppercase tracking-wide text-zinc-500 mb-3">Interpretation</div>
+      <div class="bg-zinc-50 border border-zinc-200 rounded-lg p-4 text-sm leading-relaxed text-zinc-700">
+        <p class="mb-2">
+          Die Seite ist <strong>als Brand/Landing klassifiziert</strong> (Child-Page), behandelt aber gleichzeitig 9 Subtopics mit
+          jeweils <em>shallow</em> Coverage. Daraus folgen zwei mögliche Lesarten:
+        </p>
+        <ol class="list-decimal list-inside space-y-1.5 ml-2">
+          <li>
+            <strong>Sie wäre eigentlich ein Pillar</strong>, aber zu dünn ausgeführt — dann müsste sie tiefer werden
+            (Subtopics ausarbeiten) <em>und</em> die Service-Pages als Children dazubekommen.
+          </li>
+          <li>
+            <strong>Sie bleibt Brand/Landing</strong>, dann fehlt der echte Pillar "Zahnarzt in Tornesch" als
+            Übersichtsseite — und die 9 Subtopics gehören als eigene Cluster-Pages aufgemacht.
+          </li>
+        </ol>
+        <p class="mt-3 text-zinc-600">
+          Beide Lesarten landen praktisch beim gleichen To-Do: <strong>fehlende Service-Pages anlegen.</strong>
+          Genau das macht der aktuelle Entity-Graph nicht sichtbar, weil er die drei gleichberechtigten Pillars
+          (Zahnarzt + Tornesch + Sabah Dentalmedizin) zeigt statt der Hierarchie-Frage.
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Optional: comparison with current entity map -->
+  <div class="bg-white border border-zinc-200 rounded-lg p-6">
+    <div class="text-xs uppercase tracking-wide text-zinc-500 mb-4">Was ändert sich im Vergleich zur aktuellen Ansicht?</div>
+    <div class="grid grid-cols-2 gap-6 text-sm">
+      <div>
+        <div class="font-semibold text-zinc-700 mb-2 flex items-center gap-2">
+          <span class="bg-zinc-200 text-zinc-600 text-[10px] uppercase px-2 py-0.5 rounded">Vorher</span>
+          Aktueller Entity-Graph
+        </div>
+        <div class="bg-zinc-50 border border-zinc-200 rounded-lg p-3">
+          <div class="text-xs text-zinc-600 mb-2">3 gleichberechtigte Pillars nebeneinander:</div>
+          <div class="flex gap-2 flex-wrap">
+            <span class="bg-amber-100 border border-amber-300 text-amber-900 px-2 py-1 rounded text-xs font-semibold">Zahnarzt</span>
+            <span class="bg-amber-100 border border-amber-300 text-amber-900 px-2 py-1 rounded text-xs font-semibold">Tornesch</span>
+            <span class="bg-amber-100 border border-amber-300 text-amber-900 px-2 py-1 rounded text-xs font-semibold">Sabah Dentalmedizin</span>
+          </div>
+          <div class="text-xs text-zinc-500 mt-2">→ keine Sitemap-Lesart, kein "soll/ist"-Unterschied</div>
+        </div>
+      </div>
+      <div>
+        <div class="font-semibold text-zinc-700 mb-2 flex items-center gap-2">
+          <span class="bg-emerald-100 text-emerald-800 text-[10px] uppercase px-2 py-0.5 rounded">Nachher</span>
+          Mit Parent-Pillar-Hypothese
+        </div>
+        <div class="bg-emerald-50/40 border border-emerald-200 rounded-lg p-3">
+          <div class="text-xs text-zinc-600 mb-2">1 Parent + diese Page + projizierte Geschwister:</div>
+          <div class="space-y-1.5">
+            <div class="text-xs"><span class="font-mono bg-amber-100 border border-amber-300 text-amber-900 px-1.5 rounded">PARENT</span> Zahnarzt in Tornesch (hypothetisch)</div>
+            <div class="text-xs ml-4"><span class="font-mono bg-sky-100 border border-sky-300 text-sky-900 px-1.5 rounded">HIER</span> Sabah Dentalmedizin</div>
+            <div class="text-xs ml-4 text-zinc-500">+ 9 fehlende Service-Page-Geschwister</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom explainer -->
+  <div class="bg-blue-50 border border-blue-200 rounded-lg p-5 text-sm">
+    <div class="flex items-start gap-3">
+      <svg class="w-5 h-5 text-blue-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <div>
+        <div class="font-semibold text-blue-900 mb-1">Was diese Variante kann (und was nicht)</div>
+        <div class="text-blue-900/80 space-y-1">
+          <p><strong>✓</strong> Behebt das konkrete Problem aus deinem Beispiel: das 3-Pillar-Dreieck verwirrt, weil keine Hierarchie sichtbar wird. Diese Variante stellt die Hierarchie explizit her.</p>
+          <p><strong>✓</strong> Kleinster Eingriff von den drei "Empfehlungs-Optionen": passt komplett ins Page Profile, kein neues View-Konzept.</p>
+          <p><strong>✓</strong> Funktioniert auch ohne separate Tree-Ansicht — also gut kombinierbar mit "Entity Map bleibt das Hauptbild".</p>
+          <p><strong>✗</strong> Zeigt <em>keine</em> URL-Slugs, H1s oder konkreten Page-Empfehlungen pro Subtopic (das macht A+B+C).</p>
+          <p><strong>✗</strong> Bleibt ein 2-Ebenen-Blick (Parent + Siblings), keine vollständige Sitemap.</p>
+          <p><strong>!</strong> Risiko: Hypothesen werden oft als "Fakten" gelesen — UI muss klar machen, dass der Parent <em>vorgeschlagen</em> ist und vom LLM stammt, nicht gecrawlt wurde.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
