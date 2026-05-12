@@ -16,14 +16,19 @@ import { fetchSerpTopUrls } from "@/lib/nlp/serp";
 
 export const maxDuration = 900;
 
-const ROUTE_VERSION = "2026-05-12.6-keyword-sse-mapreduce";
+const ROUTE_VERSION = "2026-05-12.7-keyword-sse-mapreduce-20k";
 
 const TOP_N_URLS = 5;
 const PER_URL_RESERVE_CHARS = 200;
+// Concat-mode (single/2step/3step/4step) shares one MAX_TEXT_CHARS budget
+// across all 5 sources, so each gets ~4-5k chars.
 const PER_URL_MAX_CHARS = Math.max(
   1200,
   Math.floor((MAX_TEXT_CHARS - PER_URL_RESERVE_CHARS * TOP_N_URLS) / TOP_N_URLS)
 );
+// Map-Reduce makes a separate LLM call per source, so each can use the full
+// 20k chars without competing with the others.
+const MAPREDUCE_PER_URL_MAX_CHARS = 20_000;
 
 const bodySchema = z.object({
   keyword: z.string().min(2).max(200),
@@ -160,6 +165,10 @@ export async function POST(request: Request) {
         );
         const fetchDurationMs = Date.now() - fetchStarted;
 
+        const isMapReduce = pipeline === "mapreduce";
+        const perUrlMaxChars = isMapReduce
+          ? MAPREDUCE_PER_URL_MAX_CHARS
+          : PER_URL_MAX_CHARS;
         const sources: ExtractedSource[] = [];
         const usableSections: string[] = [];
         const usableForMapReduce: KeywordMapReduceSource[] = [];
@@ -198,7 +207,7 @@ export async function POST(request: Request) {
             });
             continue;
           }
-          const slice = ex.text.slice(0, PER_URL_MAX_CHARS);
+          const slice = ex.text.slice(0, perUrlMaxChars);
           sources.push({
             position: u.position,
             serpUrl: u.url,
@@ -211,25 +220,32 @@ export async function POST(request: Request) {
             truncated: slice.length < ex.text.length,
             error: null
           });
-          usableSections.push(
-            `## Quelle ${u.position}: ${ex.finalUrl}${ex.title ? `\n### ${ex.title}` : ""}\n\n${slice}`
-          );
-          usableForMapReduce.push({
-            position: u.position,
-            finalUrl: ex.finalUrl,
-            title: ex.title,
-            description: ex.description,
-            text: slice
-          });
+          if (isMapReduce) {
+            usableForMapReduce.push({
+              position: u.position,
+              finalUrl: ex.finalUrl,
+              title: ex.title,
+              description: ex.description,
+              text: slice
+            });
+          } else {
+            usableSections.push(
+              `## Quelle ${u.position}: ${ex.finalUrl}${ex.title ? `\n### ${ex.title}` : ""}\n\n${slice}`
+            );
+          }
         }
+
+        const usableCount = isMapReduce
+          ? usableForMapReduce.length
+          : usableSections.length;
 
         send("crawl-done", {
           sources,
           durationMs: fetchDurationMs,
-          usableCount: usableSections.length
+          usableCount
         });
 
-        if (usableSections.length === 0) {
+        if (usableCount === 0) {
           send("error", {
             _routeVersion: ROUTE_VERSION,
             error:
@@ -243,17 +259,16 @@ export async function POST(request: Request) {
           return finish();
         }
 
-        const concatenated = usableSections.join("\n\n---\n\n");
-        const analyzedChars =
-          pipeline === "mapreduce"
-            ? usableForMapReduce.reduce((sum, s) => sum + s.text.length, 0)
-            : concatenated.length;
+        const concatenated = isMapReduce ? "" : usableSections.join("\n\n---\n\n");
+        const analyzedChars = isMapReduce
+          ? usableForMapReduce.reduce((sum, s) => sum + s.text.length, 0)
+          : concatenated.length;
 
         send("pipeline-start", {
           mode: pipeline,
           keyword,
           analyzedChars,
-          usableCount: usableSections.length
+          usableCount
         });
 
         const onProgress = (event: PipelineProgressEvent) => {
@@ -315,7 +330,7 @@ export async function POST(request: Request) {
 
         // ---------- 3b. Single / 2step / 3step / 4step (concatenated corpus) ----------
         const userMessageBuilder = (text: string) =>
-          `# Der zu analysierende Text\n\nUnten findest du die zusammengesetzten Body-Inhalte der Top-${usableSections.length} Google-SERP-Ergebnisse für das Keyword "${keyword}". Analysiere sie GEMEINSAM, als wären sie ein zusammenhängendes Korpus zum Thema. Extrahiere genau eine konsolidierte semantische Karte des Themas, keine pro-Quelle-Auswertung.\n\n${text}`;
+          `# Der zu analysierende Text\n\nUnten findest du die zusammengesetzten Body-Inhalte der Top-${usableCount} Google-SERP-Ergebnisse für das Keyword "${keyword}". Analysiere sie GEMEINSAM, als wären sie ein zusammenhängendes Korpus zum Thema. Extrahiere genau eine konsolidierte semantische Karte des Themas, keine pro-Quelle-Auswertung.\n\n${text}`;
 
         if (pipeline === "single") {
           onProgress({ type: "step-start", step: "single-shot" });
