@@ -4,11 +4,16 @@ import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { fetchAndExtract } from "@/lib/nlp/extract";
 import { runDeepSeekExtraction, MAX_TEXT_CHARS } from "@/lib/nlp/deepseek";
+import {
+  runPipeline,
+  type PipelineStepMetric,
+  type PipelineMode
+} from "@/lib/nlp/pipeline";
 import { fetchSerpTopUrls } from "@/lib/nlp/serp";
 
 export const maxDuration = 300;
 
-const ROUTE_VERSION = "2026-05-12.3-keyword-mode";
+const ROUTE_VERSION = "2026-05-12.4-keyword-pipeline";
 
 const TOP_N_URLS = 5;
 const PER_URL_RESERVE_CHARS = 200;
@@ -18,7 +23,8 @@ const PER_URL_MAX_CHARS = Math.max(
 );
 
 const bodySchema = z.object({
-  keyword: z.string().min(2).max(200)
+  keyword: z.string().min(2).max(200),
+  pipeline: z.enum(["single", "2step", "3step", "4step"]).default("single")
 });
 
 type ExtractedSource = {
@@ -178,28 +184,94 @@ export async function POST(request: Request) {
   const concatenated = usableSections.join("\n\n---\n\n");
   const analyzedChars = concatenated.length;
 
-  // 3. Call DeepSeek with the concatenated multi-source text.
-  const result = await runDeepSeekExtraction({
+  const userMessageBuilder = (text: string) =>
+    `# Der zu analysierende Text\n\nUnten findest du die zusammengesetzten Body-Inhalte der Top-${usableSections.length} Google-SERP-Ergebnisse für das Keyword "${keyword}". Analysiere sie GEMEINSAM, als wären sie ein zusammenhängendes Korpus zum Thema. Extrahiere genau eine konsolidierte semantische Karte des Themas, keine pro-Quelle-Auswertung.\n\n${text}`;
+
+  // 3. Run extraction (single-shot or multi-step pipeline).
+  if (body.pipeline === "single") {
+    const result = await runDeepSeekExtraction({
+      text: concatenated,
+      routeVersion: ROUTE_VERSION,
+      routeLogPrefix: "nlp/keyword",
+      userMessageBuilder
+    });
+
+    if (!result.ok) {
+      return NextResponse.json(
+        {
+          ...result.body,
+          keyword,
+          serpStatus: serp.status,
+          serpDurationMs,
+          fetchDurationMs,
+          sources
+        },
+        { status: result.status }
+      );
+    }
+
+    const step: PipelineStepMetric = {
+      step: "single-shot",
+      model: result.model,
+      durationMs: result.durationMs,
+      firstChunkMs: result.firstChunkMs,
+      finishReason: result.finishReason,
+      usage: result.usage
+    };
+
+    return NextResponse.json({
+      _routeVersion: ROUTE_VERSION,
+      mode: "keyword",
+      keyword,
+      serpStatus: serp.status,
+      serpDurationMs,
+      fetchDurationMs,
+      sources,
+      analyzedChars,
+      extraction: result.extraction,
+      model: result.model,
+      durationMs: result.durationMs,
+      firstChunkMs: result.firstChunkMs,
+      usage: result.usage,
+      finishReason: result.finishReason,
+      pipeline: {
+        mode: "single" as PipelineMode,
+        steps: [step],
+        totalDurationMs: result.durationMs
+      }
+    });
+  }
+
+  const pipelineResult = await runPipeline(body.pipeline, {
     text: concatenated,
     routeVersion: ROUTE_VERSION,
     routeLogPrefix: "nlp/keyword",
-    userMessageBuilder: (text) =>
-      `# Der zu analysierende Text\n\nUnten findest du die zusammengesetzten Body-Inhalte der Top-${usableSections.length} Google-SERP-Ergebnisse für das Keyword "${keyword}". Analysiere sie GEMEINSAM, als wären sie ein zusammenhängendes Korpus zum Thema. Extrahiere genau eine konsolidierte semantische Karte des Themas, keine pro-Quelle-Auswertung.\n\n${text}`
+    userMessageBuilder,
+    enableThinking: true
   });
 
-  if (!result.ok) {
+  if (!pipelineResult.ok) {
     return NextResponse.json(
       {
-        ...result.body,
+        ...pipelineResult.body,
         keyword,
         serpStatus: serp.status,
         serpDurationMs,
         fetchDurationMs,
-        sources
+        sources,
+        pipeline: {
+          mode: body.pipeline,
+          steps: pipelineResult.stepsCompleted,
+          totalDurationMs: pipelineResult.totalDurationMs,
+          failedStep: pipelineResult.failedStep
+        }
       },
-      { status: result.status }
+      { status: pipelineResult.status }
     );
   }
+
+  const lastStep = pipelineResult.steps[pipelineResult.steps.length - 1];
+  const firstStep = pipelineResult.steps[0];
 
   return NextResponse.json({
     _routeVersion: ROUTE_VERSION,
@@ -210,11 +282,16 @@ export async function POST(request: Request) {
     fetchDurationMs,
     sources,
     analyzedChars,
-    extraction: result.extraction,
-    model: result.model,
-    durationMs: result.durationMs,
-    firstChunkMs: result.firstChunkMs,
-    usage: result.usage,
-    finishReason: result.finishReason
+    extraction: pipelineResult.extraction,
+    model: lastStep?.model ?? null,
+    durationMs: pipelineResult.totalDurationMs,
+    firstChunkMs: firstStep?.firstChunkMs ?? null,
+    usage: lastStep?.usage ?? null,
+    finishReason: lastStep?.finishReason ?? null,
+    pipeline: {
+      mode: pipelineResult.mode,
+      steps: pipelineResult.steps,
+      totalDurationMs: pipelineResult.totalDurationMs
+    }
   });
 }

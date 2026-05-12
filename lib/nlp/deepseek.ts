@@ -4,6 +4,55 @@ import type { ExtractionOutput } from "./types";
 export const DEEPSEEK_TIMEOUT_MS = 290_000;
 export const MAX_TEXT_CHARS = 24_000;
 
+// Default max output tokens for the single-shot extraction. Multi-step
+// pipelines override this per step via runDeepSeekJsonCall.
+const DEFAULT_MAX_TOKENS = 8000;
+
+export type DeepSeekJsonCallSuccess<T> = {
+  ok: true;
+  data: T;
+  endpoint: string;
+  baseURL: string;
+  model: string;
+  durationMs: number;
+  firstChunkMs: number | null;
+  usage: unknown;
+  finishReason: string | null;
+};
+
+export type DeepSeekJsonCallFailure = {
+  ok: false;
+  status: number;
+  body: Record<string, unknown>;
+};
+
+export type DeepSeekJsonCallResult<T> =
+  | DeepSeekJsonCallSuccess<T>
+  | DeepSeekJsonCallFailure;
+
+export type DeepSeekJsonCallOptions = {
+  systemPrompt: string;
+  userMessage: string;
+  routeVersion: string;
+  routeLogPrefix: string;
+  /**
+   * Hard max output tokens for this call. Defaults to DEFAULT_MAX_TOKENS.
+   * Each step in a multi-step pipeline sets this explicitly.
+   */
+  maxTokens?: number;
+  /**
+   * Override the env-var driven thinking/reasoning mode.
+   * - true: enable reasoning (omits the thinking.disabled flag)
+   * - false: explicitly disable reasoning
+   * - undefined: fall back to DEEPSEEK_DISABLE_THINKING env var (default disabled)
+   */
+  enableThinking?: boolean;
+  /**
+   * Optional label included in console logs. Useful when chaining steps.
+   */
+  stepLabel?: string;
+};
+
 export type DeepSeekExtractSuccess = {
   ok: true;
   extraction: ExtractionOutput;
@@ -16,13 +65,11 @@ export type DeepSeekExtractSuccess = {
   finishReason: string | null;
 };
 
-export type DeepSeekExtractFailure = {
-  ok: false;
-  status: number;
-  body: Record<string, unknown>;
-};
+export type DeepSeekExtractFailure = DeepSeekJsonCallFailure;
 
-export type DeepSeekExtractResult = DeepSeekExtractSuccess | DeepSeekExtractFailure;
+export type DeepSeekExtractResult =
+  | DeepSeekExtractSuccess
+  | DeepSeekExtractFailure;
 
 export type DeepSeekExtractOptions = {
   text: string;
@@ -34,11 +81,53 @@ export type DeepSeekExtractOptions = {
 const defaultUserMessageBuilder = (text: string) =>
   `# Der zu analysierende Text:\n\n${text}`;
 
+/**
+ * Single-shot extraction call using the unified EXTRACTION_SYSTEM_PROMPT.
+ * Kept for backwards compatibility with the existing routes' "single"
+ * pipeline mode.
+ */
 export async function runDeepSeekExtraction(
   options: DeepSeekExtractOptions
 ): Promise<DeepSeekExtractResult> {
-  const { text, routeVersion, routeLogPrefix } = options;
   const buildUserMessage = options.userMessageBuilder ?? defaultUserMessageBuilder;
+  const result = await runDeepSeekJsonCall<ExtractionOutput>({
+    systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+    userMessage: buildUserMessage(options.text),
+    routeVersion: options.routeVersion,
+    routeLogPrefix: options.routeLogPrefix,
+    maxTokens: DEFAULT_MAX_TOKENS,
+    stepLabel: "single-shot"
+  });
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    extraction: result.data,
+    endpoint: result.endpoint,
+    baseURL: result.baseURL,
+    model: result.model,
+    durationMs: result.durationMs,
+    firstChunkMs: result.firstChunkMs,
+    usage: result.usage,
+    finishReason: result.finishReason
+  };
+}
+
+/**
+ * Generic DeepSeek JSON-mode call. Used by both runDeepSeekExtraction and
+ * the multi-step pipeline orchestrators in lib/nlp/pipeline.ts.
+ */
+export async function runDeepSeekJsonCall<T>(
+  options: DeepSeekJsonCallOptions
+): Promise<DeepSeekJsonCallResult<T>> {
+  const {
+    systemPrompt,
+    userMessage,
+    routeVersion,
+    routeLogPrefix,
+    maxTokens = DEFAULT_MAX_TOKENS,
+    enableThinking,
+    stepLabel
+  } = options;
 
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
@@ -59,23 +148,29 @@ export async function runDeepSeekExtraction(
   );
   const endpoint = `${baseURL}/chat/completions`;
   const modelId = process.env.DEEPSEEK_MODEL || "deepseek-v4-pro";
+
+  // Thinking/reasoning: an explicit param wins over the env var.
   const disableThinking =
-    (process.env.DEEPSEEK_DISABLE_THINKING ?? "true").toLowerCase() !== "false";
+    enableThinking === undefined
+      ? (process.env.DEEPSEEK_DISABLE_THINKING ?? "true").toLowerCase() !== "false"
+      : !enableThinking;
 
   const requestBody: Record<string, unknown> = {
     model: modelId,
     temperature: 0.1,
     stream: true,
+    max_tokens: maxTokens,
     response_format: { type: "json_object" },
     messages: [
-      { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
-      { role: "user", content: buildUserMessage(text) }
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMessage }
     ]
   };
   if (disableThinking) requestBody.thinking = { type: "disabled" };
 
+  const label = stepLabel ? ` step=${stepLabel}` : "";
   console.log(
-    `[${routeLogPrefix} ${routeVersion}] POST ${endpoint} model=${modelId} thinking=${disableThinking ? "disabled" : "enabled"} stream=true textChars=${text.length}`
+    `[${routeLogPrefix} ${routeVersion}]${label} POST ${endpoint} model=${modelId} thinking=${disableThinking ? "disabled" : "enabled"} stream=true max_tokens=${maxTokens} sysChars=${systemPrompt.length} userChars=${userMessage.length}`
   );
 
   const started = Date.now();
@@ -106,14 +201,15 @@ export async function runDeepSeekExtraction(
           ? "DeepSeek request timed out (no response headers within timeout)"
           : (err as Error)?.message ?? "Network error calling DeepSeek",
         endpoint,
-        model: modelId
+        model: modelId,
+        stepLabel
       }
     };
   }
 
   const headersAt = Date.now();
   console.log(
-    `[${routeLogPrefix} ${routeVersion}] headers status=${upstreamRes.status} in ${headersAt - started}ms`
+    `[${routeLogPrefix} ${routeVersion}]${label} headers status=${upstreamRes.status} in ${headersAt - started}ms`
   );
 
   if (!upstreamRes.ok) {
@@ -149,6 +245,7 @@ export async function runDeepSeekExtraction(
         url: endpoint,
         baseURL,
         model: modelId,
+        stepLabel,
         responseBody: parsedBody
       }
     };
@@ -163,7 +260,8 @@ export async function runDeepSeekExtraction(
         _routeVersion: routeVersion,
         error: "DeepSeek returned empty stream",
         endpoint,
-        model: modelId
+        model: modelId,
+        stepLabel
       }
     };
   }
@@ -183,7 +281,7 @@ export async function runDeepSeekExtraction(
       if (firstChunkAt === null) {
         firstChunkAt = Date.now();
         console.log(
-          `[${routeLogPrefix} ${routeVersion}] first chunk after ${firstChunkAt - started}ms`
+          `[${routeLogPrefix} ${routeVersion}]${label} first chunk after ${firstChunkAt - started}ms`
         );
       }
       buffer += decoder.decode(value, { stream: true });
@@ -220,6 +318,7 @@ export async function runDeepSeekExtraction(
           : (err as Error)?.message ?? "Stream read error",
         endpoint,
         model: modelId,
+        stepLabel,
         firstChunkMs: firstChunkAt ? firstChunkAt - started : null,
         partial: resultText.slice(0, 2000)
       }
@@ -228,7 +327,7 @@ export async function runDeepSeekExtraction(
   clearTimeout(timer);
 
   console.log(
-    `[${routeLogPrefix} ${routeVersion}] stream complete in ${Date.now() - started}ms, ${resultText.length} chars, finish=${finishReason}`
+    `[${routeLogPrefix} ${routeVersion}]${label} stream complete in ${Date.now() - started}ms, ${resultText.length} chars, finish=${finishReason}`
   );
 
   if (!resultText) {
@@ -240,14 +339,15 @@ export async function runDeepSeekExtraction(
         error: "DeepSeek stream produced no content",
         endpoint,
         model: modelId,
+        stepLabel,
         firstChunkMs: firstChunkAt ? firstChunkAt - started : null
       }
     };
   }
 
-  let extraction: ExtractionOutput;
+  let data: T;
   try {
-    extraction = parseJsonFromText<ExtractionOutput>(resultText);
+    data = parseJsonFromText<T>(resultText);
   } catch (err: unknown) {
     return {
       ok: false,
@@ -256,6 +356,8 @@ export async function runDeepSeekExtraction(
         _routeVersion: routeVersion,
         error: "LLM response could not be parsed as JSON",
         details: (err as Error)?.message ?? String(err),
+        stepLabel,
+        finishReason,
         raw: resultText
       }
     };
@@ -263,7 +365,7 @@ export async function runDeepSeekExtraction(
 
   return {
     ok: true,
-    extraction,
+    data,
     endpoint,
     baseURL,
     model: modelId,

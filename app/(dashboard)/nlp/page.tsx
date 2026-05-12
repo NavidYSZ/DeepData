@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Loader2,
   Sparkles,
@@ -10,7 +10,11 @@ import {
   Tag,
   FileText,
   Network,
-  Map as MapIcon
+  Map as MapIcon,
+  CheckCircle2,
+  ChevronRight,
+  Zap,
+  Layers
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +73,22 @@ type KeywordSource = {
   error: string | null;
 };
 
+type PipelineStepMetric = {
+  step: string;
+  model: string;
+  durationMs: number;
+  firstChunkMs: number | null;
+  finishReason: string | null;
+  usage: unknown;
+};
+
+type PipelineInfo = {
+  mode: Pipeline;
+  steps: PipelineStepMetric[];
+  totalDurationMs: number;
+  failedStep?: string;
+};
+
 type LlmResponse = {
   // Either an `extracted` (URL mode) or `sources` (keyword mode) is present.
   extracted?: Extracted;
@@ -82,14 +102,18 @@ type LlmResponse = {
   analyzedChars?: number;
   serpDurationMs?: number;
   fetchDurationMs?: number;
+  // Pipeline metadata (single-shot or multi-step):
+  pipeline?: PipelineInfo;
 };
 
 type Mode = "google" | "llm";
 type LlmInput = "url" | "keyword";
+type Pipeline = "single" | "2step" | "3step" | "4step";
 
 export default function NlpPage() {
   const [mode, setMode] = useState<Mode>("google");
   const [llmInput, setLlmInput] = useState<LlmInput>("url");
+  const [pipeline, setPipeline] = useState<Pipeline>("single");
   const [url, setUrl] = useState("");
   const [sentiment, setSentiment] = useState(true);
   const [entities, setEntities] = useState(true);
@@ -126,8 +150,8 @@ export default function NlpPage() {
         const endpoint = llmInput === "keyword" ? "/api/nlp/keyword" : "/api/nlp/llm";
         const payload =
           llmInput === "keyword"
-            ? { keyword: url.trim() }
-            : { url: url.trim() };
+            ? { keyword: url.trim(), pipeline }
+            : { url: url.trim(), pipeline };
         const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -208,7 +232,10 @@ export default function NlpPage() {
       >
         <div className="space-y-3">
           {mode === "llm" ? (
-            <LlmInputSwitch value={llmInput} onChange={setLlmInput} disabled={loading} />
+            <div className="flex flex-wrap items-center gap-2">
+              <LlmInputSwitch value={llmInput} onChange={setLlmInput} disabled={loading} />
+              <PipelineSelector value={pipeline} onChange={setPipeline} disabled={loading} />
+            </div>
           ) : null}
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
@@ -290,6 +317,10 @@ export default function NlpPage() {
 
       {mode === "google" && googleData?.nlp && Object.keys(googleData.nlp).length > 0 ? (
         <GoogleResults result={googleData.nlp} />
+      ) : null}
+
+      {mode === "llm" && llmData?.pipeline && llmData.pipeline.mode !== "single" ? (
+        <PipelineStepsCard pipeline={llmData.pipeline} />
       ) : null}
 
       {mode === "llm" && llmData?.extraction ? (
@@ -497,6 +528,124 @@ function LlmInputSwitch({
         Keyword (Top-5 SERP)
       </button>
     </div>
+  );
+}
+
+const PIPELINE_OPTIONS: Array<{
+  value: Pipeline;
+  label: string;
+  hint: string;
+  icon: ReactNode;
+}> = [
+  {
+    value: "single",
+    label: "Single",
+    hint: "1 LLM-Call, alle 6 Phasen",
+    icon: <Zap className="h-3.5 w-3.5" />
+  },
+  {
+    value: "2step",
+    label: "2-Step",
+    hint: "Phasen 1-5, dann Sitemap",
+    icon: <Layers className="h-3.5 w-3.5" />
+  },
+  {
+    value: "3step",
+    label: "3-Step",
+    hint: "KG, SEO, Sitemap (+Reasoning)",
+    icon: <Layers className="h-3.5 w-3.5" />
+  },
+  {
+    value: "4step",
+    label: "4-Step",
+    hint: "Entities, Relations, SEO, Sitemap (+Reasoning)",
+    icon: <Layers className="h-3.5 w-3.5" />
+  }
+];
+
+function PipelineSelector({
+  value,
+  onChange,
+  disabled
+}: {
+  value: Pipeline;
+  onChange: (v: Pipeline) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      className="inline-flex overflow-hidden rounded-md border bg-background text-xs"
+      role="group"
+      aria-label="Pipeline-Modus"
+    >
+      {PIPELINE_OPTIONS.map((opt, i) => (
+        <button
+          key={opt.value}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(opt.value)}
+          title={opt.hint}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 transition ${
+            i > 0 ? "border-l" : ""
+          } ${
+            value === opt.value
+              ? "bg-primary text-primary-foreground"
+              : "hover:bg-muted/50 text-foreground"
+          } disabled:opacity-50`}
+        >
+          {opt.icon}
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PipelineStepsCard({ pipeline }: { pipeline: PipelineInfo }) {
+  const stepCount = pipeline.steps.length;
+  const expectedCount =
+    pipeline.mode === "2step" ? 2 : pipeline.mode === "3step" ? 3 : pipeline.mode === "4step" ? 4 : 1;
+  const completedAll = !pipeline.failedStep && stepCount === expectedCount;
+  return (
+    <SectionCard
+      title={`Pipeline · ${pipeline.mode.toUpperCase()}`}
+      description={`${stepCount}/${expectedCount} Steps · ${(
+        pipeline.totalDurationMs / 1000
+      ).toFixed(1)}s total${pipeline.failedStep ? ` · Fehler in ${pipeline.failedStep}` : completedAll ? " · Reasoning aktiviert" : ""}`}
+    >
+      <ol className="flex flex-wrap items-center gap-x-2 gap-y-2 text-sm">
+        {pipeline.steps.map((s, i) => (
+          <li key={s.step} className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${
+                pipeline.failedStep === s.step
+                  ? "border-destructive/60 bg-destructive/10 text-destructive"
+                  : "border-emerald-300 bg-emerald-50/60 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300"
+              }`}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <span className="font-mono">{s.step}</span>
+              <span className="text-muted-foreground">
+                {(s.durationMs / 1000).toFixed(1)}s
+              </span>
+              {s.finishReason && s.finishReason !== "stop" ? (
+                <Badge variant="outline" className="text-[10px]">
+                  {s.finishReason}
+                </Badge>
+              ) : null}
+            </span>
+            {i < pipeline.steps.length - 1 ? (
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+            ) : null}
+          </li>
+        ))}
+        {pipeline.failedStep ? (
+          <li className="text-xs text-destructive">
+            ✗ Pipeline abgebrochen bei <code className="font-mono">{pipeline.failedStep}</code>
+          </li>
+        ) : null}
+      </ol>
+    </SectionCard>
   );
 }
 
