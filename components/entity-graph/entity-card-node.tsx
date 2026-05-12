@@ -4,7 +4,7 @@ import { memo } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
 import { Star, Circle, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { EntityNodeData } from "@/lib/nlp/entity-map";
+import type { EntityNodeData } from "@/lib/entity-graph/transform";
 
 function EntityCardNodeInner({ data, selected }: NodeProps<EntityNodeData>) {
   const { entity, color, incomingCount, outgoingCount } = data;

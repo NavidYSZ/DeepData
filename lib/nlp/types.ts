@@ -1,4 +1,10 @@
-export type SemanticRole = "pillar" | "supporting" | "peripheral";
+import type {
+  EntityGraphEntity,
+  EntityGraphRelation,
+  SemanticRole
+} from "@/lib/entity-graph/types";
+
+export type { SemanticRole } from "@/lib/entity-graph/types";
 
 export type CoverageDepth = "shallow" | "moderate" | "deep";
 
@@ -16,21 +22,8 @@ export type PageType =
 
 export type Intent = "informational" | "commercial" | "transactional" | "navigational";
 
-export type ExtractionEntity = {
-  name: string;
-  canonical_name: string;
-  category: string;
-  mentions: number;
-  definition_in_text: string | null;
-  semantic_role: SemanticRole;
-};
-
-export type ExtractionRelation = {
-  subject: string;
-  predicate: string;
-  object: string;
-  evidence: string;
-};
+export type ExtractionEntity = EntityGraphEntity;
+export type ExtractionRelation = EntityGraphRelation;
 
 export type ExtractionMeta = {
   language: string;

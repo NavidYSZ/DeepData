@@ -1,9 +1,9 @@
 import dagre from "dagre";
 import type { Edge, Node } from "reactflow";
 import type {
-  ExtractionEntity,
-  ExtractionOutput,
-  ExtractionRelation
+  EntityGraphEntity,
+  EntityGraphInput,
+  EntityGraphRelation
 } from "./types";
 
 const CATEGORY_PALETTE = [
@@ -25,25 +25,25 @@ export const NODE_WIDTH = 240;
 export const NODE_HEIGHT = 100;
 
 export type EntityNodeData = {
-  entity: ExtractionEntity;
+  entity: EntityGraphEntity;
   color: string;
   incomingCount: number;
   outgoingCount: number;
 };
 
 export type EntityEdgeData = {
-  relation: ExtractionRelation;
+  relation: EntityGraphRelation;
 };
 
-export type EntityMapResult = {
+export type EntityGraphResult = {
   nodes: Node<EntityNodeData>[];
   edges: Edge<EntityEdgeData>[];
-  orphans: ExtractionRelation[];
-  validRelations: ExtractionRelation[];
+  orphans: EntityGraphRelation[];
+  validRelations: EntityGraphRelation[];
   categoryColors: Record<string, string>;
 };
 
-export function buildCategoryColorMap(entities: ExtractionEntity[]): Record<string, string> {
+export function buildCategoryColorMap(entities: EntityGraphEntity[]): Record<string, string> {
   const categories = Array.from(new Set(entities.map((e) => e.category)));
   const map: Record<string, string> = {};
   categories.forEach((cat, idx) => {
@@ -56,7 +56,7 @@ export function humanizePredicate(p: string): string {
   return p.replace(/_/g, " ");
 }
 
-function buildNameResolver(entities: ExtractionEntity[]): Map<string, string> {
+function buildNameResolver(entities: EntityGraphEntity[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const e of entities) {
     map.set(e.name.toLowerCase().trim(), e.canonical_name);
@@ -65,7 +65,7 @@ function buildNameResolver(entities: ExtractionEntity[]): Map<string, string> {
   return map;
 }
 
-export function transformToReactFlow(data: ExtractionOutput): EntityMapResult {
+export function transformToReactFlow(data: EntityGraphInput): EntityGraphResult {
   const resolver = buildNameResolver(data.entities);
   const categoryColors = buildCategoryColorMap(data.entities);
 
@@ -77,8 +77,8 @@ export function transformToReactFlow(data: ExtractionOutput): EntityMapResult {
     g.setNode(e.canonical_name, { width: NODE_WIDTH, height: NODE_HEIGHT });
   }
 
-  const orphans: ExtractionRelation[] = [];
-  const validRelations: ExtractionRelation[] = [];
+  const orphans: EntityGraphRelation[] = [];
+  const validRelations: EntityGraphRelation[] = [];
   const incomingCount = new Map<string, number>();
   const outgoingCount = new Map<string, number>();
 
@@ -132,8 +132,8 @@ export function transformToReactFlow(data: ExtractionOutput): EntityMapResult {
 
 export function relationsForEntity(
   canonicalName: string,
-  relations: ExtractionRelation[]
-): { outgoing: ExtractionRelation[]; incoming: ExtractionRelation[] } {
+  relations: EntityGraphRelation[]
+): { outgoing: EntityGraphRelation[]; incoming: EntityGraphRelation[] } {
   const outgoing = relations.filter((r) => r.subject === canonicalName);
   const incoming = relations.filter((r) => r.object === canonicalName);
   return { outgoing, incoming };

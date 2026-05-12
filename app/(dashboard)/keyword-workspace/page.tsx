@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import ReactFlow, { Background, Controls, Edge, Node, NodeProps, ReactFlowInstance } from "reactflow";
 import "reactflow/dist/style.css";
 import * as XLSX from "xlsx";
-import { ChevronDown, Columns3, Download, FileSpreadsheet, FileText, LayoutGrid, Loader2, Menu, Play, RefreshCw, Search, Settings2, Upload, X } from "lucide-react";
+import { ChevronDown, Columns3, Download, FileSpreadsheet, FileText, LayoutGrid, Loader2, Menu, Network, Play, RefreshCw, Search, Settings2, Upload, X } from "lucide-react";
 import { useSite } from "@/components/dashboard/site-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,7 @@ import {
   type UploadImportCompletePayload
 } from "@/components/keyword-workspace/upload-dialog";
 import { ExternalBadge } from "@/components/keyword-workspace/external-badge";
+import { WorkspaceEntityMapView } from "@/components/keyword-workspace/entity-map-view";
 
 type SerpKeyword = { id: string; kwRaw: string; demandMonthly: number; demandSource?: string; difficultyScore?: number | null };
 type SerpSubcluster = {
@@ -465,6 +467,22 @@ export default function KeywordWorkspacePage() {
   const [keywordScopeMode, setKeywordScopeMode] = useState<KeywordScopeMode>("project");
   const [uploadScopeSourceId, setUploadScopeSourceId] = useState<string | null>(null);
   const [uploadScopeSourceName, setUploadScopeSourceName] = useState<string | null>(null);
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const view: "cluster" | "entity-map" =
+    searchParams.get("view") === "entity-map" ? "entity-map" : "cluster";
+  const handleViewChange = useCallback(
+    (next: "cluster" | "entity-map") => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === "cluster") params.delete("view");
+      else params.set("view", next);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [searchParams, router, pathname]
+  );
 
   const createMinDemand = useMemo(() => {
     const parsed = Number(createMinDemandInput);
@@ -956,8 +974,28 @@ export default function KeywordWorkspacePage() {
   }
 
   return (
-    <div ref={canvasRef} className="relative h-full w-full overflow-hidden bg-card">
-      {showTopLeftMeta ? (
+    <div
+      ref={canvasRef}
+      className={`relative h-full w-full bg-card ${view === "cluster" ? "overflow-hidden" : "overflow-y-auto"}`}
+    >
+      <div className="absolute top-3 left-1/2 z-30 -translate-x-1/2">
+        <div className="inline-flex items-center gap-1 rounded-full border bg-card/95 p-1 shadow-lg backdrop-blur-md">
+          <ViewTab
+            active={view === "cluster"}
+            onClick={() => handleViewChange("cluster")}
+            icon={<LayoutGrid className="h-3.5 w-3.5" />}
+            label="Cluster"
+          />
+          <ViewTab
+            active={view === "entity-map"}
+            onClick={() => handleViewChange("entity-map")}
+            icon={<Network className="h-3.5 w-3.5" />}
+            label="Entity Map"
+          />
+        </div>
+      </div>
+
+      {view === "cluster" && showTopLeftMeta ? (
         <div className="absolute top-3 left-3 text-[11px] text-muted-foreground z-10">
           <div>
             Stand{" "}
@@ -996,8 +1034,8 @@ export default function KeywordWorkspacePage() {
       ) : null}
 
       {/* ── Search bar ── */}
-      {!isRunning && hasClusterData && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center w-full max-w-lg px-4">
+      {view === "cluster" && !isRunning && hasClusterData && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center w-full max-w-lg px-4">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -1075,55 +1113,72 @@ export default function KeywordWorkspacePage() {
         </div>
       )}
 
-      <div className="absolute top-4 right-4 z-20 flex gap-2">
-        {selectedClusterId && !isRunning && hasClusterData ? (
-          <Button
-            type="button"
-            size="icon"
-            className="h-11 w-11 rounded-full border border-primary/70 bg-primary text-primary-foreground shadow-2xl transition-transform duration-200 hover:scale-105"
-            onClick={handleBack}
-            aria-label="Zur Cluster-Übersicht"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
-        ) : null}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+      {view === "cluster" && (
+        <div className="absolute top-4 right-4 z-20 flex gap-2">
+          {selectedClusterId && !isRunning && hasClusterData ? (
             <Button
               type="button"
               size="icon"
               className="h-11 w-11 rounded-full border border-primary/70 bg-primary text-primary-foreground shadow-2xl transition-transform duration-200 hover:scale-105"
-              aria-label="Menü"
+              onClick={handleBack}
+              aria-label="Zur Cluster-Übersicht"
             >
-              <Menu className="h-4 w-4" />
+              <LayoutGrid className="h-4 w-4" />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            sideOffset={10}
-            className="w-56 rounded-xl border-border/70 bg-card/95 p-1.5 shadow-2xl backdrop-blur-md"
-          >
-            <DropdownMenuItem
-              className="cursor-pointer rounded-lg px-3 py-2 text-sm font-medium"
-              onClick={() => toast.info("Settings findest du im Dock (Zahnrad unten).")}
+          ) : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                className="h-11 w-11 rounded-full border border-primary/70 bg-primary text-primary-foreground shadow-2xl transition-transform duration-200 hover:scale-105"
+                aria-label="Menü"
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              sideOffset={10}
+              className="w-56 rounded-xl border-border/70 bg-card/95 p-1.5 shadow-2xl backdrop-blur-md"
             >
-              <Settings2 className="mr-2 h-4 w-4 text-muted-foreground" />
-              Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="cursor-pointer rounded-lg px-3 py-2 text-sm font-medium"
-              disabled={isRunning || !hasClusterData}
-              onClick={() => setExportDialogOpen(true)}
-            >
-              <Download className="mr-2 h-4 w-4 text-muted-foreground" />
-              Export
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+              <DropdownMenuItem
+                className="cursor-pointer rounded-lg px-3 py-2 text-sm font-medium"
+                onClick={() => toast.info("Settings findest du im Dock (Zahnrad unten).")}
+              >
+                <Settings2 className="mr-2 h-4 w-4 text-muted-foreground" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-pointer rounded-lg px-3 py-2 text-sm font-medium"
+                disabled={isRunning || !hasClusterData}
+                onClick={() => setExportDialogOpen(true)}
+              >
+                <Download className="mr-2 h-4 w-4 text-muted-foreground" />
+                Export
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
 
-      {isRunning ? (
+      {view === "entity-map" ? (
+        <div className="px-4 pb-6 pt-20">
+          {!hasClusterData ? (
+            <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
+              Noch kein SERP-Clustering gelaufen. Wechsle in die Cluster-Ansicht und starte einen Run.
+            </div>
+          ) : (
+            <WorkspaceEntityMapView
+              subclusters={subclusters ?? []}
+              siteUrl={workspace?.siteUrl ?? site}
+              runId={serpData?.runId ?? null}
+              generatedAt={serpData?.generatedAt ?? null}
+            />
+          )}
+        </div>
+      ) : isRunning ? (
         <div className="h-full flex flex-col items-center justify-center gap-4">
           <Loader2 className="h-10 w-10 animate-spin text-primary" />
           <div className="text-center space-y-1">
@@ -1163,6 +1218,7 @@ export default function KeywordWorkspacePage() {
         </ReactFlow>
       )}
 
+      {view === "cluster" && (
       <div className="pointer-events-none absolute inset-0 flex items-end justify-center pb-3">
         <div className="pointer-events-auto bg-card/90 backdrop-blur-sm border rounded-full shadow-lg px-3 py-2 flex items-center gap-2 text-xs">
           <Select value={selectedRunId ?? ""} onValueChange={handleRunChange} disabled={!runList?.length}>
@@ -1285,6 +1341,7 @@ export default function KeywordWorkspacePage() {
           </Button>
         </div>
       </div>
+      )}
 
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
         <DialogContent className="max-w-[680px] rounded-2xl border-border/70 bg-card/95 p-0 backdrop-blur-md">
@@ -1485,5 +1542,33 @@ export default function KeywordWorkspacePage() {
         />
       )}
     </div>
+  );
+}
+
+function ViewTab({
+  active,
+  onClick,
+  icon,
+  label
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        active
+          ? "inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground shadow-sm"
+          : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+      }
+      aria-pressed={active}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -12,22 +12,50 @@ import ReactFlow, {
   type NodeMouseHandler
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { transformToReactFlow, type EntityNodeData } from "@/lib/nlp/entity-map";
-import type { ExtractionOutput } from "@/lib/nlp/types";
+import { cn } from "@/lib/utils";
+import { transformToReactFlow, type EntityNodeData } from "@/lib/entity-graph/transform";
+import type { EntityGraphEntity, EntityGraphInput } from "@/lib/entity-graph/types";
 import { EntityCardNode } from "./entity-card-node";
 import { EntitySidebar } from "./entity-sidebar";
 
 const nodeTypes = { entityCard: EntityCardNode };
 
-export function EntityMap({ data }: { data: ExtractionOutput }) {
+export type SidebarRenderArgs = {
+  selectedEntity: EntityGraphEntity | null;
+  onSelectEntity: (canonicalName: string) => void;
+  onClearSelection: () => void;
+  categoryColors: Record<string, string>;
+};
+
+export type SidebarConfig = {
+  collapsedLabel: string;
+  headerTitle: string;
+  headerIcon?: ReactNode;
+  body: ReactNode;
+  showCloseButton?: boolean;
+};
+
+export type EntityMapProps = {
+  data: EntityGraphInput;
+  renderSidebar?: (args: SidebarRenderArgs) => SidebarConfig;
+  orphansLabel?: (count: number) => string;
+  heightClass?: string;
+};
+
+export function EntityMap(props: EntityMapProps) {
   return (
     <ReactFlowProvider>
-      <EntityMapInner data={data} />
+      <EntityMapInner {...props} />
     </ReactFlowProvider>
   );
 }
 
-function EntityMapInner({ data }: { data: ExtractionOutput }) {
+function EntityMapInner({
+  data,
+  renderSidebar,
+  orphansLabel,
+  heightClass = "h-[78vh]"
+}: EntityMapProps) {
   const { nodes: initialNodes, edges: initialEdges, orphans, categoryColors } = useMemo(
     () => transformToReactFlow(data),
     [data]
@@ -105,8 +133,20 @@ function EntityMapInner({ data }: { data: ExtractionOutput }) {
     [data.entities, selectedId]
   );
 
+  const handleSelectEntity = useCallback((canonicalName: string) => {
+    setSelectedId(canonicalName);
+  }, []);
+  const handleClearSelection = useCallback(() => setSelectedId(null), []);
+
+  const sidebarConfig = renderSidebar?.({
+    selectedEntity,
+    onSelectEntity: handleSelectEntity,
+    onClearSelection: handleClearSelection,
+    categoryColors
+  });
+
   return (
-    <div className="relative h-[78vh] w-full overflow-hidden rounded-lg border bg-muted/20">
+    <div className={cn("relative w-full overflow-hidden rounded-lg border bg-muted/20", heightClass)}>
       <ReactFlow
         nodes={styledNodes}
         edges={styledEdges}
@@ -139,17 +179,21 @@ function EntityMapInner({ data }: { data: ExtractionOutput }) {
 
       {orphans.length > 0 ? (
         <div className="pointer-events-none absolute left-3 top-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300">
-          {orphans.length} Relation{orphans.length === 1 ? "" : "en"} ohne passende Entity übersprungen
+          {orphansLabel?.(orphans.length) ??
+            `${orphans.length} Relation${orphans.length === 1 ? "" : "en"} ohne passende Entity übersprungen`}
         </div>
       ) : null}
 
-      <EntitySidebar
-        data={data}
-        categoryColors={categoryColors}
-        selectedEntity={selectedEntity}
-        onClearSelection={() => setSelectedId(null)}
-        onSelectEntity={(id) => setSelectedId(id)}
-      />
+      {sidebarConfig ? (
+        <EntitySidebar
+          collapsedLabel={sidebarConfig.collapsedLabel}
+          headerTitle={sidebarConfig.headerTitle}
+          headerIcon={sidebarConfig.headerIcon}
+          body={sidebarConfig.body}
+          onClose={handleClearSelection}
+          showCloseButton={sidebarConfig.showCloseButton ?? selectedEntity !== null}
+        />
+      ) : null}
     </div>
   );
 }

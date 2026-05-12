@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Sparkles, ExternalLink, Brain, Cloud } from "lucide-react";
+import { Loader2, Sparkles, ExternalLink, Brain, Cloud, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +9,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { PageHeader, SectionCard } from "@/components/dashboard/page-shell";
-import { EntityMap } from "@/components/nlp/entity-map";
+import { EntityMap } from "@/components/entity-graph/entity-map";
+import { EntityDetailPanel } from "@/components/nlp/entity-detail-panel";
+import { SeoInsightsPanel } from "@/components/nlp/seo-insights-panel";
 import { PageProfile } from "@/components/nlp/page-profile";
 import type { ExtractionOutput } from "@/lib/nlp/types";
 
@@ -217,7 +219,29 @@ export default function NlpPage() {
             ).toFixed(1)}s extrahiert. Pillar-Entities sind gelb umrandet.`}
             contentClassName="!p-0"
           >
-            <EntityMap data={llmData.extraction} />
+            <EntityMap
+              data={llmData.extraction}
+              renderSidebar={({ selectedEntity, onSelectEntity, categoryColors }) => ({
+                collapsedLabel: selectedEntity?.canonical_name ?? "Insights",
+                headerTitle: selectedEntity?.canonical_name ?? "SEO Insights",
+                headerIcon: selectedEntity ? (
+                  <Tag className="h-4 w-4 shrink-0 text-muted-foreground" />
+                ) : (
+                  <Sparkles className="h-4 w-4 shrink-0 text-muted-foreground" />
+                ),
+                body: selectedEntity ? (
+                  <EntityDetailPanel
+                    entity={selectedEntity}
+                    color={categoryColors[selectedEntity.category] ?? "#64748b"}
+                    relations={llmData.extraction.relations}
+                    onSelectEntity={onSelectEntity}
+                  />
+                ) : (
+                  <SeoInsightsPanel data={llmData.extraction} />
+                ),
+                showCloseButton: selectedEntity !== null
+              })}
+            />
           </SectionCard>
         </>
       ) : null}
