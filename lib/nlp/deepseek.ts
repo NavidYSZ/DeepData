@@ -1,12 +1,15 @@
 import { EXTRACTION_SYSTEM_PROMPT } from "./extraction-prompt";
 import type { ExtractionOutput } from "./types";
 
-export const DEEPSEEK_TIMEOUT_MS = 290_000;
+export const DEEPSEEK_TIMEOUT_MS = 900_000;
 export const MAX_TEXT_CHARS = 24_000;
 
 // Default max output tokens for the single-shot extraction. Multi-step
 // pipelines override this per step via runDeepSeekJsonCall.
-const DEFAULT_MAX_TOKENS = 8000;
+// DeepSeek v4-pro supports up to 380k output tokens (verified by user);
+// max_tokens covers reasoning + content together, so we set this fat
+// to leave headroom for thinking mode.
+const DEFAULT_MAX_TOKENS = 380_000;
 
 export type DeepSeekJsonCallSuccess<T> = {
   ok: true;

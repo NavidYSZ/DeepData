@@ -11,9 +11,9 @@ import {
 } from "@/lib/nlp/pipeline";
 import { fetchSerpTopUrls } from "@/lib/nlp/serp";
 
-export const maxDuration = 300;
+export const maxDuration = 900;
 
-const ROUTE_VERSION = "2026-05-12.4-keyword-pipeline";
+const ROUTE_VERSION = "2026-05-12.5-keyword-large-budget";
 
 const TOP_N_URLS = 5;
 const PER_URL_RESERVE_CHARS = 200;

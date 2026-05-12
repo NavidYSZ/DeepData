@@ -69,14 +69,16 @@ export type PipelineOptions = {
   enableThinking?: boolean;
 };
 
-// Per-step max output tokens. Tuned so the largest plausible output fits.
+// Per-step max output tokens. DeepSeek v4-pro supports up to 380k output
+// (verified by user) and max_tokens covers reasoning + content together,
+// so every step gets the full budget — reasoning never starves content.
 const TOKENS = {
-  entities: 8000,
-  relations: 6000,
-  seo: 4000,
-  kg: 12000,
-  kgAndSeo: 16000,
-  sitemap: 8000
+  entities: 380_000,
+  relations: 380_000,
+  seo: 380_000,
+  kg: 380_000,
+  kgAndSeo: 380_000,
+  sitemap: 380_000
 } as const;
 
 const defaultUserMessageBuilder = (text: string) =>
