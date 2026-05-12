@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup A+B+C (React Flow) — Empfohlene Sitemap visualisiert</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; }
+
+  /* React Flow canvas */
+  .rf-canvas {
+    position: relative;
+    width: 1400px;
+    height: 720px;
+    background-color: #fafafa;
+    background-image: radial-gradient(circle, #d4d4d8 1px, transparent 1px);
+    background-size: 20px 20px;
+    overflow: hidden;
+  }
+  .rf-scroll {
+    overflow: auto;
+    border: 1px solid #e4e4e7;
+    border-radius: 0.5rem;
+    background: white;
+  }
+
+  /* React Flow node base */
+  .rf-node {
+    position: absolute;
+    background: white;
+    border: 1px solid #e4e4e7;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    overflow: hidden;
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+  .rf-node:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    transform: translateY(-1px);
+  }
+  .rf-node-pillar {
+    border: 2px solid #f59e0b;
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
+  }
+  .rf-node-covered { border-color: #10b981; }
+  .rf-node-gap { border-color: #f59e0b; border-style: dashed; }
+  .rf-node-likely { border-color: #d4d4d8; }
+
+  .rf-stripe { height: 4px; }
+  .rf-stripe-pillar { background: linear-gradient(to right, #f59e0b, #fbbf24); }
+  .rf-stripe-covered { background: #10b981; }
+  .rf-stripe-gap { background: #f59e0b; }
+  .rf-stripe-likely { background: #a1a1aa; }
+
+  /* Node handles (visual only) */
+  .rf-handle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: white;
+    border: 1px solid #71717a;
+    border-radius: 50%;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .rf-handle-top { top: -4px; }
+  .rf-handle-bottom { bottom: -4px; }
+
+  /* Edges layer */
+  .rf-edges {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .rf-edge-path { fill: none; stroke: #a1a1aa; stroke-width: 1.5; }
+  .rf-edge-path-selected { stroke: #3b82f6; stroke-width: 2.5; }
+
+  /* Overlays */
+  .rf-overlay {
+    position: absolute;
+    background: white;
+    border: 1px solid #e4e4e7;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    z-index: 10;
+  }
+  .rf-control-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid #e4e4e7;
+    cursor: pointer;
+    color: #52525b;
+  }
+  .rf-control-btn:last-child { border-bottom: none; }
+  .rf-control-btn:hover { background: #f4f4f5; }
+
+  .mini-node {
+    position: absolute;
+    border-radius: 2px;
+  }
+</style>
+</head>
+<body class="bg-zinc-50 text-zinc-900 min-h-screen">
+
+<!-- Top bar -->
+<div class="border-b border-zinc-200 bg-white">
+  <div class="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="text-sm text-zinc-500">
+      <span class="hover:text-zinc-900 cursor-pointer">NLP Playground</span>
+      <span class="mx-2 text-zinc-300">/</span>
+      <span class="text-zinc-900 font-medium">Sitemap Map (React Flow)</span>
+    </div>
+    <a href="./index.html" class="px-3 py-1.5 rounded-md border border-zinc-200 hover:bg-zinc-50 text-xs">← Alle Varianten</a>
+  </div>
+</div>
+
+<div class="max-w-[1600px] mx-auto px-6 py-6 space-y-5">
+
+  <!-- Header -->
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight">Empfohlene Sitemap — als React-Flow-Graph</h1>
+    <p class="text-sm text-zinc-500 mt-1">
+      Selbe Daten wie in der Listen-Variante A+B+C, aber visualisiert auf dem gleichen React-Flow-Canvas wie die Entity Map.
+      Top-down-Baum mit drei Ebenen (Pillar → Cluster → Service-Page). Edges sind <em>strukturell</em> (immer „is_child_of") — kein
+      Spaghetti-Predicate-Salat. Klick auf eine Node würde rechts ein Detail-Panel öffnen (Mockup unten).
+    </p>
+  </div>
+
+  <!-- Analyzed page card -->
+  <div class="bg-white border border-zinc-200 rounded-lg p-4 flex items-start justify-between">
+    <div>
+      <div class="text-xs uppercase tracking-wide text-zinc-500 mb-1">Analysierte Seite</div>
+      <div class="font-medium">Ihr Zahnarzt in Tornesch — Praxis Sabah-Dentalmedizin</div>
+      <a href="#" class="text-sm text-blue-600 hover:underline">https://www.sabah-dentalmedizin.de/</a>
+    </div>
+    <div class="flex gap-2">
+      <span class="inline-flex items-center rounded-md border border-sky-300 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800">Child-Page / Spoke</span>
+      <span class="inline-flex items-center rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">depth: shallow</span>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="bg-white border border-zinc-200 rounded-lg p-3 flex items-center justify-between flex-wrap gap-3">
+    <div class="flex items-center gap-2 text-xs">
+      <span class="text-zinc-500 uppercase tracking-wide font-semibold mr-2">Filter:</span>
+      <button class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-50">
+        <span class="w-2 h-2 rounded-full bg-amber-400"></span> Pillar
+      </button>
+      <button class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-emerald-300 bg-emerald-50 text-emerald-900">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span> covered_on_page (1)
+      </button>
+      <button class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-300 bg-amber-50 text-amber-900">
+        <span class="w-2 h-2 rounded-full bg-amber-500"></span> content_gap (10)
+      </button>
+      <button class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-zinc-300 bg-zinc-50 text-zinc-700">
+        <span class="w-2 h-2 rounded-full bg-zinc-400"></span> likely_exists_elsewhere (3)
+      </button>
+    </div>
+    <div class="flex items-center gap-2 text-xs">
+      <button class="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-50">Top-Down</button>
+      <button class="px-2.5 py-1 rounded-md border border-zinc-200 bg-zinc-100 text-zinc-500">Left-Right</button>
+      <span class="text-zinc-300 mx-1">|</span>
+      <button class="px-2.5 py-1 rounded-md border border-zinc-300 bg-white hover:bg-zinc-50">Als JSON kopieren</button>
+    </div>
+  </div>
+
+  <!-- THE REACT FLOW CANVAS -->
+  <div class="rf-scroll">
+    <div class="rf-canvas">
+
+      <!-- SVG Edges Layer -->
+      <svg class="rf-edges" viewBox="0 0 1400 720" preserveAspectRatio="none">
+        <!-- arrow marker -->
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#a1a1aa"/>
+          </marker>
+        </defs>
+
+        <!-- Pillar(700, 130) → /leistungen(170, 240) -->
+        <path class="rf-edge-path" d="M 700 130 C 700 185, 170 185, 170 240" marker-end="url(#arrow)"/>
+        <!-- Pillar(700, 130) → /preise(510, 240) -->
+        <path class="rf-edge-path" d="M 700 130 C 700 185, 510 185, 510 240" marker-end="url(#arrow)"/>
+        <!-- Pillar(700, 130) → /notfall(850, 240) -->
+        <path class="rf-edge-path" d="M 700 130 C 700 185, 850 185, 850 240" marker-end="url(#arrow)"/>
+        <!-- Pillar(700, 130) → /praxis(1230, 240) -->
+        <path class="rf-edge-path" d="M 700 130 C 700 185, 1230 185, 1230 240" marker-end="url(#arrow)"/>
+
+        <!-- /leistungen(170, 350) → service nodes (y=470) -->
+        <path class="rf-edge-path" d="M 170 350 C 170 410, 80 410, 80 470" marker-end="url(#arrow)"/>
+        <path class="rf-edge-path" d="M 170 350 C 170 410, 240 410, 240 470" marker-end="url(#arrow)"/>
+        <path class="rf-edge-path" d="M 170 350 C 170 410, 400 410, 400 470" marker-end="url(#arrow)"/>
+        <path class="rf-edge-path" d="M 170 350 C 170 410, 560 410, 560 470" marker-end="url(#arrow)"/>
+        <path class="rf-edge-path" d="M 170 350 C 170 410, 720 410, 720 470" marker-end="url(#arrow)" stroke-dasharray="4 3" opacity="0.4"/>
+
+        <!-- /praxis(1230, 350) → /team and /anfahrt -->
+        <path class="rf-edge-path" d="M 1230 350 C 1230 410, 1140 410, 1140 470" marker-end="url(#arrow)"/>
+        <path class="rf-edge-path" d="M 1230 350 C 1230 410, 1310 410, 1310 470" marker-end="url(#arrow)"/>
+      </svg>
+
+      <!-- PILLAR (root) -->
+      <div class="rf-node rf-node-pillar" style="left:600px; top:20px; width:200px; height:110px;">
+        <div class="rf-handle rf-handle-bottom"></div>
+        <div class="rf-stripe rf-stripe-pillar"></div>
+        <div class="p-3">
+          <div class="flex items-center gap-1 mb-1">
+            <svg class="w-3 h-3 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg>
+            <span class="text-[10px] uppercase tracking-wider font-bold text-amber-700">Pillar Page</span>
+          </div>
+          <code class="text-[11px] font-mono text-zinc-500">/</code>
+          <div class="text-sm font-bold text-zinc-900 mt-0.5 leading-tight">Zahnarztpraxis Tornesch</div>
+          <div class="text-[10px] text-zinc-500 mt-1.5 flex items-center gap-1">
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded">
+              <svg class="w-2 h-2" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+              auf dieser Seite
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- LEVEL 2: /leistungen (covered overview) -->
+      <div class="rf-node rf-node-likely" style="left:80px; top:240px; width:180px; height:110px;">
+        <div class="rf-handle rf-handle-top"></div>
+        <div class="rf-handle rf-handle-bottom"></div>
+        <div class="rf-stripe rf-stripe-likely"></div>
+        <div class="p-3">
+          <div class="text-[10px] uppercase tracking-wider font-semibold text-zinc-500 mb-0.5">Cluster · Overview</div>
+          <code class="text-[11px] font-mono text-zinc-600">/leistungen</code>
+          <div class="text-xs font-semibold text-zinc-900 mt-1 leading-tight">Unsere Leistungen</div>
+          <div class="text-[10px] mt-1.5">
+            <span class="px-1.5 py-0.5 bg-zinc-100 border border-zinc-300 text-zinc-600 rounded">likely exists</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- LEVEL 2: /preise (gap) -->
+      <div class="rf-node rf-node-gap" style="left:420px; top:240px; width:180px; height:110px;">
+        <div class="rf-handle rf-handle-top"></div>
+        <div class="rf-stripe rf-stripe-gap"></div>
+        <div class="p-3">
+          <div class="text-[10px] uppercase tracking-wider font-semibold text-amber-700 mb-0.5">Cluster · Info</div>
+          <code class="text-[11px] font-mono text-zinc-600">/preise</code>
+          <div class="text-xs font-semibold text-zinc-900 mt-1 leading-tight">Kosten & Krankenkasse</div>
+          <div class="text-[10px] mt-1.5">
+            <span class="px-1.5 py-0.5 bg-amber-100 border border-amber-300 text-amber-800 rounded font-semibold">⚠ content gap</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- LEVEL 2: /notfall (gap) -->
+      <div class="rf-node rf-node-gap" style="left:760px; top:240px; width:180px; height:110px;">
+        <div class="rf-handle rf-handle-top"></div>
+        <div class="rf-stripe rf-stripe-gap"></div>
+        <div class="p-3">
+          <div class="text-[10px] uppercase tracking-wider font-semibold text-amber-700 mb-0.5">Cluster · Info</div>
+          <code class="text-[11px] font-mono text-zinc-600">/notfall</code>
+          <div class="text-xs font-semibold text-zinc-900 mt-1 leading-tight">Zahnärztlicher Notdienst</div>
+          <div class="text-[10px] mt-1.5">
+            <span class="px-1.5 py-0.5 bg-amber-100 border border-amber-300 text-amber-800 rounded font-semibold">⚠ content gap</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- LEVEL 2: /praxis (likely) -->
+      <div class="rf-node rf-node-likely" style="left:1140px; top:240px; width:180px; height:110px;">
+        <div class="rf-handle rf-handle-top"></div>
+        <div class="rf-handle rf-handle-bottom"></div>
+        <div class="rf-stripe rf-stripe-likely"></div>
+        <div class="p-3">
+          <div class="text-[10px] uppercase tracking-wider font-semibold text-zinc-500 mb-0.5">Cluster · Praxis</div>
+          <code class="text-[11px] font-mono text-zinc-600">/praxis</code>
+          <div class="text-xs font-semibold text-zinc-900 mt-1 leading-tight">Die Praxis</div>
+          <div class="text-[10px] mt-1.5">
+            <span class="px-1.5 py-0.5 bg-zinc-100 border border-zinc-300 text-zinc-600 rounded">likely exists</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- LEVEL 3 under /leistungen -->
+      <div class="rf-node rf-node-gap" style="left:10px; top:470px; width:140px; height:100px;">
+        <div class="rf-handle rf-handle-top"></div>
+        <div class="rf-stripe rf-stripe-gap"></div>
+        <div class="p-2.5">
+          <div class="text-[9px] uppercase tracking-wider font-semibold text-amber-700">Service-Page</div>
+          <code class="text-[10px] font-mono text-zinc-600 block truncate">/implantologie</code>
+          <div class="text-[11px] font-semibold text-zinc-900 mt-1 leading-tight">Zahnimplantate</div>
+          <div class="text-[9px] text-zinc-500 mt-1">3 entities · target: <em>"zahnimplantat tornesch"</em></div>
+        </div>
+      </div>
+
+      <div class="rf-node rf-node-gap" style="left:170px; top:470px; width:140px; height:100px;">
+        <div class="rf-handle rf-handle-top"></div>
+        <div class="rf-stripe rf-stripe-gap"></div>
+        <div class="p-2.5">
+          <div class="text-[9px] uppercase tracking-wider font-semibold text-amber-700">Service-Page</div>
+          <code class="text-[10px] font-mono text-zinc-600 block truncate">/prophylaxe</code>
+          <div class="text-[11px] font-semibold text-zinc-900 mt-1 leading-tight">PZR & Prophylaxe</div>
+          <div class="text-[9px] text-zinc-500 mt-1">2 entities · target: <em>"pzr tornesch"</em></div>
+        </div>
+      </div>
+
+      <div class="rf-node rf-node-gap" style="left:330px; top:470px; width:140px; height:100px;">
+        <div class="rf-handle rf-handle-top"></div>
+        <div class="rf-stripe rf-stripe-gap"></div>
+        <div class="p-2.5">
+          <div class="text-[9px] uppercase tracking-wider font-semibold text-amber-700">Service-Page</div>
+          <code class="text-[10px] font-mono text-zinc-600 block truncate">/aesthetik</code>
+          <div class="text-[11px] font-semibold text-zinc-900 mt-1 leading-tight">Ästhetische Zahnheilkunde</div>
+          <div class="text-[9px] text-zinc-500 mt-1">2 entities · <em>"veneers preise"</em></div>
+        </div>
+      </div>
+
+      <div class="rf-node rf-node-gap" style="left:490px; top:470px; width:140px; height:100px;">
+        <div class="rf-handle rf-handle-top"></div>
+        <div class="rf-stripe rf-stripe-gap"></div>
+        <div class="p-2.5">
+          <div class="text-[9px] uppercase tracking-wider font-semibold text-amber-700">Service-Page</div>
+          <code class="text-[10px] font-mono text-zinc-600 block truncate">/wurzelbehandlung</code>
+          <div class="text-[11px] font-semibold text-zinc-900 mt-1 leading-tight">Wurzelbehandlung</div>
+          <div class="text-[9px] text-zinc-500 mt-1">2 entities · Endodontie</div>
+        </div>
+      </div>
+
+      <!-- ellipsis "more" -->
+      <div class="rf-node" style="left:650px; top:470px; width:140px; height:100px; border-style:dashed; background:#fafafa;">
+        <div class="rf-handle rf-handle-top"></div>
+        <div class="p-2.5 h-full flex flex-col items-center justify-center text-center">
+          <div class="text-2xl text-zinc-400 leading-none mb-1">⋯</div>
+          <div class="text-[10px] text-zinc-500 leading-tight">+4 weitere<br>Service-Pages</div>
+          <div class="text-[9px] text-zinc-400 mt-1">Zahnersatz · Kinder · Zahnfleisch · Zahnkorrektur</div>
+        </div>
+      </div>
+
+      <!-- LEVEL 3 under /praxis -->
+      <div class="rf-node rf-node-likely" style="left:1070px; top:470px; width:140px; height:100px;">
+        <div class="rf-handle rf-handle-top"></div>
+        <div class="rf-stripe rf-stripe-likely"></div>
+        <div class="p-2.5">
+          <div class="text-[9px] uppercase tracking-wider font-semibold text-zinc-500">Praxis-Info</div>
+          <code class="text-[10px] font-mono text-zinc-600 block truncate">/praxis/team</code>
+          <div class="text-[11px] font-semibold text-zinc-900 mt-1 leading-tight">Unser Team</div>
+          <div class="text-[9px] text-zinc-500 mt-1">likely exists</div>
+        </div>
+      </div>
+
+      <div class="rf-node rf-node-likely" style="left:1240px; top:470px; width:140px; height:100px;">
+        <div class="rf-handle rf-handle-top"></div>
+        <div class="rf-stripe rf-stripe-likely"></div>
+        <div class="p-2.5">
+          <div class="text-[9px] uppercase tracking-wider font-semibold text-zinc-500">Praxis-Info</div>
+          <code class="text-[10px] font-mono text-zinc-600 block truncate">/praxis/anfahrt</code>
+          <div class="text-[11px] font-semibold text-zinc-900 mt-1 leading-tight">Anfahrt & Parken</div>
+          <div class="text-[9px] text-zinc-500 mt-1">Ahrenloher Straße 27</div>
+        </div>
+      </div>
+
+      <!-- Related clusters (sibling pillars) -->
+      <div class="rf-overlay" style="bottom:120px; left:40px; padding:10px 14px; width:240px;">
+        <div class="text-[10px] uppercase tracking-wider text-violet-700 font-bold mb-2">Verwandte Cluster</div>
+        <div class="space-y-1">
+          <div class="text-xs flex items-center gap-1.5">
+            <span class="w-1 h-3 bg-violet-400 rounded"></span>
+            <span class="text-zinc-700">Zahnarzt Pinneberg</span>
+            <span class="text-[9px] text-zinc-400">(geo)</span>
+          </div>
+          <div class="text-xs flex items-center gap-1.5">
+            <span class="w-1 h-3 bg-violet-400 rounded"></span>
+            <span class="text-zinc-700">Kieferorthopädie Tornesch</span>
+            <span class="text-[9px] text-zinc-400">(fachgebiet)</span>
+          </div>
+          <div class="text-xs flex items-center gap-1.5">
+            <span class="w-1 h-3 bg-violet-400 rounded"></span>
+            <span class="text-zinc-700">Mundhygiene-Ratgeber</span>
+            <span class="text-[9px] text-zinc-400">(topic)</span>
+          </div>
+        </div>
+        <div class="text-[9px] text-zinc-500 mt-2 italic">→ Kandidaten für interne Verlinkung</div>
+      </div>
+
+      <!-- Stats overlay (top-left) -->
+      <div class="rf-overlay" style="top:16px; left:16px; padding:10px 14px;">
+        <div class="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-1.5">Sitemap-Stats</div>
+        <div class="grid grid-cols-3 gap-3 text-center">
+          <div>
+            <div class="text-lg font-bold text-zinc-900 leading-none">14</div>
+            <div class="text-[9px] text-zinc-500 uppercase tracking-wide mt-0.5">gesamt</div>
+          </div>
+          <div>
+            <div class="text-lg font-bold text-emerald-600 leading-none">1</div>
+            <div class="text-[9px] text-zinc-500 uppercase tracking-wide mt-0.5">covered</div>
+          </div>
+          <div>
+            <div class="text-lg font-bold text-amber-600 leading-none">10</div>
+            <div class="text-[9px] text-zinc-500 uppercase tracking-wide mt-0.5">gaps</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls (bottom-left) -->
+      <div class="rf-overlay" style="bottom:16px; left:16px; padding:0;">
+        <div class="rf-control-btn" title="Zoom in">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 4v16M4 12h16"/></svg>
+        </div>
+        <div class="rf-control-btn" title="Zoom out">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M4 12h16"/></svg>
+        </div>
+        <div class="rf-control-btn" title="Fit view">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/></svg>
+        </div>
+        <div class="rf-control-btn" title="Lock">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
+        </div>
+      </div>
+
+      <!-- Mini-map (bottom-right) -->
+      <div class="rf-overlay" style="bottom:16px; right:16px; padding:6px; background:rgba(255,255,255,0.92);">
+        <div class="relative" style="width:180px; height:100px; background:#fafafa; border:1px solid #e4e4e7; border-radius:4px;">
+          <!-- mini pillar -->
+          <div class="mini-node" style="left:78px; top:6px; width:28px; height:14px; background:#fbbf24;"></div>
+          <!-- mini level 2 -->
+          <div class="mini-node" style="left:8px; top:30px; width:22px; height:14px; background:#a1a1aa;"></div>
+          <div class="mini-node" style="left:50px; top:30px; width:22px; height:14px; background:#fbbf24;"></div>
+          <div class="mini-node" style="left:96px; top:30px; width:22px; height:14px; background:#fbbf24;"></div>
+          <div class="mini-node" style="left:144px; top:30px; width:22px; height:14px; background:#a1a1aa;"></div>
+          <!-- mini level 3 -->
+          <div class="mini-node" style="left:2px; top:60px; width:16px; height:12px; background:#fbbf24;"></div>
+          <div class="mini-node" style="left:22px; top:60px; width:16px; height:12px; background:#fbbf24;"></div>
+          <div class="mini-node" style="left:42px; top:60px; width:16px; height:12px; background:#fbbf24;"></div>
+          <div class="mini-node" style="left:62px; top:60px; width:16px; height:12px; background:#fbbf24;"></div>
+          <div class="mini-node" style="left:82px; top:60px; width:16px; height:12px; background:#e4e4e7;"></div>
+          <div class="mini-node" style="left:136px; top:60px; width:16px; height:12px; background:#a1a1aa;"></div>
+          <div class="mini-node" style="left:158px; top:60px; width:16px; height:12px; background:#a1a1aa;"></div>
+          <!-- viewport frame -->
+          <div class="absolute border-2 border-blue-500/40 rounded" style="left:2px; top:2px; right:2px; bottom:2px; pointer-events:none;"></div>
+        </div>
+      </div>
+
+      <!-- Attribution -->
+      <div class="absolute bottom-3 left-1/2 -translate-x-1/2 text-[9px] text-zinc-400 z-10">
+        Sitemap Map · gerendert mit React Flow
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Mockup of detail panel -->
+  <div class="grid grid-cols-3 gap-5">
+    <div class="col-span-2 bg-white border border-zinc-200 rounded-lg p-5">
+      <div class="text-xs uppercase tracking-wide text-zinc-500 mb-3">Interaktion (Mockup)</div>
+      <div class="text-sm space-y-2 text-zinc-700">
+        <p><strong>Klick auf eine Node:</strong> rechtes Detail-Panel zeigt H1, Slug, status, Target Queries, welche Entities/Subtopics diese Page abdecken soll, plus eine Liste der Phase-3-Evidence-Sätze, die diese Page-Idee stützen.</p>
+        <p><strong>Hover:</strong> Parent/Child-Pfad wird hervorgehoben — alle anderen Edges blassen ab (gleiche Logik wie in der Entity Map).</p>
+        <p><strong>Filter-Bar:</strong> Status-Buttons togglen Visibility (z.B. nur Content Gaps anzeigen → Fokus auf "was noch fehlt").</p>
+        <p><strong>"Als JSON kopieren":</strong> exportiert die <code class="text-xs bg-zinc-100 px-1 rounded">recommended_sitemap</code> als JSON-Liste — direkter Input für Briefings oder ChatGPT-Content-Erstellung.</p>
+      </div>
+    </div>
+    <!-- Mocked detail panel -->
+    <div class="bg-white border border-zinc-200 rounded-lg p-4">
+      <div class="text-[10px] uppercase tracking-wider text-zinc-500 font-bold mb-2">Detail-Panel (bei Klick auf <code class="text-[10px]">/leistungen/implantologie</code>)</div>
+      <div class="border-l-4 border-amber-400 pl-3 mb-3">
+        <code class="text-[11px] font-mono text-zinc-600 block">/leistungen/implantologie</code>
+        <div class="text-sm font-bold text-zinc-900 mt-0.5">Zahnimplantate in Tornesch</div>
+        <span class="inline-block mt-1 text-[10px] px-1.5 py-0.5 bg-amber-100 border border-amber-300 text-amber-800 rounded font-semibold">⚠ content gap</span>
+      </div>
+      <div class="space-y-2 text-xs">
+        <div>
+          <div class="text-[10px] uppercase text-zinc-500 font-semibold">Target Queries</div>
+          <div class="text-zinc-700 mt-0.5">"zahnimplantat tornesch"<br>"implantat preise"</div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase text-zinc-500 font-semibold">deckt ab (Entities)</div>
+          <div class="flex flex-wrap gap-1 mt-1">
+            <span class="px-1.5 py-0.5 bg-zinc-100 text-zinc-700 rounded text-[10px]">Einzelzahn-Implantat</span>
+            <span class="px-1.5 py-0.5 bg-zinc-100 text-zinc-700 rounded text-[10px]">All-on-4</span>
+            <span class="px-1.5 py-0.5 bg-zinc-100 text-zinc-700 rounded text-[10px]">Knochenaufbau</span>
+          </div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase text-zinc-500 font-semibold">Evidence aus Phase 3</div>
+          <div class="text-zinc-600 italic mt-0.5 text-[11px]">„Wir bieten Implantate für Einzelzähne, ganze Reihen oder den vollständigen Kiefer (All-on-4)…"</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom explainer -->
+  <div class="bg-blue-50 border border-blue-200 rounded-lg p-5 text-sm">
+    <div class="flex items-start gap-3">
+      <svg class="w-5 h-5 text-blue-600 mt-0.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <div>
+        <div class="font-semibold text-blue-900 mb-1">Was sich technisch ändert gegenüber der heutigen Entity Map</div>
+        <div class="text-blue-900/80 space-y-1">
+          <p><strong>Wiederverwendet:</strong> der gesamte React-Flow-Wrapper, der Custom-Node-Renderer (leichte Anpassung für „Page-Card" statt „Entity-Card"), die Sidebar-Mechanik, Hover/Click-Logik.</p>
+          <p><strong>Neu:</strong> ein zweiter Transformer (<code class="bg-white px-1 rounded text-xs">sitemap-graph/transform.ts</code>) baut nodes/edges aus <code class="bg-white px-1 rounded text-xs">extraction.recommended_sitemap</code> statt aus entities/relations. Dagre rankdir = <code class="bg-white px-1 rounded text-xs">TB</code> (top-bottom) statt LR.</p>
+          <p><strong>Edges:</strong> immer derselbe Predicate <code class="bg-white px-1 rounded text-xs">is_child_of</code> — kein humanizePredicate nötig, kein Orphan-Risiko (Slugs sind eindeutig).</p>
+          <p><strong>Prompt:</strong> neue Phase 6 (<code class="bg-white px-1 rounded text-xs">recommended_sitemap</code>) ergänzt den 5-Phasen-Prompt. Die LLM hypothetisiert Slugs und H1s — das wird visuell klar als „Empfehlung" markiert.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

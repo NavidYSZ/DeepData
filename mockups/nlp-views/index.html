@@ -69,19 +69,19 @@
       </div>
     </a>
 
-    <!-- Variant A+B+C -->
+    <!-- Variant A+B+C (List) -->
     <a href="./variant-abc.html" class="block bg-white border border-zinc-200 rounded-lg p-6 hover:border-zinc-400 hover:shadow-sm transition">
       <div class="flex items-start justify-between gap-6">
         <div class="flex-1">
           <div class="flex items-center gap-2 mb-2">
             <span class="bg-violet-100 text-violet-800 text-xs font-semibold px-2 py-0.5 rounded">VOLL</span>
-            <span class="text-xs text-zinc-500">neue Phase 6 · echte Sitemap-Empfehlung</span>
+            <span class="text-xs text-zinc-500">neue Phase 6 · Listen-Ansicht</span>
           </div>
-          <h2 class="text-xl font-semibold text-zinc-900">Variante A + B + C — Empfohlene Sitemap</h2>
+          <h2 class="text-xl font-semibold text-zinc-900">Variante A + B + C — Empfohlene Sitemap (Liste)</h2>
           <p class="text-sm text-zinc-600 mt-2">
             Macht aus dem Beschreibungstool ein Empfehlungstool: pro empfohlener Page bekommen wir H1, URL-Slug,
             <span class="font-medium">status</span> (covered_on_page / content_gap / likely_exists_elsewhere), und target-Queries.
-            Genau die "wie sollte meine Sitemap aussehen"-Sicht.
+            Diese Variante zeigt das als <strong>vertikale Listen-Ansicht</strong>.
           </p>
           <div class="text-xs text-zinc-500 mt-3">
             <strong>Aufwand:</strong> neue Phase 6 im Prompt + neues Schema-Feld + neue View ·
@@ -89,6 +89,30 @@
           </div>
         </div>
         <div class="text-zinc-400">→</div>
+      </div>
+    </a>
+
+    <!-- Variant A+B+C (React Flow) -->
+    <a href="./variant-abc-flow.html" class="block bg-gradient-to-br from-violet-50 to-white border-2 border-violet-300 rounded-lg p-6 hover:border-violet-500 hover:shadow-md transition">
+      <div class="flex items-start justify-between gap-6">
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-violet-600 text-white text-xs font-semibold px-2 py-0.5 rounded">FAVORIT</span>
+            <span class="bg-violet-100 text-violet-800 text-xs font-semibold px-2 py-0.5 rounded">React Flow</span>
+            <span class="text-xs text-zinc-500">selbe Daten wie A+B+C, aber visualisiert</span>
+          </div>
+          <h2 class="text-xl font-semibold text-zinc-900">Variante A + B + C — Empfohlene Sitemap (React Flow)</h2>
+          <p class="text-sm text-zinc-600 mt-2">
+            Gleicher Datenstand wie die Listen-Variante, aber als <strong>Top-Down-Baum auf dem React-Flow-Canvas</strong>
+            gerendert — selbe Engine, selber Look-and-Feel wie die bestehende Entity Map (Background-Dots, Mini-Map, Controls).
+            Drei Ebenen Pillar → Cluster → Service-Page, Status farbcodiert, Klick auf Node öffnet Detail-Panel rechts.
+          </p>
+          <div class="text-xs text-zinc-500 mt-3">
+            <strong>Aufwand:</strong> wie A+B+C, plus zweiter Transformer (~lib/sitemap-graph/transform.ts), TB-Dagre-Layout, leichte Page-Card-Variante des EntityCardNode ·
+            <strong>Vorteil:</strong> wiederverwendet 80% der vorhandenen React-Flow-Infrastruktur
+          </div>
+        </div>
+        <div class="text-violet-500 text-2xl">→</div>
       </div>
     </a>
 
