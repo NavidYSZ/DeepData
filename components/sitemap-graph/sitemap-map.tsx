@@ -82,7 +82,7 @@ function SitemapMapInner({
   renderSidebar,
   renderFilterBar,
   heightClass = "h-[78vh]",
-  defaultMode = "TB"
+  defaultMode = "tidy"
 }: SitemapMapProps) {
   const [displayMode, setDisplayMode] = useState<SitemapDisplayMode>(defaultMode);
   const [selectedId, setSelectedId] = useState<string | null>(null);

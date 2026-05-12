@@ -7,10 +7,14 @@ import { cn } from "@/lib/utils";
 import type { EntityNodeData } from "@/lib/entity-graph/transform";
 
 function EntityCardNodeInner({ data, selected }: NodeProps<EntityNodeData>) {
-  const { entity, color, incomingCount, outgoingCount } = data;
+  const { entity, color, incomingCount, outgoingCount, layout } = data;
   const isPillar = entity.semantic_role === "pillar";
   const isPeripheral = entity.semantic_role === "peripheral";
   const linkCount = incomingCount + outgoingCount;
+
+  const useLR = layout === "LR";
+  const targetPos = useLR ? Position.Left : Position.Top;
+  const sourcePos = useLR ? Position.Right : Position.Bottom;
 
   return (
     <div
@@ -27,12 +31,12 @@ function EntityCardNodeInner({ data, selected }: NodeProps<EntityNodeData>) {
     >
       <Handle
         type="target"
-        position={Position.Left}
+        position={targetPos}
         className="!h-2 !w-2 !border-0 !bg-muted-foreground/40"
       />
       <Handle
         type="source"
-        position={Position.Right}
+        position={sourcePos}
         className="!h-2 !w-2 !border-0 !bg-muted-foreground/40"
       />
 

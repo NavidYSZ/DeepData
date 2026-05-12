@@ -55,17 +55,41 @@ type Extracted = {
 };
 
 type GoogleResponse = { extracted: Extracted; nlp: AnnotateResponse };
+
+type KeywordSource = {
+  position: number;
+  serpUrl: string;
+  finalUrl: string | null;
+  title: string | null;
+  description: string | null;
+  source: string | null;
+  totalChars: number;
+  usedChars: number;
+  truncated: boolean;
+  error: string | null;
+};
+
 type LlmResponse = {
-  extracted: Extracted;
+  // Either an `extracted` (URL mode) or `sources` (keyword mode) is present.
+  extracted?: Extracted;
   extraction: ExtractionOutput;
   model: string;
   durationMs: number;
+  // Keyword-mode-only fields:
+  mode?: "keyword";
+  keyword?: string;
+  sources?: KeywordSource[];
+  analyzedChars?: number;
+  serpDurationMs?: number;
+  fetchDurationMs?: number;
 };
 
 type Mode = "google" | "llm";
+type LlmInput = "url" | "keyword";
 
 export default function NlpPage() {
   const [mode, setMode] = useState<Mode>("google");
+  const [llmInput, setLlmInput] = useState<LlmInput>("url");
   const [url, setUrl] = useState("");
   const [sentiment, setSentiment] = useState(true);
   const [entities, setEntities] = useState(true);
@@ -99,10 +123,15 @@ export default function NlpPage() {
           setGoogleData(json);
         }
       } else {
-        const res = await fetch("/api/nlp/llm", {
+        const endpoint = llmInput === "keyword" ? "/api/nlp/keyword" : "/api/nlp/llm";
+        const payload =
+          llmInput === "keyword"
+            ? { keyword: url.trim() }
+            : { url: url.trim() };
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: url.trim() })
+          body: JSON.stringify(payload)
         });
         const json = await res.json();
         if (!res.ok) {
@@ -142,9 +171,17 @@ export default function NlpPage() {
     }
   }
 
-  const canSubmit = !!url.trim() && /^https?:\/\//i.test(url.trim()) && !loading;
+  const inputValue = url.trim();
+  const needsUrl = mode === "google" || (mode === "llm" && llmInput === "url");
+  const canSubmit =
+    !!inputValue &&
+    (needsUrl ? /^https?:\/\//i.test(inputValue) : inputValue.length >= 2) &&
+    !loading;
+
   const currentExtracted =
     mode === "google" ? googleData?.extracted : llmData?.extracted;
+  const keywordSources = mode === "llm" ? llmData?.sources : undefined;
+  const isKeywordResult = mode === "llm" && llmData?.mode === "keyword";
 
   return (
     <div className="space-y-6">
@@ -153,21 +190,36 @@ export default function NlpPage() {
         description={
           mode === "google"
             ? "URL eingeben → Body-Content wird extrahiert → Sentiment, Entitäten und Kategorien über die Google Natural Language API."
-            : "URL eingeben → Body-Content wird extrahiert → DeepSeek führt 5-Phasen-Semantik-Extraktion durch (Entitäten, Relationen, SEO-Signale)."
+            : llmInput === "keyword"
+              ? "Keyword eingeben → Top-5 SERP-URLs werden gefetched + bereinigt → DeepSeek macht eine konsolidierte 6-Phasen-Analyse über alle Quellen."
+              : "URL eingeben → Body-Content wird extrahiert → DeepSeek führt 6-Phasen-Semantik-Extraktion durch (Entitäten, Relationen, SEO-Signale, Sitemap)."
         }
         actions={
           <ModeSwitch mode={mode} onChange={setMode} disabled={loading} />
         }
       />
 
-      <SectionCard title="URL analysieren">
+      <SectionCard
+        title={
+          mode === "llm" && llmInput === "keyword"
+            ? "Keyword analysieren"
+            : "URL analysieren"
+        }
+      >
         <div className="space-y-3">
+          {mode === "llm" ? (
+            <LlmInputSwitch value={llmInput} onChange={setLlmInput} disabled={loading} />
+          ) : null}
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
-              type="url"
+              type={mode === "llm" && llmInput === "keyword" ? "text" : "url"}
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://example.com/blog/artikel"
+              placeholder={
+                mode === "llm" && llmInput === "keyword"
+                  ? "z.B. zahnimplantat tornesch"
+                  : "https://example.com/blog/artikel"
+              }
               onKeyDown={(e) => {
                 if (e.key === "Enter" && canSubmit) analyze();
               }}
@@ -179,7 +231,11 @@ export default function NlpPage() {
               ) : (
                 <Sparkles className="mr-2 h-4 w-4" />
               )}
-              {mode === "google" ? "Analysieren" : "Semantik extrahieren"}
+              {mode === "google"
+                ? "Analysieren"
+                : llmInput === "keyword"
+                  ? "SERP analysieren"
+                  : "Semantik extrahieren"}
             </Button>
           </div>
           {mode === "google" ? (
@@ -205,6 +261,11 @@ export default function NlpPage() {
               </span>
               {" · "}konfigurierbar über{" "}
               <code className="rounded bg-muted px-1 py-0.5 text-[10px]">DEEPSEEK_MODEL</code>
+              {llmInput === "keyword" ? (
+                <span className="ml-2 text-amber-700 dark:text-amber-300">
+                  · Keyword-Modus kann 60–120s dauern (SERP-Fetch + 5 Page-Crawls + LLM).
+                </span>
+              ) : null}
             </div>
           )}
           {error ? (
@@ -216,6 +277,16 @@ export default function NlpPage() {
       </SectionCard>
 
       {currentExtracted ? <ExtractedCard extracted={currentExtracted} /> : null}
+
+      {isKeywordResult && keywordSources ? (
+        <KeywordSourcesCard
+          keyword={llmData?.keyword ?? ""}
+          sources={keywordSources}
+          analyzedChars={llmData?.analyzedChars ?? 0}
+          serpDurationMs={llmData?.serpDurationMs ?? 0}
+          fetchDurationMs={llmData?.fetchDurationMs ?? 0}
+        />
+      ) : null}
 
       {mode === "google" && googleData?.nlp && Object.keys(googleData.nlp).length > 0 ? (
         <GoogleResults result={googleData.nlp} />
@@ -385,6 +456,110 @@ function SitemapOverviewPanel({ pages }: { pages: RecommendedPage[] }) {
         nicht Teil dieser Version.
       </p>
     </div>
+  );
+}
+
+function LlmInputSwitch({
+  value,
+  onChange,
+  disabled
+}: {
+  value: LlmInput;
+  onChange: (v: LlmInput) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="inline-flex overflow-hidden rounded-md border bg-background text-xs">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange("url")}
+        className={`inline-flex items-center gap-1.5 px-3 py-1 transition ${
+          value === "url"
+            ? "bg-primary text-primary-foreground"
+            : "hover:bg-muted/50 text-foreground"
+        } disabled:opacity-50`}
+      >
+        <ExternalLink className="h-3.5 w-3.5" />
+        URL
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange("keyword")}
+        className={`inline-flex items-center gap-1.5 border-l px-3 py-1 transition ${
+          value === "keyword"
+            ? "bg-primary text-primary-foreground"
+            : "hover:bg-muted/50 text-foreground"
+        } disabled:opacity-50`}
+      >
+        <Sparkles className="h-3.5 w-3.5" />
+        Keyword (Top-5 SERP)
+      </button>
+    </div>
+  );
+}
+
+function KeywordSourcesCard({
+  keyword,
+  sources,
+  analyzedChars,
+  serpDurationMs,
+  fetchDurationMs
+}: {
+  keyword: string;
+  sources: KeywordSource[];
+  analyzedChars: number;
+  serpDurationMs: number;
+  fetchDurationMs: number;
+}) {
+  const usable = sources.filter((s) => !s.error);
+  return (
+    <SectionCard
+      title={`SERP-Quellen für "${keyword}"`}
+      description={`${usable.length}/${sources.length} Top-Ergebnisse nutzbar · ${(serpDurationMs / 1000).toFixed(1)}s SERP-Fetch · ${(fetchDurationMs / 1000).toFixed(1)}s Crawl · ${analyzedChars.toLocaleString("de-DE")} Zeichen analysiert`}
+    >
+      <ol className="space-y-2">
+        {sources.map((s) => (
+          <li
+            key={`${s.position}-${s.serpUrl}`}
+            className="rounded-md border bg-background/60 p-3 text-sm"
+          >
+            <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+              <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
+                #{s.position}
+              </span>
+              <a
+                href={s.finalUrl ?? s.serpUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary underline-offset-2 hover:underline"
+              >
+                {s.finalUrl ?? s.serpUrl}
+              </a>
+              {s.error ? (
+                <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-300">
+                  {s.error}
+                </Badge>
+              ) : (
+                <Badge variant="outline">
+                  {s.usedChars.toLocaleString("de-DE")} / {s.totalChars.toLocaleString("de-DE")} Zeichen
+                  {s.truncated ? " · gekürzt" : ""}
+                </Badge>
+              )}
+            </div>
+            {s.title ? (
+              <div className="mt-1 font-medium">{s.title}</div>
+            ) : null}
+            {s.description ? (
+              <div className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                {s.description}
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    </SectionCard>
   );
 }
 

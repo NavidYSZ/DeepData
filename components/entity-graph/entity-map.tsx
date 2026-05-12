@@ -12,13 +12,55 @@ import ReactFlow, {
   type NodeMouseHandler
 } from "reactflow";
 import "reactflow/dist/style.css";
+import {
+  ArrowDownToLine,
+  ArrowRightToLine,
+  Sparkles,
+  CircleDot
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { transformToReactFlow, type EntityNodeData } from "@/lib/entity-graph/transform";
+import {
+  transformToReactFlow,
+  type EntityLayout,
+  type EntityNodeData
+} from "@/lib/entity-graph/transform";
 import type { EntityGraphEntity, EntityGraphInput } from "@/lib/entity-graph/types";
 import { EntityCardNode } from "./entity-card-node";
 import { EntitySidebar } from "./entity-sidebar";
 
 const nodeTypes = { entityCard: EntityCardNode };
+
+const LAYOUT_MODES: {
+  value: EntityLayout;
+  label: string;
+  Icon: typeof ArrowDownToLine;
+  tooltip: string;
+}[] = [
+  {
+    value: "tidy",
+    label: "Tidy",
+    Icon: Sparkles,
+    tooltip: "Tidy Tree — Pillar als Wurzel, BFS-Spanning-Tree"
+  },
+  {
+    value: "TB",
+    label: "Top-Down",
+    Icon: ArrowDownToLine,
+    tooltip: "Dagre Top-Down — Pillar oben, fließt nach unten"
+  },
+  {
+    value: "LR",
+    label: "Left-Right",
+    Icon: ArrowRightToLine,
+    tooltip: "Dagre Left-Right — Pillar links, fließt nach rechts"
+  },
+  {
+    value: "radial",
+    label: "Radial",
+    Icon: CircleDot,
+    tooltip: "Pillar im Zentrum, Entities radial nach außen"
+  }
+];
 
 export type SidebarRenderArgs = {
   selectedEntity: EntityGraphEntity | null;
@@ -40,6 +82,7 @@ export type EntityMapProps = {
   renderSidebar?: (args: SidebarRenderArgs) => SidebarConfig;
   orphansLabel?: (count: number) => string;
   heightClass?: string;
+  defaultLayout?: EntityLayout;
 };
 
 export function EntityMap(props: EntityMapProps) {
@@ -54,11 +97,14 @@ function EntityMapInner({
   data,
   renderSidebar,
   orphansLabel,
-  heightClass = "h-[78vh]"
+  heightClass = "h-[78vh]",
+  defaultLayout = "tidy"
 }: EntityMapProps) {
+  const [layout, setLayout] = useState<EntityLayout>(defaultLayout);
+
   const { nodes: initialNodes, edges: initialEdges, orphans, categoryColors } = useMemo(
-    () => transformToReactFlow(data),
-    [data]
+    () => transformToReactFlow(data, { layout }),
+    [data, layout]
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState<EntityNodeData>(initialNodes);
@@ -69,9 +115,12 @@ function EntityMapInner({
   useEffect(() => {
     setNodes(initialNodes);
     setEdges(initialEdges);
+  }, [initialNodes, initialEdges, setNodes, setEdges]);
+
+  useEffect(() => {
     setSelectedId(null);
     setHoveredId(null);
-  }, [initialNodes, initialEdges, setNodes, setEdges]);
+  }, [data]);
 
   const onNodeClick = useCallback<NodeMouseHandler>((_evt, node) => {
     setSelectedId((cur) => (cur === node.id ? null : node.id));
@@ -146,54 +195,85 @@ function EntityMapInner({
   });
 
   return (
-    <div className={cn("relative w-full overflow-hidden rounded-lg border bg-muted/20", heightClass)}>
-      <ReactFlow
-        nodes={styledNodes}
-        edges={styledEdges}
-        nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeClick={onNodeClick}
-        onNodeMouseEnter={onNodeMouseEnter}
-        onNodeMouseLeave={onNodeMouseLeave}
-        onPaneClick={onPaneClick}
-        fitView
-        fitViewOptions={{ padding: 0.2 }}
-        proOptions={{ hideAttribution: true }}
-        minZoom={0.2}
-        maxZoom={1.5}
-        nodesDraggable
-        nodesConnectable={false}
-        elementsSelectable
-      >
-        <Background gap={20} size={1} />
-        <Controls position="bottom-left" showInteractive={false} />
-        <MiniMap
-          pannable
-          zoomable
-          nodeColor={(n) => (n.data as EntityNodeData | undefined)?.color ?? "#94a3b8"}
-          maskColor="hsl(var(--background) / 0.6)"
-          style={{ right: 52, bottom: 12, left: undefined }}
-        />
-      </ReactFlow>
-
-      {orphans.length > 0 ? (
-        <div className="pointer-events-none absolute left-3 top-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300">
-          {orphansLabel?.(orphans.length) ??
-            `${orphans.length} Relation${orphans.length === 1 ? "" : "en"} ohne passende Entity übersprungen`}
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
+        <span className="mr-1 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+          Ansicht:
+        </span>
+        <div className="inline-flex overflow-hidden rounded-md border bg-background">
+          {LAYOUT_MODES.map((mode) => {
+            const active = layout === mode.value;
+            const Icon = mode.Icon;
+            return (
+              <button
+                key={mode.value}
+                type="button"
+                onClick={() => setLayout(mode.value)}
+                title={mode.tooltip}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border-r last:border-r-0 transition",
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-muted/50 text-foreground"
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                <span>{mode.label}</span>
+              </button>
+            );
+          })}
         </div>
-      ) : null}
+      </div>
 
-      {sidebarConfig ? (
-        <EntitySidebar
-          collapsedLabel={sidebarConfig.collapsedLabel}
-          headerTitle={sidebarConfig.headerTitle}
-          headerIcon={sidebarConfig.headerIcon}
-          body={sidebarConfig.body}
-          onClose={handleClearSelection}
-          showCloseButton={sidebarConfig.showCloseButton ?? selectedEntity !== null}
-        />
-      ) : null}
+      <div className={cn("relative w-full overflow-hidden rounded-lg border bg-muted/20", heightClass)}>
+        <ReactFlow
+          nodes={styledNodes}
+          edges={styledEdges}
+          nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={onNodeClick}
+          onNodeMouseEnter={onNodeMouseEnter}
+          onNodeMouseLeave={onNodeMouseLeave}
+          onPaneClick={onPaneClick}
+          fitView
+          fitViewOptions={{ padding: 0.2 }}
+          proOptions={{ hideAttribution: true }}
+          minZoom={0.15}
+          maxZoom={1.5}
+          nodesDraggable
+          nodesConnectable={false}
+          elementsSelectable
+        >
+          <Background gap={20} size={1} />
+          <Controls position="bottom-left" showInteractive={false} />
+          <MiniMap
+            pannable
+            zoomable
+            nodeColor={(n) => (n.data as EntityNodeData | undefined)?.color ?? "#94a3b8"}
+            maskColor="hsl(var(--background) / 0.6)"
+            style={{ right: 52, bottom: 12, left: undefined }}
+          />
+        </ReactFlow>
+
+        {orphans.length > 0 ? (
+          <div className="pointer-events-none absolute left-3 top-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300">
+            {orphansLabel?.(orphans.length) ??
+              `${orphans.length} Relation${orphans.length === 1 ? "" : "en"} ohne passende Entity übersprungen`}
+          </div>
+        ) : null}
+
+        {sidebarConfig ? (
+          <EntitySidebar
+            collapsedLabel={sidebarConfig.collapsedLabel}
+            headerTitle={sidebarConfig.headerTitle}
+            headerIcon={sidebarConfig.headerIcon}
+            body={sidebarConfig.body}
+            onClose={handleClearSelection}
+            showCloseButton={sidebarConfig.showCloseButton ?? selectedEntity !== null}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
