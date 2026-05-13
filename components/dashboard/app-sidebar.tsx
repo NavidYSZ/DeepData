@@ -14,7 +14,8 @@ import {
   Network,
   Search,
   Waypoints,
-  Languages
+  Languages,
+  Crown
 } from "lucide-react";
 
 import {
@@ -56,6 +57,7 @@ const navGroups = [
     label: "Tools",
     items: [
       { href: "/keyword-workspace", label: "Clustering", icon: Network },
+      { href: "/authority-workspace", label: "Authority Workspace", icon: Crown },
       { href: "/nlp", label: "NLP", icon: Languages }
     ]
   }

@@ -18,6 +18,7 @@ const pageTitles: Record<string, string> = {
   "/seo-bubble": "Position vs CTR",
   "/chat-agent": "Chat Agent",
   "/keyword-workspace": "Clustering",
+  "/authority-workspace": "Authority Workspace",
   "/nlp": "NLP Playground",
   "/settings": "Settings",
   "/dashboard": "Dashboard"
@@ -25,9 +26,13 @@ const pageTitles: Record<string, string> = {
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const isKeywordWorkspace = pathname.startsWith("/keyword-workspace");
-  const pageTitle =
-    isKeywordWorkspace ? "Keyword Mapping" : pageTitles[pathname] ?? "Dashboard";
+  const isFullscreenView =
+    pathname.startsWith("/keyword-workspace") || pathname.startsWith("/authority-workspace");
+  const pageTitle = pathname.startsWith("/keyword-workspace")
+    ? "Keyword Mapping"
+    : pathname.startsWith("/authority-workspace")
+      ? "Authority Workspace"
+      : pageTitles[pathname] ?? "Dashboard";
 
   return (
     <SiteProvider>
@@ -35,11 +40,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <div className="flex min-h-screen w-full min-w-0">
           <AppSidebar pathname={pathname} />
 
-          <SidebarInset className={cn("overflow-x-hidden", isKeywordWorkspace && "overflow-hidden")}>
-            {!isKeywordWorkspace ? <SiteHeader pageTitle={pageTitle} /> : null}
+          <SidebarInset className={cn("overflow-x-hidden", isFullscreenView && "overflow-hidden")}>
+            {!isFullscreenView ? <SiteHeader pageTitle={pageTitle} /> : null}
             <main
               className={cn(
-                isKeywordWorkspace
+                isFullscreenView
                   ? "flex-1 min-h-0 w-full max-w-none overflow-hidden p-0"
                   : "container min-w-0 max-w-screen-2xl space-y-6 overflow-x-hidden px-4 py-5 sm:px-5 md:px-6 md:py-6"
               )}
