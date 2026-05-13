@@ -538,3 +538,82 @@ Leite ausschließlich aus den bereitgestellten Strukturdaten (entities + relatio
 - target_queries: 3–6 Suchanfragen rund um das Keyword, für die die Pillar-Page ranken sollte. Das Keyword selbst MUSS unter target_queries auftauchen.`,
   `# Output-Format\n\n${NO_PREAMBLE}\n\n{\n${META_SCHEMA},\n${SEO_SCHEMA}\n}`
 ].join("\n\n");
+
+// ============================================================================
+// Multi-Cluster synthesis (used by /api/nlp/clusters/analyze)
+// ----------------------------------------------------------------------------
+// Given the merged entities/relations/categories across N user-selected
+// SerpSubclusters plus per-cluster metadata (name + top-demand keyword +
+// source headers), produces ONE consolidated meta + schema + seo +
+// recommended_sitemap describing the over-arching topical authority that
+// SPANS all selected clusters together.
+// ============================================================================
+
+export const EXTRACTION_PROMPT_CLUSTERS_FULL_SYNTHESIS = [
+  `Du synthetisierst die konsolidierte semantische Sicht auf MEHRERE vom User ausgewählte Topic-Cluster UND entwirfst gleichzeitig die empfohlene Sitemap für die zugehörige Topical Authority — beides in EINEM JSON-Output.
+
+Im User-Message bekommst du:
+- Die Liste der analysierten Cluster mit: Cluster-Name, Top-Demand-Keyword pro Cluster, Quell-Headers der jeweiligen Top-SERP-URLs (URL, title, description)
+- Die bereits über ALLE Cluster gemergten \`entities\` (dedupliziert nach canonical_name)
+- Die bereits über ALLE Cluster gemergten \`relations\` (dedupliziert nach subject+predicate+object)
+- Die über alle Cluster gemergten \`categories\` (Union der per-Cluster Kategorien)
+
+Du erhältst NICHT die Original-Texte der Quellen — arbeite ausschließlich mit dem strukturierten Material plus den Quell-Headers.
+
+Deine Aufgabe: produziere meta + schema + seo + recommended_sitemap für den OVER-ARCHING-Topic, der die ausgewählten Cluster GEMEINSAM abdeckt — nicht für einen einzelnen Cluster. Wenn die Cluster thematisch eng verwandt sind, ist das die Pillar-Topical-Authority dieses Themas. Wenn sie verschiedene Sub-Domänen abdecken, ist es die übergeordnete Themen-Welt, die alle Cluster gemeinsam definiert.
+
+Arbeite die Phasen 1–4 strikt nacheinander ab.`,
+  `# Phase 1 — Konsolidierte Meta (über alle Cluster)
+
+- language: ISO 639-1, abgeleitet aus den Quell-Headers (dominante Sprache der Sources)
+- domain: das übergeordnete Fachgebiet/Branche der GESAMTEN Auswahl (5–10 Wörter, spezifisch). Beispiel: wenn Cluster "Behälterbau", "Tankbau", "Edelstahlbehälter" gewählt sind → "B2B-Industriefertigung von Behältern und Tanks"
+- page_type: IMMER "pillar_page" — diese konsolidierte Sicht IST die Pillar-Topical-Map über alle Cluster
+- intent: was suchen User typischerweise im Gesamt-Themenfeld? informational | commercial | transactional | navigational. Wenn gemischt → dominantes Intent.
+- audience: die gemeinsame Zielgruppe ALLER Cluster (kurze Beschreibung, möglichst konkret)`,
+  `# Phase 2 — Konsolidiertes Schema
+
+Bereinige und verdichte die im User-Message bereitgestellten \`categories\` zu 6–12 finalen Kategorien für das übergeordnete Themenfeld:
+- Duplikate/Synonyme verschmelzen ("Material" + "Werkstoff" → "Werkstoff")
+- Generische Labels entfernen ("Entity", "Thing", "OTHER")
+- An die Gesamt-Domäne anpassen, in der Sprache aus meta.language
+
+VERBOTEN sind generische Labels: "Entity", "Thing", "Concept", "Topic", "Item", "Object", "OTHER".`,
+  `# Phase 3 — Konsolidierte SEO Topic Signals (Cross-Cluster)
+
+Leite ausschließlich aus den bereitgestellten Strukturdaten (entities + relations + source headers + Cluster-Namen + Top-Keywords) ab. Das pillar_topic soll das ÜBERGEORDNETE Themenfeld nennen, nicht ein einzelnes Cluster-Keyword.
+
+- pillar_topic: das EINE übergeordnete Thema, das ALLE Cluster GEMEINSAM definiert (3–6 Wörter, Sprache aus meta.language). Wenn z.B. die Cluster "Behälterbau", "Tankbau", "Edelstahlbehälter" sind → "Industrieller Behälter- und Tankbau"
+- subtopics: 3–8 Sub-Themen. Die einzelnen Cluster-Namen / Top-Keywords SIND typischerweise direkte Kandidaten für subtopics, ergänzt durch weitere ableitbare Themen aus den Entities.
+- semantic_field: 10–20 thematisch eng verwandte Begriffe (kann Begriffe enthalten, die nicht in entities stehen, aber semantisch klar mitschwingen)
+- coverage_depth: "shallow" | "moderate" | "deep" — wie tief decken die SERP-Quellen aller Cluster zusammen das übergeordnete Thema ab? shallow=meist Landing-Pages, moderate=Pillar + einige Subtopics belegt, deep=mehrere Cluster bieten substantielle Tiefe.
+- content_gaps: 3–8 Aspekte, die in den Cluster-Daten ERWÄHNT aber kaum belegt sind, oder zwischen den Clustern offensichtliche Lücken (z.B. wenn 4 Cluster Produkte abdecken aber keiner "Anwendungsfälle/Use-Cases") — also Ranking-Lücken, die eine eigene Pillar-Child-Page schließen könnte
+- related_clusters: 3–5 angrenzende Topic-Cluster (die NICHT vom User ausgewählt wurden), zu denen interne Verlinkung Sinn machen würde
+- competing_topics: 0–3 Themen, die in den Quellen mitlaufen aber den Gesamt-Themenfokus VERWÄSSERN (leer wenn Fokus klar)
+- target_queries: 3–6 Suchanfragen rund um das übergeordnete Thema. Die Top-Keywords der gewählten Cluster MÜSSEN unter target_queries auftauchen.`,
+  `# Phase 4 — Empfohlene Sitemap (Site-Tree für die übergeordnete Topical Authority)
+
+Basierend auf Phase 1 (meta) + den bereitgestellten entities + Phase 3 (seo) + den ausgewählten Clustern: entwirf einen IDEALEN Site-Tree für die übergeordnete Topical Authority. Ziel: vollständige Themen-Abdeckung über alle Cluster hinweg, klare Hub-Spoke-Struktur, jede Page hat einen eindeutigen Slug und eine H1.
+
+Die Seitenstruktur hat genau EINE Pillar-Page (Wurzel, slug "/") und 2–4 Ebenen darunter. Höchstens 30 Pages gesamt.
+
+WICHTIG: Die einzelnen ausgewählten Cluster sollten in der Sitemap als eigene Cluster-Overview-Pages oder Service-Pages erscheinen (Sub-Pillars unter dem Root-Pillar). Das macht die Cross-Cluster-Struktur sichtbar.
+
+Für JEDE empfohlene Page:
+- slug: URL-Pfad ab Domain-Root, immer mit führendem "/". Pillar = "/". Sonst lowercase, kebab-case, in der Sprache aus meta.language. Slugs MÜSSEN eindeutig sein.
+- parent_slug: Slug der Eltern-Page. NULL nur für die Pillar-Page. Jeder andere parent_slug MUSS einer in dieser Liste vorkommenden Slug sein.
+- h1: vorgeschlagene Hauptüberschrift, 2–8 Wörter, in der Sprache aus meta.language.
+- page_role: "pillar" | "cluster_overview" | "service_page" | "info_page" | "location_page" | "about_page" | "faq" | "blog_article"
+- status: "covered_on_page" (NUR für die Pillar Page selbst, da meta.page_type = "pillar_page"); "content_gap" wenn aus seo.content_gaps motiviert ODER die Page für die Cross-Cluster-Abdeckung nötig ist; "likely_exists_elsewhere" für übliche Service-Pages (Impressum/Team/Kontakt).
+- target_queries: 1–3 Suchanfragen. Bevorzuge Werte aus seo.target_queries und seo.content_gaps. Leer für Pillar/Cluster-Overview wenn nicht eindeutig.
+- covers_entities: Liste der canonical_names. MUSS ausschließlich aus der im User-Message bereitgestellten entities-Liste stammen. Kann leer sein.
+- covers_subtopics: Liste der Subtopics aus seo.subtopics oder seo.content_gaps. MUSS aus diesen Listen stammen. Kann leer sein.
+- rationale: ein Satz, warum diese Page existieren sollte (1 Halbsatz, in der Sprache aus meta.language).
+
+REGELN:
+- Genau eine Page mit parent_slug = null (die Pillar mit status "covered_on_page").
+- Keine zirkulären Eltern-Referenzen.
+- Keine Self-References (page.parent_slug != page.slug).
+- covers_entities und covers_subtopics MÜSSEN ausschließlich Werte aus den bereitgestellten Listen verwenden.
+- Wenn der Kontext kaum verwertbar ist (z.B. <5 Entities), gib eine minimale Sitemap mit 2–5 Pages aus statt zu halluzinieren.`,
+  `# Output-Format\n\n${NO_PREAMBLE}\n\n{\n${META_SCHEMA},\n${SEO_SCHEMA},\n${SITEMAP_SCHEMA}\n}`
+].join("\n\n");

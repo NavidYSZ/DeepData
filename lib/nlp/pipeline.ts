@@ -138,7 +138,7 @@ type StepSitemapData = {
 
 // ---------- Helpers ----------
 
-function compactEntitiesForContext(entities: ExtractionEntity[]) {
+export function compactEntitiesForContext(entities: ExtractionEntity[]) {
   // Strip mentions/definition_in_text to save tokens in downstream steps.
   return entities.map((e) => ({
     canonical_name: e.canonical_name,
@@ -148,7 +148,7 @@ function compactEntitiesForContext(entities: ExtractionEntity[]) {
   }));
 }
 
-function compactRelationsForContext(relations: ExtractionRelation[]) {
+export function compactRelationsForContext(relations: ExtractionRelation[]) {
   // Drop evidence to save tokens once relations have been confirmed.
   return relations.map((r) => ({
     subject: r.subject,
@@ -551,12 +551,12 @@ export type KeywordMapReduceOptions = {
   onProgress?: (event: PipelineProgressEvent) => void;
 };
 
-type SlimExtractionEntity = Omit<ExtractionEntity, "mentions" | "definition_in_text"> & {
+export type SlimExtractionEntity = Omit<ExtractionEntity, "mentions" | "definition_in_text"> & {
   mentions?: number;
   definition_in_text?: string | null;
 };
 
-type PerUrlExtraction = {
+export type PerUrlExtraction = {
   schema: { categories: string[] };
   entities: SlimExtractionEntity[];
   relations: ExtractionRelation[];
@@ -569,7 +569,7 @@ type MapReduceFullSynthesisData = {
   recommended_sitemap: RecommendedSitemap;
 };
 
-function mergeEntities(all: SlimExtractionEntity[]): ExtractionEntity[] {
+export function mergeEntities(all: SlimExtractionEntity[]): ExtractionEntity[] {
   const groups = new Map<string, SlimExtractionEntity[]>();
   for (const e of all) {
     const key = e.canonical_name?.trim();
@@ -614,7 +614,7 @@ function mergeEntities(all: SlimExtractionEntity[]): ExtractionEntity[] {
   return merged.sort((a, b) => b.mentions - a.mentions);
 }
 
-function mergeRelations(all: ExtractionRelation[]): ExtractionRelation[] {
+export function mergeRelations(all: ExtractionRelation[]): ExtractionRelation[] {
   const seen = new Map<string, ExtractionRelation>();
   for (const r of all) {
     const subj = r.subject?.trim();
@@ -632,7 +632,7 @@ function mergeRelations(all: ExtractionRelation[]): ExtractionRelation[] {
   return [...seen.values()];
 }
 
-function mergeCategories(all: string[]): string[] {
+export function mergeCategories(all: string[]): string[] {
   const seen = new Map<string, string>();
   for (const c of all) {
     const t = c?.trim();
