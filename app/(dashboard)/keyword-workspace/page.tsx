@@ -275,13 +275,54 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 /* ── Custom Node: Parent (unified – compact / expanded / docked) ── */
+function formatAllintitle(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`;
+  return String(n);
+}
+
+function AllintitleBadge({ value }: { value: number | null | "loading" | undefined }) {
+  if (value === "loading") {
+    return (
+      <span className="inline-flex w-14 shrink-0 justify-end text-[11px] tabular-nums text-muted-foreground/60">
+        …
+      </span>
+    );
+  }
+  if (value === null || value === undefined) {
+    return (
+      <span className="inline-flex w-14 shrink-0 justify-end text-[11px] tabular-nums text-muted-foreground/40">
+        —
+      </span>
+    );
+  }
+  const tone =
+    value < 100
+      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+      : value < 1_000
+        ? "bg-lime-500/15 text-lime-700 dark:text-lime-300"
+        : value < 10_000
+          ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+          : "bg-rose-500/15 text-rose-700 dark:text-rose-300";
+  return (
+    <span
+      className={`inline-flex w-14 shrink-0 justify-center rounded-md px-1.5 py-0.5 text-[11px] tabular-nums font-medium ${tone}`}
+      title={`Allintitle: ${value.toLocaleString("de-DE")} Treffer`}
+    >
+      {formatAllintitle(value)}
+    </span>
+  );
+}
+
 function ParentNode({ data }: NodeProps) {
   /* ── Expanded detail view (selected parent) ── */
   if (data.expanded) {
     const keywords: SerpKeyword[] = data.keywordsFlat ?? [];
+    const allintitleByKw: Record<string, number | null | "loading"> =
+      data.allintitleByKw ?? {};
     return (
       <div
-        className="rounded-lg border bg-card shadow-2xl p-4 w-[360px] max-h-[520px] overflow-hidden flex flex-col transition-[transform,opacity,width,height] duration-[480ms]"
+        className="rounded-lg border bg-card shadow-2xl p-4 w-[420px] max-h-[520px] overflow-hidden flex flex-col transition-[transform,opacity,width,height] duration-[480ms]"
         style={{ transitionTimingFunction: FLOW_EASING }}
       >
         <div className="flex items-start justify-between gap-3">
@@ -293,18 +334,29 @@ function ParentNode({ data }: NodeProps) {
           </div>
         </div>
         <div className="mt-3 space-y-1 flex-1 min-h-0">
-          <div className="text-sm font-medium">Keywords</div>
+          <div className="flex items-center justify-between text-sm font-medium">
+            <span>Keywords</span>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Demand · AIT
+            </span>
+          </div>
           <ScrollArea className="h-[340px] rounded border">
             <div className="p-3 space-y-1 text-sm text-muted-foreground">
-              {keywords.map((k) => (
-                <div key={k.id} className="flex min-w-0 items-center justify-between gap-2">
-                  <span className="flex min-w-0 flex-1 items-center gap-1">
-                    {k.demandSource === "upload" && <ExternalBadge />}
-                    <span className="truncate">{k.kwRaw}</span>
-                  </span>
-                  <span className="shrink-0 tabular-nums">{Math.round(k.demandMonthly)}</span>
-                </div>
-              ))}
+              {keywords.map((k) => {
+                const ait = allintitleByKw[k.kwRaw.trim().toLowerCase()];
+                return (
+                  <div key={k.id} className="flex min-w-0 items-center justify-between gap-2">
+                    <span className="flex min-w-0 flex-1 items-center gap-1">
+                      {k.demandSource === "upload" && <ExternalBadge />}
+                      <span className="truncate">{k.kwRaw}</span>
+                    </span>
+                    <span className="shrink-0 tabular-nums text-foreground/80">
+                      {Math.round(k.demandMonthly)}
+                    </span>
+                    <AllintitleBadge value={ait} />
+                  </div>
+                );
+              })}
             </div>
           </ScrollArea>
         </div>
@@ -347,7 +399,8 @@ function buildFlowGraph(
   selectedId: string | null,
   onSelect: (id: string) => void,
   dockTarget: { x: number; y: number } | null,
-  clickFeedbackId: string | null
+  clickFeedbackId: string | null,
+  allintitleByKw: Record<string, number | null | "loading">
 ): { nodes: Node[]; edges: Edge[] } {
   if (!subclusters.length) return { nodes: [], edges: [] };
 
@@ -406,6 +459,7 @@ function buildFlowGraph(
       expanded: true,
       keywordsFlat,
       totalKeywords: selected.keywordCount,
+      allintitleByKw,
       onSelect
     },
     style: { ...transitionStyle(), zIndex: 10 },
@@ -469,6 +523,7 @@ export default function KeywordWorkspacePage() {
   const [keywordScopeMode, setKeywordScopeMode] = useState<KeywordScopeMode>("project");
   const [uploadScopeSourceId, setUploadScopeSourceId] = useState<string | null>(null);
   const [uploadScopeSourceName, setUploadScopeSourceName] = useState<string | null>(null);
+  const [allintitleByKw, setAllintitleByKw] = useState<Record<string, number | null | "loading">>({});
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -878,15 +933,78 @@ export default function KeywordWorkspacePage() {
     [selectedOptionalColumns, updateOptionalColumns]
   );
 
-  const handleSelect = useCallback((id: string) => {
-    setClickFeedbackClusterId(id);
-    if (selectTimerRef.current) window.clearTimeout(selectTimerRef.current);
-    selectTimerRef.current = window.setTimeout(() => {
-      setSelectedClusterId(id);
-      setClickFeedbackClusterId(null);
-      selectTimerRef.current = null;
-    }, 130);
-  }, []);
+  const fetchAllintitleForCluster = useCallback(
+    async (keywords: string[]) => {
+      const unique = Array.from(
+        new Set(keywords.map((k) => k.trim()).filter((k) => k.length > 0))
+      );
+      if (unique.length === 0) return;
+
+      const needsFetch = unique.filter((kw) => {
+        const key = kw.toLowerCase();
+        const current = allintitleByKw[key];
+        return current === undefined;
+      });
+      if (needsFetch.length === 0) return;
+
+      setAllintitleByKw((prev) => {
+        const next = { ...prev };
+        for (const kw of needsFetch) next[kw.toLowerCase()] = "loading";
+        return next;
+      });
+
+      try {
+        const res = await fetch("/api/keyword-workspace/allintitle", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ keywords: needsFetch })
+        });
+        if (!res.ok) {
+          setAllintitleByKw((prev) => {
+            const next = { ...prev };
+            for (const kw of needsFetch) next[kw.toLowerCase()] = null;
+            return next;
+          });
+          return;
+        }
+        const json = (await res.json()) as {
+          results: Array<{ keyword: string; allintitle: number | null }>;
+        };
+        setAllintitleByKw((prev) => {
+          const next = { ...prev };
+          for (const r of json.results) {
+            next[r.keyword.toLowerCase()] = r.allintitle;
+          }
+          return next;
+        });
+      } catch {
+        setAllintitleByKw((prev) => {
+          const next = { ...prev };
+          for (const kw of needsFetch) next[kw.toLowerCase()] = null;
+          return next;
+        });
+      }
+    },
+    [allintitleByKw]
+  );
+
+  const handleSelect = useCallback(
+    (id: string) => {
+      setClickFeedbackClusterId(id);
+      if (selectTimerRef.current) window.clearTimeout(selectTimerRef.current);
+      selectTimerRef.current = window.setTimeout(() => {
+        setSelectedClusterId(id);
+        setClickFeedbackClusterId(null);
+        selectTimerRef.current = null;
+      }, 130);
+
+      const cluster = subclustersSorted.find((s) => s.id === id);
+      if (cluster) {
+        void fetchAllintitleForCluster(cluster.keywords.map((k) => k.kwRaw));
+      }
+    },
+    [subclustersSorted, fetchAllintitleForCluster]
+  );
 
   const handleBack = useCallback(() => {
     if (selectTimerRef.current) {
@@ -916,9 +1034,17 @@ export default function KeywordWorkspacePage() {
         selectedClusterId,
         handleSelect,
         dockTarget,
-        clickFeedbackClusterId
+        clickFeedbackClusterId,
+        allintitleByKw
       ),
-    [subclustersSorted, selectedClusterId, handleSelect, dockTarget, clickFeedbackClusterId]
+    [
+      subclustersSorted,
+      selectedClusterId,
+      handleSelect,
+      dockTarget,
+      clickFeedbackClusterId,
+      allintitleByKw
+    ]
   );
 
   useEffect(
