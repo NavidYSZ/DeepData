@@ -105,8 +105,7 @@ function ClusterCard({ data }: NodeProps) {
     keywordCount,
     topKeyword,
     rank,
-    selected,
-    onToggle
+    selected
   }: {
     name: string;
     totalDemand: number;
@@ -114,20 +113,10 @@ function ClusterCard({ data }: NodeProps) {
     topKeyword: string | null;
     rank: number;
     selected: boolean;
-    onToggle: () => void;
   } = data;
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={onToggle}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onToggle();
-        }
-      }}
       className={cn(
         "group flex w-[280px] cursor-pointer flex-col gap-2 rounded-xl border-2 bg-card p-3 shadow-sm transition-all duration-200",
         selected
@@ -176,8 +165,7 @@ const nodeTypes = { clusterCard: ClusterCard };
 
 function buildSelectionGraph(
   topClusters: SerpSubcluster[],
-  selectedIds: Set<string>,
-  onToggle: (id: string) => void
+  selectedIds: Set<string>
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = topClusters.map((c, idx) => {
     const col = idx % NODE_COLS;
@@ -198,11 +186,9 @@ function buildSelectionGraph(
         keywordCount: c.keywordCount,
         topKeyword,
         rank: idx + 1,
-        selected: selectedIds.has(c.id),
-        onToggle: () => onToggle(c.id)
+        selected: selectedIds.has(c.id)
       },
-      draggable: false,
-      selectable: false
+      draggable: false
     };
   });
   return { nodes, edges: [] };
@@ -271,8 +257,8 @@ export default function AuthorityWorkspacePage() {
   const handleClearAll = useCallback(() => setSelectedIds(new Set()), []);
 
   const { nodes: flowNodes, edges: flowEdges } = useMemo(
-    () => buildSelectionGraph(topClusters, selectedIds, handleToggle),
-    [topClusters, selectedIds, handleToggle]
+    () => buildSelectionGraph(topClusters, selectedIds),
+    [topClusters, selectedIds]
   );
 
   const handleStart = useCallback(async () => {
@@ -450,6 +436,7 @@ export default function AuthorityWorkspacePage() {
           flowEdges={flowEdges}
           selectionCount={selectionCount}
           totalCount={topClusters.length}
+          onToggle={handleToggle}
           onSelectAll={handleSelectAll}
           onClearAll={handleClearAll}
           onStart={handleStart}
@@ -481,6 +468,7 @@ function SelectionScene({
   flowEdges,
   selectionCount,
   totalCount,
+  onToggle,
   onSelectAll,
   onClearAll,
   onStart,
@@ -490,6 +478,7 @@ function SelectionScene({
   flowEdges: Edge[];
   selectionCount: number;
   totalCount: number;
+  onToggle: (id: string) => void;
   onSelectAll: () => void;
   onClearAll: () => void;
   onStart: () => void;
@@ -541,12 +530,12 @@ function SelectionScene({
         nodes={flowNodes}
         edges={flowEdges}
         nodeTypes={nodeTypes}
+        onNodeClick={(_evt, node) => onToggle(node.id)}
         fitView
         fitViewOptions={{ padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
         nodesDraggable={false}
         nodesConnectable={false}
-        elementsSelectable={false}
         panOnDrag
         zoomOnScroll
         minZoom={0.4}
