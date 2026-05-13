@@ -84,6 +84,7 @@ export type EntityMapProps = {
   heightClass?: string;
   defaultLayout?: EntityLayout;
   allowedLayouts?: EntityLayout[];
+  fullscreen?: boolean;
 };
 
 export function EntityMap(props: EntityMapProps) {
@@ -100,7 +101,8 @@ function EntityMapInner({
   orphansLabel,
   heightClass = "h-[78vh]",
   defaultLayout = "tidy",
-  allowedLayouts
+  allowedLayouts,
+  fullscreen = false
 }: EntityMapProps) {
   const [layout, setLayout] = useState<EntityLayout>(defaultLayout);
   const visibleLayouts = allowedLayouts
@@ -199,35 +201,94 @@ function EntityMapInner({
     categoryColors
   });
 
+  const layoutSwitcher = (
+    <div className="inline-flex overflow-hidden rounded-md border bg-background/95 shadow-sm backdrop-blur">
+      {visibleLayouts.map((mode) => {
+        const active = layout === mode.value;
+        const Icon = mode.Icon;
+        return (
+          <button
+            key={mode.value}
+            type="button"
+            onClick={() => setLayout(mode.value)}
+            title={mode.tooltip}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border-r last:border-r-0 transition",
+              active
+                ? "bg-primary text-primary-foreground"
+                : "hover:bg-muted/50 text-foreground"
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            <span>{mode.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  if (fullscreen) {
+    return (
+      <div className={cn("relative w-full overflow-hidden bg-muted/20", heightClass)}>
+        <div className="pointer-events-auto absolute right-3 top-3 z-20">{layoutSwitcher}</div>
+        <ReactFlow
+          nodes={styledNodes}
+          edges={styledEdges}
+          nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={onNodeClick}
+          onNodeMouseEnter={onNodeMouseEnter}
+          onNodeMouseLeave={onNodeMouseLeave}
+          onPaneClick={onPaneClick}
+          fitView
+          fitViewOptions={{ padding: 0.2 }}
+          proOptions={{ hideAttribution: true }}
+          minZoom={0.15}
+          maxZoom={1.5}
+          nodesDraggable
+          nodesConnectable={false}
+          elementsSelectable
+        >
+          <Background gap={20} size={1} />
+          <Controls position="bottom-left" showInteractive={false} />
+          <MiniMap
+            pannable
+            zoomable
+            nodeColor={(n) => (n.data as EntityNodeData | undefined)?.color ?? "#94a3b8"}
+            maskColor="hsl(var(--background) / 0.6)"
+            style={{ right: 52, bottom: 12, left: undefined }}
+          />
+        </ReactFlow>
+
+        {orphans.length > 0 ? (
+          <div className="pointer-events-none absolute left-3 top-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300">
+            {orphansLabel?.(orphans.length) ??
+              `${orphans.length} Relation${orphans.length === 1 ? "" : "en"} ohne passende Entity übersprungen`}
+          </div>
+        ) : null}
+
+        {sidebarConfig ? (
+          <EntitySidebar
+            collapsedLabel={sidebarConfig.collapsedLabel}
+            headerTitle={sidebarConfig.headerTitle}
+            headerIcon={sidebarConfig.headerIcon}
+            body={sidebarConfig.body}
+            onClose={handleClearSelection}
+            showCloseButton={sidebarConfig.showCloseButton ?? selectedEntity !== null}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2">
         <span className="mr-1 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
           Ansicht:
         </span>
-        <div className="inline-flex overflow-hidden rounded-md border bg-background">
-          {visibleLayouts.map((mode) => {
-            const active = layout === mode.value;
-            const Icon = mode.Icon;
-            return (
-              <button
-                key={mode.value}
-                type="button"
-                onClick={() => setLayout(mode.value)}
-                title={mode.tooltip}
-                className={cn(
-                  "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border-r last:border-r-0 transition",
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-muted/50 text-foreground"
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                <span>{mode.label}</span>
-              </button>
-            );
-          })}
-        </div>
+        {layoutSwitcher}
       </div>
 
       <div className={cn("relative w-full overflow-hidden rounded-lg border bg-muted/20", heightClass)}>

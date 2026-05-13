@@ -51,7 +51,7 @@ import {
   type UploadImportCompletePayload
 } from "@/components/keyword-workspace/upload-dialog";
 import { ExternalBadge } from "@/components/keyword-workspace/external-badge";
-import { WorkspaceEntityMapView } from "@/components/keyword-workspace/entity-map-view";
+import { WorkspaceEntityMapFullscreen } from "@/components/keyword-workspace/entity-map-view";
 
 type SerpKeyword = { id: string; kwRaw: string; demandMonthly: number; demandSource?: string; difficultyScore?: number | null };
 type SerpSubcluster = {
@@ -1104,7 +1104,7 @@ export default function KeywordWorkspacePage() {
   return (
     <div
       ref={canvasRef}
-      className={`relative h-full w-full bg-card ${view === "cluster" ? "overflow-hidden" : "overflow-y-auto"}`}
+      className="relative h-full w-full overflow-hidden bg-card"
     >
       <div className="absolute top-3 left-1/2 z-30 -translate-x-1/2">
         <div className="inline-flex items-center gap-1 rounded-full border bg-card/95 p-1 shadow-lg backdrop-blur-md">
@@ -1292,17 +1292,17 @@ export default function KeywordWorkspacePage() {
       )}
 
       {view === "entity-map" ? (
-        <div className="px-4 pb-6 pt-20">
+        <div className="absolute inset-0">
           {!hasClusterData ? (
-            <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
-              Noch kein SERP-Clustering gelaufen. Wechsle in die Cluster-Ansicht und starte einen Run.
+            <div className="flex h-full items-center justify-center px-4">
+              <div className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
+                Noch kein SERP-Clustering gelaufen. Wechsle in die Cluster-Ansicht und starte einen Run.
+              </div>
             </div>
           ) : (
-            <WorkspaceEntityMapView
+            <WorkspaceEntityMapFullscreen
               subclusters={subclusters ?? []}
               siteUrl={workspace?.siteUrl ?? site}
-              runId={serpData?.runId ?? null}
-              generatedAt={serpData?.generatedAt ?? null}
             />
           )}
         </div>

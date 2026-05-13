@@ -11,7 +11,6 @@ import { EntityMap } from "@/components/entity-graph/entity-map";
 import { EntityDetailPanel } from "@/components/nlp/entity-detail-panel";
 import {
   CLUSTER_CATEGORY,
-  KEYWORD_CATEGORY,
   clustersToEntityGraph,
   type ClusterEntityInput,
   type ClusterEntityMapOptions
@@ -31,6 +30,85 @@ const DEFAULT_OPTIONS: ClusterEntityMapOptions = {
   minClusterDemand: 0,
   minKeywordDemand: 0
 };
+
+export function WorkspaceEntityMapFullscreen({ subclusters, siteUrl }: { subclusters: ClusterEntityInput[]; siteUrl: string | null }) {
+  const graph = useMemo(
+    () => clustersToEntityGraph(subclusters, DEFAULT_OPTIONS),
+    [subclusters]
+  );
+  const clusterRelations = graph.relations.filter((r) => r.predicate === "related_to");
+  const clusterEntities = graph.entities.filter((e) => e.category === CLUSTER_CATEGORY);
+  const connectedness = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of clusterRelations) {
+      counts.set(r.subject, (counts.get(r.subject) ?? 0) + 1);
+      counts.set(r.object, (counts.get(r.object) ?? 0) + 1);
+    }
+    const sorted = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+    return {
+      mostConnected: sorted[0] ?? null,
+      isolated: clusterEntities.map((e) => e.canonical_name).filter((n) => !counts.has(n))
+    };
+  }, [clusterRelations, clusterEntities]);
+
+  return (
+    <EntityMap
+      data={graph}
+      fullscreen
+      heightClass="h-full"
+      defaultLayout="tidy"
+      allowedLayouts={["tidy", "radial"]}
+      orphansLabel={(n) => `${n} Cluster-Beziehung${n === 1 ? "" : "en"} nicht aufgelöst`}
+      renderSidebar={({ selectedEntity, onSelectEntity, categoryColors }) => {
+        if (!selectedEntity) {
+          return {
+            collapsedLabel: "Workspace",
+            headerTitle: "Workspace-Insights",
+            headerIcon: <Sparkles className="h-4 w-4 shrink-0 text-muted-foreground" />,
+            body: (
+              <WorkspaceInsights
+                subclusters={subclusters}
+                relationCount={clusterRelations.length}
+                isolated={connectedness.isolated}
+              />
+            ),
+            showCloseButton: false
+          };
+        }
+        if (selectedEntity.category === CLUSTER_CATEGORY) {
+          const cluster = graph.clusterIndex.get(selectedEntity.canonical_name);
+          return {
+            collapsedLabel: selectedEntity.canonical_name,
+            headerTitle: selectedEntity.canonical_name,
+            headerIcon: <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />,
+            body: cluster ? (
+              <ClusterDetailPanel
+                cluster={cluster}
+                color={categoryColors[CLUSTER_CATEGORY] ?? "#64748b"}
+                siteUrl={siteUrl}
+              />
+            ) : null,
+            showCloseButton: true
+          };
+        }
+        return {
+          collapsedLabel: selectedEntity.canonical_name,
+          headerTitle: selectedEntity.canonical_name,
+          headerIcon: <Tag className="h-4 w-4 shrink-0 text-muted-foreground" />,
+          body: (
+            <EntityDetailPanel
+              entity={selectedEntity}
+              color={categoryColors[selectedEntity.category] ?? "#64748b"}
+              relations={graph.relations}
+              onSelectEntity={onSelectEntity}
+            />
+          ),
+          showCloseButton: true
+        };
+      }}
+    />
+  );
+}
 
 export function WorkspaceEntityMapView({ subclusters, siteUrl, runId, generatedAt }: Props) {
   const [options, setOptions] = useState<ClusterEntityMapOptions>(DEFAULT_OPTIONS);
