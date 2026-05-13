@@ -34,7 +34,8 @@ const bodySchema = z.object({
   keyword: z.string().min(2).max(200),
   pipeline: z
     .enum(["single", "2step", "3step", "4step", "mapreduce"])
-    .default("single")
+    .default("single"),
+  model: z.string().min(1).max(80).optional()
 });
 
 type ExtractedSource = {
@@ -283,6 +284,7 @@ export async function POST(request: Request) {
             routeVersion: ROUTE_VERSION,
             routeLogPrefix: "nlp/keyword",
             enableThinking: true,
+            modelOverride: body.model,
             onProgress
           });
           if (!result.ok) {
@@ -338,7 +340,8 @@ export async function POST(request: Request) {
             text: concatenated,
             routeVersion: ROUTE_VERSION,
             routeLogPrefix: "nlp/keyword",
-            userMessageBuilder
+            userMessageBuilder,
+            modelOverride: body.model
           });
           if (!result.ok) {
             const errMsg = String(
@@ -395,6 +398,7 @@ export async function POST(request: Request) {
           routeLogPrefix: "nlp/keyword",
           userMessageBuilder,
           enableThinking: true,
+          modelOverride: body.model,
           onProgress
         });
 

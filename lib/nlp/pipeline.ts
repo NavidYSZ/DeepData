@@ -85,6 +85,12 @@ export type PipelineOptions = {
    * it completes. Routes use this to push SSE events to the client.
    */
   onProgress?: (event: PipelineProgressEvent) => void;
+  /**
+   * Per-call model override. When set, every step in the pipeline uses
+   * this model id instead of the env default. xAI Grok models route
+   * automatically to the xAI base URL via resolveProvider().
+   */
+  modelOverride?: string;
 };
 
 // Per-step max output tokens (passed as max_completion_tokens to OpenAI).
@@ -190,6 +196,7 @@ function failure(
 
 type ProgressEmitter = {
   onProgress?: (event: PipelineProgressEvent) => void;
+  modelOverride?: string;
 };
 
 async function executeStep<T>(
@@ -200,7 +207,10 @@ async function executeStep<T>(
   callArgs: LlmJsonCallOptions
 ): Promise<{ ok: true; data: T } | PipelineFailure> {
   emitter.onProgress?.({ type: "step-start", step });
-  const result = await runLlmJsonCall<T>(callArgs);
+  const result = await runLlmJsonCall<T>({
+    ...callArgs,
+    modelOverride: callArgs.modelOverride ?? emitter.modelOverride
+  });
   if (!result.ok) {
     emitter.onProgress?.({
       type: "step-failed",
@@ -549,6 +559,12 @@ export type KeywordMapReduceOptions = {
   routeLogPrefix: string;
   enableThinking?: boolean;
   onProgress?: (event: PipelineProgressEvent) => void;
+  /**
+   * Per-call model override. Forwarded to every step (Phase 1 keeps using
+   * the fast hint when override is empty so the env-default stays for the
+   * normal "fast model" lane).
+   */
+  modelOverride?: string;
 };
 
 export type SlimExtractionEntity = Omit<ExtractionEntity, "mentions" | "definition_in_text"> & {
@@ -695,9 +711,11 @@ async function runPerUrlLightExtraction(
     // Phase 1 is mechanical entity/relation extraction — reasoning adds
     // latency without quality, so we hardcode `enableThinking: false`
     // (maps to OpenAI reasoning_effort=minimal). The "fast" hint routes
-    // to OPENAI_MODEL_FAST (default gpt-5.4-mini).
+    // to OPENAI_MODEL_FAST (default gpt-5.4-mini) UNLESS the caller pinned
+    // a specific model (e.g. user selected grok-4.3) — then we honor that.
     enableThinking: false,
-    modelHint: "fast",
+    modelOverride: options.modelOverride,
+    modelHint: options.modelOverride ? undefined : "fast",
     stepLabel: step
   });
   if (!result.ok) {

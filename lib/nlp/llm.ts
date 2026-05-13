@@ -89,6 +89,7 @@ export type LlmExtractOptions = {
   routeVersion: string;
   routeLogPrefix: string;
   userMessageBuilder?: (text: string) => string;
+  modelOverride?: string;
 };
 
 const defaultUserMessageBuilder = (text: string) =>
@@ -99,6 +100,33 @@ export function resolveModel(hint?: ModelHint): string {
     return process.env.OPENAI_MODEL_FAST ?? "gpt-5.4-mini";
   }
   return process.env.OPENAI_MODEL ?? "gpt-5.4";
+}
+
+type ProviderConfig = {
+  baseURL: string;
+  apiKey: string | undefined;
+  apiKeyName: string;
+  providerLabel: string;
+};
+
+function resolveProvider(modelId: string): ProviderConfig {
+  if (modelId.toLowerCase().startsWith("grok")) {
+    return {
+      baseURL: (process.env.XAI_BASE_URL || "https://api.x.ai/v1").replace(/\/$/, ""),
+      apiKey: process.env.GROK_API_KEY,
+      apiKeyName: "GROK_API_KEY",
+      providerLabel: "xAI"
+    };
+  }
+  return {
+    baseURL: (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(
+      /\/$/,
+      ""
+    ),
+    apiKey: process.env.OPENAI_API_KEY,
+    apiKeyName: "OPENAI_API_KEY",
+    providerLabel: "OpenAI"
+  };
 }
 
 /**
@@ -115,6 +143,7 @@ export async function runLlmExtraction(
     routeVersion: options.routeVersion,
     routeLogPrefix: options.routeLogPrefix,
     maxTokens: DEFAULT_MAX_TOKENS,
+    modelOverride: options.modelOverride,
     stepLabel: "single-shot"
   });
   if (!result.ok) return result;
@@ -155,44 +184,44 @@ export async function runLlmJsonCall<T>(
     stepLabel
   } = options;
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const modelId = modelOverride || resolveModel(modelHint);
+  const provider = resolveProvider(modelId);
+  const { baseURL, apiKey } = provider;
   if (!apiKey) {
     return {
       ok: false,
       status: 500,
       body: {
         _routeVersion: routeVersion,
-        error:
-          "Missing OPENAI_API_KEY. Set OPENAI_API_KEY in your env. Optional: OPENAI_BASE_URL (default https://api.openai.com/v1), OPENAI_MODEL (default gpt-5.4), OPENAI_MODEL_FAST (default gpt-5.4-mini)."
+        error: `Missing ${provider.apiKeyName}. Set ${provider.apiKeyName} in your env to use ${provider.providerLabel} model "${modelId}".`
       }
     };
   }
-
-  const baseURL = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(
-    /\/$/,
-    ""
-  );
   const endpoint = `${baseURL}/chat/completions`;
-  const modelId = modelOverride || resolveModel(modelHint);
 
-  // enableThinking → reasoning_effort. Undefined leaves the field off so
-  // the API default applies (varies by model).
-  // GPT-5.x models accept: "none" | "low" | "medium" | "high" | "xhigh".
-  // ("minimal" is not supported on gpt-5.4 / gpt-5.4-mini.)
+  const isXai = provider.providerLabel === "xAI";
+
+  // enableThinking → reasoning_effort. Only OpenAI's gpt-5.x accepts this;
+  // xAI's Grok handles reasoning implicitly per model and rejects the param.
   let reasoningEffort: string | undefined;
-  if (enableThinking === false) reasoningEffort = "none";
-  else if (enableThinking === true) reasoningEffort = "medium";
+  if (!isXai) {
+    if (enableThinking === false) reasoningEffort = "none";
+    else if (enableThinking === true) reasoningEffort = "medium";
+  }
 
   const requestBody: Record<string, unknown> = {
     model: modelId,
     stream: true,
-    max_completion_tokens: maxTokens,
+    stream_options: { include_usage: true },
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userMessage }
     ]
   };
+  // OpenAI gpt-5.x wants max_completion_tokens; xAI Grok wants legacy max_tokens.
+  if (isXai) requestBody.max_tokens = maxTokens;
+  else requestBody.max_completion_tokens = maxTokens;
   if (reasoningEffort) requestBody.reasoning_effort = reasoningEffort;
 
   const label = stepLabel ? ` step=${stepLabel}` : "";

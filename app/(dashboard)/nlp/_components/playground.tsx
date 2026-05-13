@@ -110,6 +110,113 @@ type LlmResponse = {
 type Mode = "google" | "llm";
 type LlmInput = "url" | "keyword";
 type Pipeline = "single" | "2step" | "3step" | "4step" | "mapreduce";
+type ModelChoice = "gpt-5.4" | "gpt-5.4-mini" | "grok-4.3" | "grok-4.1-fast";
+
+const MODEL_CHOICES: { id: ModelChoice; label: string; tag: string; provider: "openai" | "xai" }[] = [
+  { id: "gpt-5.4", label: "GPT-5.4", tag: "OpenAI · flagship", provider: "openai" },
+  { id: "gpt-5.4-mini", label: "GPT-5.4-mini", tag: "OpenAI · mini", provider: "openai" },
+  { id: "grok-4.3", label: "Grok 4.3", tag: "xAI · flagship", provider: "xai" },
+  { id: "grok-4.1-fast", label: "Grok 4.1 Fast", tag: "xAI · fast", provider: "xai" }
+];
+
+// USD per 1M tokens. Source: public 2026 pricing. Adjust here as it shifts.
+const PRICE_PER_MILLION: Record<ModelChoice, { in: number; out: number }> = {
+  "gpt-5.4": { in: 10, out: 30 },
+  "gpt-5.4-mini": { in: 1.5, out: 6 },
+  "grok-4.3": { in: 1.25, out: 2.5 },
+  "grok-4.1-fast": { in: 0.2, out: 0.5 }
+};
+
+type UsageLike = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+} | null | undefined;
+
+function extractTokens(usage: UsageLike): { input: number; output: number } {
+  if (!usage || typeof usage !== "object") return { input: 0, output: 0 };
+  const u = usage as Record<string, unknown>;
+  const input =
+    Number(u.prompt_tokens) ||
+    Number(u.input_tokens) ||
+    (Number(u.total_tokens) && Number(u.completion_tokens)
+      ? Number(u.total_tokens) - Number(u.completion_tokens)
+      : 0);
+  const output = Number(u.completion_tokens) || Number(u.output_tokens) || 0;
+  return { input: input || 0, output: output || 0 };
+}
+
+function estimateCost(model: ModelChoice, input: number, output: number): number {
+  const price = PRICE_PER_MILLION[model];
+  if (!price) return 0;
+  return (input * price.in + output * price.out) / 1_000_000;
+}
+
+function formatCost(usd: number): string {
+  if (usd === 0) return "$0";
+  if (usd < 0.01) return `$${usd.toFixed(4)}`;
+  return `$${usd.toFixed(4)}`;
+}
+
+function logPipelineCost(args: {
+  scope: string;
+  model: ModelChoice;
+  totalDurationMs: number;
+  steps: PipelineStepMetric[];
+}) {
+  const rows = args.steps.map((s) => {
+    const { input, output } = extractTokens(s.usage as UsageLike);
+    return {
+      step: s.step,
+      model: s.model,
+      durationS: +(s.durationMs / 1000).toFixed(2),
+      firstChunkMs: s.firstChunkMs,
+      inputTokens: input,
+      outputTokens: output,
+      cost: formatCost(estimateCost(args.model, input, output)),
+      finish: s.finishReason
+    };
+  });
+  const totalInput = rows.reduce((s, r) => s + r.inputTokens, 0);
+  const totalOutput = rows.reduce((s, r) => s + r.outputTokens, 0);
+  const totalCost = estimateCost(args.model, totalInput, totalOutput);
+  console.groupCollapsed(
+    `[NLP] ${args.scope} model=${args.model} duration=${(args.totalDurationMs / 1000).toFixed(2)}s tokens=${totalInput}/${totalOutput} cost=${formatCost(totalCost)}`
+  );
+  console.table(rows);
+  console.log("Pricing per 1M tokens (USD):", PRICE_PER_MILLION[args.model]);
+  console.groupEnd();
+}
+
+function logSingleCost(args: {
+  scope: string;
+  model: ModelChoice;
+  durationMs: number;
+  firstChunkMs: number | null;
+  usage: UsageLike;
+  finishReason: string | null;
+  reportedModel?: string;
+}) {
+  const { input, output } = extractTokens(args.usage);
+  const cost = estimateCost(args.model, input, output);
+  console.groupCollapsed(
+    `[NLP] ${args.scope} model=${args.model} duration=${(args.durationMs / 1000).toFixed(2)}s tokens=${input}/${output} cost=${formatCost(cost)}`
+  );
+  console.log({
+    selectedModel: args.model,
+    reportedModel: args.reportedModel ?? null,
+    durationMs: args.durationMs,
+    firstChunkMs: args.firstChunkMs,
+    inputTokens: input,
+    outputTokens: output,
+    estimatedCostUSD: cost.toFixed(6),
+    finishReason: args.finishReason,
+    pricingPerMillion: PRICE_PER_MILLION[args.model]
+  });
+  console.groupEnd();
+}
 
 function formatLlmError(json: any): string {
   const parts: string[] = [json?.error ?? "LLM request failed"];
@@ -156,14 +263,18 @@ function formatLlmError(json: any): string {
 }
 
 export function NlpPlayground() {
-  const [mode, setMode] = useState<Mode>("google");
+  // Google mode is hidden from the UI but the code path stays in place
+  // so we can flip it back on later without unwiring the route.
+  const [mode] = useState<Mode>("llm");
   const [llmInput, setLlmInput] = useState<LlmInput>("url");
   const [pipeline, setPipeline] = useState<Pipeline>("single");
+  const [model, setModel] = useState<ModelChoice>("gpt-5.4");
   const [url, setUrl] = useState("");
-  const [sentiment, setSentiment] = useState(true);
-  const [entities, setEntities] = useState(true);
-  const [entitySentiment, setEntitySentiment] = useState(false);
-  const [classify, setClassify] = useState(false);
+  // Google-mode feature flags — unused while the UI hides the mode switch.
+  const [sentiment] = useState(true);
+  const [entities] = useState(true);
+  const [entitySentiment] = useState(false);
+  const [classify] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleData, setGoogleData] = useState<GoogleResponse | null>(null);
@@ -205,7 +316,7 @@ export function NlpPlayground() {
         const res = await fetch("/api/nlp/llm", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: url.trim(), pipeline })
+          body: JSON.stringify({ url: url.trim(), pipeline, model })
         });
         const json = await res.json();
         if (!res.ok) {
@@ -220,6 +331,24 @@ export function NlpPlayground() {
           }
         } else {
           setLlmData(json);
+          if (json?.pipeline?.steps?.length) {
+            logPipelineCost({
+              scope: `url/${pipeline}`,
+              model,
+              totalDurationMs: json.pipeline.totalDurationMs ?? json.durationMs ?? 0,
+              steps: json.pipeline.steps as PipelineStepMetric[]
+            });
+          } else {
+            logSingleCost({
+              scope: `url/${pipeline}`,
+              model,
+              durationMs: json.durationMs ?? 0,
+              firstChunkMs: json.firstChunkMs ?? null,
+              usage: json.usage as UsageLike,
+              finishReason: json.finishReason ?? null,
+              reportedModel: json.model
+            });
+          }
         }
       }
     } catch (err: any) {
@@ -234,7 +363,7 @@ export function NlpPlayground() {
     const res = await fetch("/api/nlp/keyword", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ keyword: url.trim(), pipeline })
+      body: JSON.stringify({ keyword: url.trim(), pipeline, model })
     });
 
     // Pre-stream errors (auth / validation / env) come back as plain JSON.
@@ -324,6 +453,25 @@ export function NlpPlayground() {
           case "result":
             acc = data;
             flush();
+            if (data?.pipeline?.steps?.length) {
+              logPipelineCost({
+                scope: `keyword/${pipeline}`,
+                model,
+                totalDurationMs:
+                  data.pipeline.totalDurationMs ?? data.durationMs ?? 0,
+                steps: data.pipeline.steps as PipelineStepMetric[]
+              });
+            } else {
+              logSingleCost({
+                scope: `keyword/${pipeline}`,
+                model,
+                durationMs: data.durationMs ?? 0,
+                firstChunkMs: data.firstChunkMs ?? null,
+                usage: data.usage as UsageLike,
+                finishReason: data.finishReason ?? null,
+                reportedModel: data.model
+              });
+            }
             break;
           case "error":
             setError(formatLlmError(data));
@@ -354,14 +502,9 @@ export function NlpPlayground() {
       <PageHeader
         title="NLP Playground"
         description={
-          mode === "google"
-            ? "URL eingeben → Body-Content wird extrahiert → Sentiment, Entitäten und Kategorien über die Google Natural Language API."
-            : llmInput === "keyword"
-              ? "Keyword eingeben → Top-5 SERP-URLs werden gefetched + bereinigt → GPT-5.4 macht eine konsolidierte 6-Phasen-Analyse über alle Quellen."
-              : "URL eingeben → Body-Content wird extrahiert → GPT-5.4 führt 6-Phasen-Semantik-Extraktion durch (Entitäten, Relationen, SEO-Signale, Sitemap)."
-        }
-        actions={
-          <ModeSwitch mode={mode} onChange={setMode} disabled={loading} />
+          llmInput === "keyword"
+            ? "Keyword eingeben → Top-5 SERP-URLs werden gefetched + bereinigt → LLM macht eine konsolidierte 6-Phasen-Analyse über alle Quellen."
+            : "URL eingeben → Body-Content wird extrahiert → LLM führt 6-Phasen-Semantik-Extraktion durch (Entitäten, Relationen, SEO-Signale, Sitemap)."
         }
       />
 
@@ -373,21 +516,20 @@ export function NlpPlayground() {
         }
       >
         <div className="space-y-3">
-          {mode === "llm" ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <LlmInputSwitch
-                value={llmInput}
-                onChange={handleLlmInputChange}
-                disabled={loading}
-              />
-              <PipelineSelector
-                value={pipeline}
-                onChange={setPipeline}
-                disabled={loading}
-                inputMode={llmInput}
-              />
-            </div>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <LlmInputSwitch
+              value={llmInput}
+              onChange={handleLlmInputChange}
+              disabled={loading}
+            />
+            <PipelineSelector
+              value={pipeline}
+              onChange={setPipeline}
+              disabled={loading}
+              inputMode={llmInput}
+            />
+            <ModelSelector value={model} onChange={setModel} disabled={loading} />
+          </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
               type={mode === "llm" && llmInput === "keyword" ? "text" : "url"}
@@ -409,43 +551,19 @@ export function NlpPlayground() {
               ) : (
                 <Sparkles className="mr-2 h-4 w-4" />
               )}
-              {mode === "google"
-                ? "Analysieren"
-                : llmInput === "keyword"
-                  ? "SERP analysieren"
-                  : "Semantik extrahieren"}
+              {llmInput === "keyword" ? "SERP analysieren" : "Semantik extrahieren"}
             </Button>
           </div>
-          {mode === "google" ? (
-            <div className="flex flex-wrap items-center gap-4">
-              <Toggle label="Sentiment" checked={sentiment} onChange={setSentiment} />
-              <Toggle label="Entitäten" checked={entities} onChange={setEntities} />
-              <Toggle
-                label="Entity Sentiment"
-                checked={entitySentiment}
-                onChange={setEntitySentiment}
-              />
-              <Toggle
-                label="Kategorien (≥20 Wörter, EN)"
-                checked={classify}
-                onChange={setClassify}
-              />
-            </div>
-          ) : (
-            <div className="text-xs text-muted-foreground">
-              Modell:{" "}
-              <span className="font-mono text-foreground">
-                {llmData?.model || "gpt-5.4"}
+          <div className="text-xs text-muted-foreground">
+            Modell:{" "}
+            <span className="font-mono text-foreground">{llmData?.model || model}</span>
+            {" · "}Dauer + Kosten werden in die JS-Console geloggt.
+            {llmInput === "keyword" ? (
+              <span className="ml-2 text-amber-700 dark:text-amber-300">
+                · Keyword-Modus kann 60–120s dauern (SERP-Fetch + 5 Page-Crawls + LLM).
               </span>
-              {" · "}konfigurierbar über{" "}
-              <code className="rounded bg-muted px-1 py-0.5 text-[10px]">OPENAI_MODEL</code>
-              {llmInput === "keyword" ? (
-                <span className="ml-2 text-amber-700 dark:text-amber-300">
-                  · Keyword-Modus kann 60–120s dauern (SERP-Fetch + 5 Page-Crawls + LLM).
-                </span>
-              ) : null}
-            </div>
-          )}
+            ) : null}
+          </div>
           {error ? (
             <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
@@ -928,6 +1046,36 @@ function KeywordSourcesCard({
         ))}
       </ol>
     </SectionCard>
+  );
+}
+
+function ModelSelector({
+  value,
+  onChange,
+  disabled
+}: {
+  value: ModelChoice;
+  onChange: (m: ModelChoice) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="inline-flex items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-xs">
+      <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+        Modell
+      </span>
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value as ModelChoice)}
+        className="bg-transparent text-xs font-medium outline-none"
+      >
+        {MODEL_CHOICES.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.label} ({m.tag})
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 

@@ -18,7 +18,8 @@ const ROUTE_VERSION = "2026-05-12.9-openai-gpt5.4";
 
 const bodySchema = z.object({
   url: z.string().url(),
-  pipeline: z.enum(["single", "2step", "3step", "4step"]).default("single")
+  pipeline: z.enum(["single", "2step", "3step", "4step"]).default("single"),
+  model: z.string().min(1).max(80).optional()
 });
 
 export async function POST(request: Request) {
@@ -73,7 +74,8 @@ export async function POST(request: Request) {
     const result = await runLlmExtraction({
       text: truncated,
       routeVersion: ROUTE_VERSION,
-      routeLogPrefix: "nlp/llm"
+      routeLogPrefix: "nlp/llm",
+      modelOverride: body.model
     });
 
     if (!result.ok) {
@@ -113,7 +115,8 @@ export async function POST(request: Request) {
     text: truncated,
     routeVersion: ROUTE_VERSION,
     routeLogPrefix: "nlp/llm",
-    enableThinking: true
+    enableThinking: true,
+    modelOverride: body.model
   });
 
   if (!pipelineResult.ok) {
