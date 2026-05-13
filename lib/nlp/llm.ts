@@ -177,8 +177,10 @@ export async function runLlmJsonCall<T>(
 
   // enableThinking → reasoning_effort. Undefined leaves the field off so
   // the API default applies (varies by model).
+  // GPT-5.x models accept: "none" | "low" | "medium" | "high" | "xhigh".
+  // ("minimal" is not supported on gpt-5.4 / gpt-5.4-mini.)
   let reasoningEffort: string | undefined;
-  if (enableThinking === false) reasoningEffort = "minimal";
+  if (enableThinking === false) reasoningEffort = "none";
   else if (enableThinking === true) reasoningEffort = "medium";
 
   const requestBody: Record<string, unknown> = {
