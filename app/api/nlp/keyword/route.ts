@@ -16,7 +16,7 @@ import { fetchSerpTopUrls } from "@/lib/nlp/serp";
 
 export const maxDuration = 900;
 
-const ROUTE_VERSION = "2026-05-12.7-keyword-sse-mapreduce-20k";
+const ROUTE_VERSION = "2026-05-12.8-mapreduce-fast";
 
 const TOP_N_URLS = 5;
 const PER_URL_RESERVE_CHARS = 200;

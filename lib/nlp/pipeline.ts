@@ -1,6 +1,6 @@
 import {
   EXTRACTION_PROMPT_ENTITIES,
-  EXTRACTION_PROMPT_KEYWORD_SYNTHESIS,
+  EXTRACTION_PROMPT_KEYWORD_FULL_SYNTHESIS,
   EXTRACTION_PROMPT_KG,
   EXTRACTION_PROMPT_KG_AND_SEO,
   EXTRACTION_PROMPT_PER_URL_LIGHT,
@@ -87,16 +87,22 @@ export type PipelineOptions = {
   onProgress?: (event: PipelineProgressEvent) => void;
 };
 
-// Per-step max output tokens. DeepSeek v4-pro supports up to 380k output
-// (verified by user) and max_tokens covers reasoning + content together,
-// so every step gets the full budget — reasoning never starves content.
+// Per-step max output tokens.
+// URL-mode multi-step pipelines (single/2step/3step/4step) keep the full
+// 380k budget because their outputs can be large and reasoning runs on the
+// big v4-pro model. Map-Reduce caps each step tight: Phase 1 runs on the
+// fast v4-flash model without reasoning and produces tiny slim entities,
+// Phase 3 (combined synthesis+sitemap) runs with reasoning capped so it
+// doesn't drift.
 const TOKENS = {
   entities: 380_000,
   relations: 380_000,
   seo: 380_000,
   kg: 380_000,
   kgAndSeo: 380_000,
-  sitemap: 380_000
+  sitemap: 380_000,
+  mapreducePerUrl: 32_000,
+  mapreduceFullSynthesis: 64_000
 } as const;
 
 const defaultUserMessageBuilder = (text: string) =>
@@ -545,20 +551,26 @@ export type KeywordMapReduceOptions = {
   onProgress?: (event: PipelineProgressEvent) => void;
 };
 
+type SlimExtractionEntity = Omit<ExtractionEntity, "mentions" | "definition_in_text"> & {
+  mentions?: number;
+  definition_in_text?: string | null;
+};
+
 type PerUrlExtraction = {
   schema: { categories: string[] };
-  entities: ExtractionEntity[];
+  entities: SlimExtractionEntity[];
   relations: ExtractionRelation[];
 };
 
-type MapReduceSynthesisData = {
+type MapReduceFullSynthesisData = {
   meta: ExtractionMeta;
   schema: { categories: string[] };
   seo: ExtractionSeo;
+  recommended_sitemap: RecommendedSitemap;
 };
 
-function mergeEntities(all: ExtractionEntity[]): ExtractionEntity[] {
-  const groups = new Map<string, ExtractionEntity[]>();
+function mergeEntities(all: SlimExtractionEntity[]): ExtractionEntity[] {
+  const groups = new Map<string, SlimExtractionEntity[]>();
   for (const e of all) {
     const key = e.canonical_name?.trim();
     if (!key) continue;
@@ -568,9 +580,11 @@ function mergeEntities(all: ExtractionEntity[]): ExtractionEntity[] {
   }
   const merged: ExtractionEntity[] = [];
   for (const [canonical_name, entries] of groups) {
-    const totalMentions = entries.reduce((s, e) => s + (e.mentions || 0), 0);
+    // Slim entities may omit `mentions`; default each to 1 so the sum
+    // reflects "seen in N sources" at minimum.
+    const totalMentions = entries.reduce((s, e) => s + (e.mentions ?? 1), 0);
     const rep = entries.reduce((best, e) =>
-      (e.mentions || 0) > (best.mentions || 0) ? e : best
+      (e.mentions ?? 1) > (best.mentions ?? 1) ? e : best
     );
     const catCount = new Map<string, number>();
     for (const e of entries) {
@@ -672,8 +686,13 @@ async function runPerUrlLightExtraction(
     userMessage,
     routeVersion: options.routeVersion,
     routeLogPrefix: options.routeLogPrefix,
-    maxTokens: TOKENS.entities,
-    enableThinking: options.enableThinking,
+    maxTokens: TOKENS.mapreducePerUrl,
+    // Phase 1 is mechanical entity/relation extraction — reasoning adds
+    // latency without quality, so we hardcode it off regardless of what
+    // the caller passed in. The fast non-reasoning model handles it
+    // 3-5× quicker than v4-pro.
+    enableThinking: false,
+    modelOverride: process.env.DEEPSEEK_MODEL_FAST ?? "deepseek-v4-flash",
     stepLabel: step
   });
   if (!result.ok) {
@@ -766,14 +785,18 @@ export async function runKeywordMapReducePipeline(
   steps.push(mergeMetric);
   options.onProgress?.({ type: "step-done", metric: mergeMetric });
 
-  // ---------- Phase 3: LLM synthesis (meta + schema + seo) ----------
-  const stepSynthesis = await executeStep<MapReduceSynthesisData>(
+  // ---------- Phase 3 + Phase 4 merged: meta + schema + seo + sitemap in one call ----------
+  // Saves one HTTP round-trip + reasoning startup vs the previous two-call
+  // synthesis→sitemap chain. The sitemap part of the prompt only needs
+  // structured data which is already in the user message, so collapsing
+  // them is loss-free.
+  const stepFull = await executeStep<MapReduceFullSynthesisData>(
     options,
     steps,
     startedAt,
-    "mapreduce/3-synthesis",
+    "mapreduce/3-synthesis+sitemap",
     {
-      systemPrompt: EXTRACTION_PROMPT_KEYWORD_SYNTHESIS,
+      systemPrompt: EXTRACTION_PROMPT_KEYWORD_FULL_SYNTHESIS,
       userMessage: buildKeywordSynthesisUserMessage({
         keyword: options.keyword,
         sources: options.sources,
@@ -783,46 +806,23 @@ export async function runKeywordMapReducePipeline(
       }),
       routeVersion: options.routeVersion,
       routeLogPrefix: options.routeLogPrefix,
-      maxTokens: TOKENS.kg,
+      maxTokens: TOKENS.mapreduceFullSynthesis,
       enableThinking: options.enableThinking,
-      stepLabel: "mapreduce/3-synthesis"
+      stepLabel: "mapreduce/3-synthesis+sitemap"
     }
   );
-  if (!stepSynthesis.ok) return stepSynthesis;
-
-  // ---------- Phase 4: Sitemap from structured data only ----------
-  const stepSitemap = await executeStep<StepSitemapData>(
-    options,
-    steps,
-    startedAt,
-    "mapreduce/4-sitemap",
-    {
-      systemPrompt: EXTRACTION_PROMPT_SITEMAP,
-      userMessage: buildSitemapUserMessage({
-        meta: stepSynthesis.data.meta,
-        entities: mergedEntities,
-        relations: mergedRelations,
-        seo: stepSynthesis.data.seo
-      }),
-      routeVersion: options.routeVersion,
-      routeLogPrefix: options.routeLogPrefix,
-      maxTokens: TOKENS.sitemap,
-      enableThinking: options.enableThinking,
-      stepLabel: "mapreduce/4-sitemap"
-    }
-  );
-  if (!stepSitemap.ok) return stepSitemap;
+  if (!stepFull.ok) return stepFull;
 
   return {
     ok: true,
     mode: "mapreduce",
     extraction: {
-      meta: stepSynthesis.data.meta,
-      schema: { categories: stepSynthesis.data.schema.categories },
+      meta: stepFull.data.meta,
+      schema: { categories: stepFull.data.schema.categories },
       entities: mergedEntities,
       relations: mergedRelations,
-      seo: stepSynthesis.data.seo,
-      recommended_sitemap: stepSitemap.data.recommended_sitemap
+      seo: stepFull.data.seo,
+      recommended_sitemap: stepFull.data.recommended_sitemap
     },
     steps,
     totalDurationMs: Date.now() - startedAt

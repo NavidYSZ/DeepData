@@ -51,6 +51,13 @@ export type DeepSeekJsonCallOptions = {
    */
   enableThinking?: boolean;
   /**
+   * Per-call override for the DeepSeek model id. Wins over the
+   * DEEPSEEK_MODEL env var. Map-Reduce uses this to route Phase 1 to
+   * the cheaper/faster `deepseek-v4-flash` while Phase 3 stays on
+   * `deepseek-v4-pro`.
+   */
+  modelOverride?: string;
+  /**
    * Optional label included in console logs. Useful when chaining steps.
    */
   stepLabel?: string;
@@ -129,6 +136,7 @@ export async function runDeepSeekJsonCall<T>(
     routeLogPrefix,
     maxTokens = DEFAULT_MAX_TOKENS,
     enableThinking,
+    modelOverride,
     stepLabel
   } = options;
 
@@ -150,7 +158,7 @@ export async function runDeepSeekJsonCall<T>(
     ""
   );
   const endpoint = `${baseURL}/chat/completions`;
-  const modelId = process.env.DEEPSEEK_MODEL || "deepseek-v4-pro";
+  const modelId = modelOverride || process.env.DEEPSEEK_MODEL || "deepseek-v4-pro";
 
   // Thinking/reasoning: an explicit param wins over the env var.
   const disableThinking =

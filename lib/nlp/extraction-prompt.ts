@@ -197,6 +197,18 @@ Für JEDE in Phase 2 definierte Kategorie extrahiere alle vorkommenden Entitäte
 
 Keine Duplikate. Wenn unsicher zwischen Kategorien, wähle die spezifischste.`;
 
+const PHASE_3_SLIM = `# Phase 3 — Entity-Extraktion (light)
+
+Für JEDE in Phase 2 definierte Kategorie extrahiere alle vorkommenden Entitäten:
+- name: exakt wie im Text (erste oder häufigste Schreibung)
+- canonical_name: normalisierte Form (z.B. "Hastelloy C-22" statt "C22", "DIN EN ISO 3834-3" statt "3834-3")
+- category: eine der Phase-2-Kategorien
+- semantic_role: "pillar" (zentral) | "supporting" (stützt Pillar) | "peripheral" (Randerwähnung)
+
+Diese Light-Version SKIPPT bewusst die Felder \`mentions\` und \`definition_in_text\` — sie werden downstream nicht verwendet. Liefere sie NICHT.
+
+Keine Duplikate. Wenn unsicher zwischen Kategorien, wähle die spezifischste.`;
+
 const PHASE_4 = `# Phase 4 — Relations-Extraktion
 
 Extrahiere alle bedeutungsvollen Beziehungen zwischen zwei Entitäten:
@@ -245,6 +257,15 @@ const ENTITIES_SCHEMA = `  "entities": [
       "category": "<string>",
       "mentions": <int>,
       "definition_in_text": "<string|null>",
+      "semantic_role": "<pillar|supporting|peripheral>"
+    }
+  ]`;
+
+const ENTITIES_SCHEMA_SLIM = `  "entities": [
+    {
+      "name": "<string>",
+      "canonical_name": "<string>",
+      "category": "<string>",
       "semantic_role": "<pillar|supporting|peripheral>"
     }
   ]`;
@@ -393,14 +414,86 @@ export const EXTRACTION_PROMPT_PER_URL_LIGHT = [
 
 Im User-Message bekommst du das gemeinsame Keyword UND den Body-Text DIESER einen Quelle. Konzentriere dich auf den Body-Text — das Keyword dient nur als Domänen-Hinweis.
 
-Arbeite die folgenden Phasen strikt nacheinander ab. SEO-Signale, page_type/intent/audience und Sitemap werden in SEPARATEN späteren Aufrufen aus der gemergten Sicht synthetisiert — extrahiere sie hier NICHT.`,
+Arbeite die folgenden Phasen strikt nacheinander ab. SEO-Signale, page_type/intent/audience und Sitemap werden in SEPARATEN späteren Aufrufen aus der gemergten Sicht synthetisiert — extrahiere sie hier NICHT.
+
+Diese Light-Variante läuft OHNE Chain-of-Thought-Reasoning. Sei direkt und mechanisch: Domäne erkennen → Kategorien ableiten → Entities + Relations extrahieren.`,
   `# Phase 1 (intern) — Domäne erkennen
 
 Bestimme die Domäne dieser Quelle nur intern, um Kategorien sauber ableiten zu können. Gib sie NICHT als Feld aus.`,
   PHASE_2,
-  PHASE_3,
+  PHASE_3_SLIM,
   PHASE_4,
-  `# Output-Format\n\n${NO_PREAMBLE}\n\n{\n  "schema": {\n    "categories": ["<kat1>", "<kat2>"]\n  },\n${ENTITIES_SCHEMA},\n${RELATIONS_SCHEMA}\n}`
+  `# Output-Format\n\n${NO_PREAMBLE}\n\n{\n  "schema": {\n    "categories": ["<kat1>", "<kat2>"]\n  },\n${ENTITIES_SCHEMA_SLIM},\n${RELATIONS_SCHEMA}\n}`
+].join("\n\n");
+
+export const EXTRACTION_PROMPT_KEYWORD_FULL_SYNTHESIS = [
+  `Du synthetisierst die konsolidierte semantische Sicht auf ein Keyword UND entwirfst die empfohlene Sitemap für die zugehörige Topical Authority — beides in EINEM JSON-Output.
+
+Im User-Message bekommst du:
+- Das Keyword
+- Die Headers der Top-5 SERP-Quellen (URL, title, description, position)
+- Die bereits gemergten \`entities\` (über alle Quellen dedupliziert nach canonical_name)
+- Die bereits gemergten \`relations\` (über alle Quellen dedupliziert nach subject+predicate+object)
+- Die gemergten \`categories\` (Union der per-Quelle Kategorien-Sets)
+
+Du erhältst NICHT die Original-Texte der Quellen — arbeite ausschließlich mit dem bereitgestellten strukturierten Material plus den Quell-Headers.
+
+Deine Aufgabe: produziere meta + schema + seo + recommended_sitemap für die GESAMTE Topic-Map des Keywords. Arbeite die Phasen 1–4 strikt nacheinander ab. Reasoning ist aktiviert; nutze es für Phase 3 (SEO-Synthese) und Phase 4 (Sitemap-Architektur), nicht für Phase 1/2.`,
+  `# Phase 1 — Konsolidierte Meta
+
+- language: ISO 639-1, abgeleitet aus den Quell-Headers (alle deutsch → "de", alle englisch → "en", gemischt → dominante Sprache)
+- domain: das Fachgebiet des Keywords spezifisch (5–10 Wörter), z.B. "B2B-Industriefertigung Behälter- und Tankbau"
+- page_type: IMMER "pillar_page" — diese konsolidierte Sicht IST die Pillar-Topic-Map zum Keyword
+- intent: was suchen User typischerweise mit DIESEM Keyword? informational | commercial | transactional | navigational
+- audience: gemeinsame Zielgruppe der Top-SERP-Quellen (kurze Beschreibung)`,
+  `# Phase 2 — Konsolidiertes Schema
+
+Bereinige und verdichte die im User-Message bereitgestellten \`categories\` zu 6–12 finalen Kategorien:
+- Duplikate/Synonyme verschmelzen ("Material" + "Werkstoff" → "Werkstoff")
+- Generische Labels entfernen ("Entity", "Thing", "OTHER")
+- An die Domäne anpassen, in der Sprache aus meta.language
+
+VERBOTEN sind generische Labels: "Entity", "Thing", "Concept", "Topic", "Item", "Object", "OTHER".`,
+  `# Phase 3 — Konsolidierte SEO Topic Signals
+
+Leite ausschließlich aus den bereitgestellten Strukturdaten (entities + relations + source headers + keyword) ab:
+
+- pillar_topic: das EINE dominante Thema des Keywords (3–6 Wörter, Sprache aus meta.language). Bevorzuge die canonical_names der Entities mit semantic_role="pillar".
+- subtopics: 3–8 Sub-Themen, ableitbar aus pillar-Entities + ihren Relations + Quell-Titles
+- semantic_field: 10–20 thematisch eng verwandte Begriffe (kann Begriffe enthalten, die nicht in entities stehen, aber semantisch klar mitschwingen)
+- coverage_depth: "shallow" | "moderate" | "deep" — wie tief decken die Top-5 SERPs zusammen das Thema ab? shallow=meist Landing-Pages mit wenig Tiefe, moderate=Pillar + einige Subtopics, deep=mehrere ausführliche Pillar-Pages.
+- content_gaps: 3–8 Aspekte/Subtopics, die in den Quell-Headers/entities ERWÄHNT aber kaum belegt sind — also Ranking-Lücken, die eine eigene Seite schließen könnte
+- related_clusters: 3–5 angrenzende Topic-Cluster, zu denen interne Verlinkung Sinn machen würde
+- competing_topics: 0–3 Themen, die in den Quellen mitlaufen aber den Keyword-Fokus VERWÄSSERN (leer wenn Fokus klar)
+- target_queries: 3–6 Suchanfragen rund um das Keyword, für die die Pillar-Page ranken sollte. Das Keyword selbst MUSS unter target_queries auftauchen.`,
+  `# Phase 4 — Empfohlene Sitemap (Site-Tree für SEO Topical Authority)
+
+Basierend auf Phase 1 (meta) + den bereitgestellten entities + Phase 3 (seo): entwirf einen IDEALEN Site-Tree für die Domäne des Keywords. Ziel: vollständige Themen-Abdeckung, klare Hub-Spoke-Struktur, jede Page hat einen eindeutigen Slug und eine H1.
+
+Die Seitenstruktur hat genau EINE Pillar-Page (Wurzel, slug "/") und 2–4 Ebenen darunter. Höchstens 30 Pages gesamt.
+
+Für JEDE empfohlene Page:
+- slug: URL-Pfad ab Domain-Root, immer mit führendem "/". Pillar = "/". Sonst lowercase, kebab-case, in der Sprache aus meta.language. Slugs MÜSSEN eindeutig sein.
+- parent_slug: Slug der Eltern-Page. NULL nur für die Pillar-Page. Jeder andere parent_slug MUSS einer in dieser Liste vorkommenden Slug sein.
+- h1: vorgeschlagene Hauptüberschrift, 2–8 Wörter, in der Sprache aus meta.language.
+- page_role: "pillar" | "cluster_overview" | "service_page" | "info_page" | "location_page" | "about_page" | "faq" | "blog_article"
+- status: "covered_on_page" (Pillar selbst, da meta.page_type = "pillar_page"); "content_gap" wenn aus seo.content_gaps motiviert ODER die Page klar nötig wäre; "likely_exists_elsewhere" wenn die Page typischerweise auf einer Site existiert (/impressum, /team, /kontakt).
+- target_queries: 1–3 Suchanfragen. Bevorzuge Werte aus seo.target_queries und seo.content_gaps. Leer für Pillar/Cluster-Overview wenn nicht eindeutig.
+- covers_entities: Liste der canonical_names. MUSS ausschließlich aus der im User-Message bereitgestellten entities-Liste stammen — erfinde KEINE neuen Entity-Namen. Kann leer sein.
+- covers_subtopics: Liste der Subtopics aus seo.subtopics oder seo.content_gaps. MUSS aus diesen Listen stammen. Kann leer sein.
+- rationale: ein Satz, warum diese Page existieren sollte (1 Halbsatz, in der Sprache aus meta.language).
+
+REGELN:
+- Genau eine Page mit parent_slug = null (die Pillar mit status "covered_on_page").
+- Keine zirkulären Eltern-Referenzen.
+- Keine Self-References (page.parent_slug != page.slug).
+- covers_entities und covers_subtopics MÜSSEN ausschließlich Werte aus den bereitgestellten Listen verwenden.
+- Wenn der Kontext kaum verwertbar ist (z.B. <3 Entities), gib eine minimale Sitemap mit 1–3 Pages aus statt zu halluzinieren.
+
+Beispiele plausibler Trees (NICHT 1:1 übernehmen, nur Stil):
+- Zahnarzt-Praxis: Pillar "/" → Cluster "/leistungen" → Service-Pages "/leistungen/implantologie", "/leistungen/prophylaxe", ... + Cluster "/praxis" → "/praxis/team", "/praxis/anfahrt" + "/notfall" + "/preise".
+- SaaS-B2B: Pillar "/" → "/produkt" → Feature-Pages, + "/anwendungsfaelle/<branche>", + "/preise", + "/blog/<thema>".`,
+  `# Output-Format\n\n${NO_PREAMBLE}\n\n{\n${META_SCHEMA},\n${SEO_SCHEMA},\n${SITEMAP_SCHEMA}\n}`
 ].join("\n\n");
 
 export const EXTRACTION_PROMPT_KEYWORD_SYNTHESIS = [

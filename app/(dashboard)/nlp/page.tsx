@@ -780,7 +780,7 @@ function PipelineStepsCard({
         : pipeline.mode === "4step"
           ? 4
           : pipeline.mode === "mapreduce"
-            ? 8 // 5 per-URL + merge + synthesis + sitemap
+            ? 7 // 5 per-URL + merge + synthesis+sitemap (combined)
             : 1;
   const completedAll = !pipeline.failedStep && stepCount === expectedCount;
   const totalDurationLabel = pipeline.totalDurationMs
