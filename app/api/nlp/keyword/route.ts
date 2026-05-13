@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { fetchAndExtract } from "@/lib/nlp/extract";
-import { runDeepSeekExtraction, MAX_TEXT_CHARS } from "@/lib/nlp/deepseek";
+import { runLlmExtraction, MAX_TEXT_CHARS } from "@/lib/nlp/llm";
 import {
   runPipeline,
   runKeywordMapReducePipeline,
@@ -16,7 +16,7 @@ import { fetchSerpTopUrls } from "@/lib/nlp/serp";
 
 export const maxDuration = 900;
 
-const ROUTE_VERSION = "2026-05-12.8-mapreduce-fast";
+const ROUTE_VERSION = "2026-05-12.9-openai-gpt5.4";
 
 const TOP_N_URLS = 5;
 const PER_URL_RESERVE_CHARS = 200;
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
       };
 
       // Keepalive every 10s so any idle-timeout proxy keeps the connection
-      // alive even during long DeepSeek calls.
+      // alive even during long LLM calls.
       const keepalive = setInterval(() => sendComment("keepalive"), 10_000);
 
       const finish = () => {
@@ -334,7 +334,7 @@ export async function POST(request: Request) {
 
         if (pipeline === "single") {
           onProgress({ type: "step-start", step: "single-shot" });
-          const result = await runDeepSeekExtraction({
+          const result = await runLlmExtraction({
             text: concatenated,
             routeVersion: ROUTE_VERSION,
             routeLogPrefix: "nlp/keyword",

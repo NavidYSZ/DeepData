@@ -1,17 +1,17 @@
 import { EXTRACTION_SYSTEM_PROMPT } from "./extraction-prompt";
 import type { ExtractionOutput } from "./types";
 
-export const DEEPSEEK_TIMEOUT_MS = 900_000;
+export const LLM_TIMEOUT_MS = 900_000;
 export const MAX_TEXT_CHARS = 24_000;
 
 // Default max output tokens for the single-shot extraction. Multi-step
-// pipelines override this per step via runDeepSeekJsonCall.
-// DeepSeek v4-pro supports up to 380k output tokens (verified by user);
-// max_tokens covers reasoning + content together, so we set this fat
-// to leave headroom for thinking mode.
+// pipelines override this per step via runLlmJsonCall.
+// GPT-5.4 supports a large completion budget; max_completion_tokens covers
+// reasoning + content together, so we set this fat to leave headroom for
+// thinking mode.
 const DEFAULT_MAX_TOKENS = 380_000;
 
-export type DeepSeekJsonCallSuccess<T> = {
+export type LlmJsonCallSuccess<T> = {
   ok: true;
   data: T;
   endpoint: string;
@@ -23,17 +23,17 @@ export type DeepSeekJsonCallSuccess<T> = {
   finishReason: string | null;
 };
 
-export type DeepSeekJsonCallFailure = {
+export type LlmJsonCallFailure = {
   ok: false;
   status: number;
   body: Record<string, unknown>;
 };
 
-export type DeepSeekJsonCallResult<T> =
-  | DeepSeekJsonCallSuccess<T>
-  | DeepSeekJsonCallFailure;
+export type LlmJsonCallResult<T> = LlmJsonCallSuccess<T> | LlmJsonCallFailure;
 
-export type DeepSeekJsonCallOptions = {
+export type ModelHint = "default" | "fast";
+
+export type LlmJsonCallOptions = {
   systemPrompt: string;
   userMessage: string;
   routeVersion: string;
@@ -41,29 +41,34 @@ export type DeepSeekJsonCallOptions = {
   /**
    * Hard max output tokens for this call. Defaults to DEFAULT_MAX_TOKENS.
    * Each step in a multi-step pipeline sets this explicitly.
+   * On OpenAI this is sent as `max_completion_tokens`.
    */
   maxTokens?: number;
   /**
-   * Override the env-var driven thinking/reasoning mode.
-   * - true: enable reasoning (omits the thinking.disabled flag)
-   * - false: explicitly disable reasoning
-   * - undefined: fall back to DEEPSEEK_DISABLE_THINKING env var (default disabled)
+   * Reasoning toggle. Maps to OpenAI's `reasoning_effort`:
+   * - true: `medium` (synthesis-style steps)
+   * - false: `minimal` (mechanical extraction)
+   * - undefined: omit field, let API default apply
    */
   enableThinking?: boolean;
   /**
-   * Per-call override for the DeepSeek model id. Wins over the
-   * DEEPSEEK_MODEL env var. Map-Reduce uses this to route Phase 1 to
-   * the cheaper/faster `deepseek-v4-flash` while Phase 3 stays on
-   * `deepseek-v4-pro`.
+   * Per-call override for the OpenAI model id. Wins over OPENAI_MODEL env
+   * and over `modelHint`.
    */
   modelOverride?: string;
+  /**
+   * Provider-agnostic hint instead of a full override. Map-Reduce uses
+   * "fast" for Phase 1 → resolves to OPENAI_MODEL_FAST (default gpt-5.4-mini).
+   * "default" (or undefined) → OPENAI_MODEL (default gpt-5.4).
+   */
+  modelHint?: ModelHint;
   /**
    * Optional label included in console logs. Useful when chaining steps.
    */
   stepLabel?: string;
 };
 
-export type DeepSeekExtractSuccess = {
+export type LlmExtractSuccess = {
   ok: true;
   extraction: ExtractionOutput;
   endpoint: string;
@@ -75,13 +80,11 @@ export type DeepSeekExtractSuccess = {
   finishReason: string | null;
 };
 
-export type DeepSeekExtractFailure = DeepSeekJsonCallFailure;
+export type LlmExtractFailure = LlmJsonCallFailure;
 
-export type DeepSeekExtractResult =
-  | DeepSeekExtractSuccess
-  | DeepSeekExtractFailure;
+export type LlmExtractResult = LlmExtractSuccess | LlmExtractFailure;
 
-export type DeepSeekExtractOptions = {
+export type LlmExtractOptions = {
   text: string;
   routeVersion: string;
   routeLogPrefix: string;
@@ -91,16 +94,22 @@ export type DeepSeekExtractOptions = {
 const defaultUserMessageBuilder = (text: string) =>
   `# Der zu analysierende Text:\n\n${text}`;
 
+export function resolveModel(hint?: ModelHint): string {
+  if (hint === "fast") {
+    return process.env.OPENAI_MODEL_FAST ?? "gpt-5.4-mini";
+  }
+  return process.env.OPENAI_MODEL ?? "gpt-5.4";
+}
+
 /**
  * Single-shot extraction call using the unified EXTRACTION_SYSTEM_PROMPT.
- * Kept for backwards compatibility with the existing routes' "single"
- * pipeline mode.
+ * Kept for the "single" pipeline mode in both routes.
  */
-export async function runDeepSeekExtraction(
-  options: DeepSeekExtractOptions
-): Promise<DeepSeekExtractResult> {
+export async function runLlmExtraction(
+  options: LlmExtractOptions
+): Promise<LlmExtractResult> {
   const buildUserMessage = options.userMessageBuilder ?? defaultUserMessageBuilder;
-  const result = await runDeepSeekJsonCall<ExtractionOutput>({
+  const result = await runLlmJsonCall<ExtractionOutput>({
     systemPrompt: EXTRACTION_SYSTEM_PROMPT,
     userMessage: buildUserMessage(options.text),
     routeVersion: options.routeVersion,
@@ -123,12 +132,17 @@ export async function runDeepSeekExtraction(
 }
 
 /**
- * Generic DeepSeek JSON-mode call. Used by both runDeepSeekExtraction and
- * the multi-step pipeline orchestrators in lib/nlp/pipeline.ts.
+ * Generic OpenAI JSON-mode call (chat completions API). Used by both
+ * runLlmExtraction and the multi-step pipeline orchestrators in
+ * lib/nlp/pipeline.ts.
+ *
+ * Uses `max_completion_tokens` (not legacy `max_tokens`) and
+ * `reasoning_effort` (not DeepSeek's `thinking`). Omits `temperature`
+ * because gpt-5 reasoning models reject custom values.
  */
-export async function runDeepSeekJsonCall<T>(
-  options: DeepSeekJsonCallOptions
-): Promise<DeepSeekJsonCallResult<T>> {
+export async function runLlmJsonCall<T>(
+  options: LlmJsonCallOptions
+): Promise<LlmJsonCallResult<T>> {
   const {
     systemPrompt,
     userMessage,
@@ -137,10 +151,11 @@ export async function runDeepSeekJsonCall<T>(
     maxTokens = DEFAULT_MAX_TOKENS,
     enableThinking,
     modelOverride,
+    modelHint,
     stepLabel
   } = options;
 
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return {
       ok: false,
@@ -148,45 +163,44 @@ export async function runDeepSeekJsonCall<T>(
       body: {
         _routeVersion: routeVersion,
         error:
-          "Missing DEEPSEEK_API_KEY. Set DEEPSEEK_API_KEY in your env. Optional: DEEPSEEK_BASE_URL (default https://api.deepseek.com), DEEPSEEK_MODEL (default deepseek-v4-pro)."
+          "Missing OPENAI_API_KEY. Set OPENAI_API_KEY in your env. Optional: OPENAI_BASE_URL (default https://api.openai.com/v1), OPENAI_MODEL (default gpt-5.4), OPENAI_MODEL_FAST (default gpt-5.4-mini)."
       }
     };
   }
 
-  const baseURL = (process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com").replace(
+  const baseURL = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(
     /\/$/,
     ""
   );
   const endpoint = `${baseURL}/chat/completions`;
-  const modelId = modelOverride || process.env.DEEPSEEK_MODEL || "deepseek-v4-pro";
+  const modelId = modelOverride || resolveModel(modelHint);
 
-  // Thinking/reasoning: an explicit param wins over the env var.
-  const disableThinking =
-    enableThinking === undefined
-      ? (process.env.DEEPSEEK_DISABLE_THINKING ?? "true").toLowerCase() !== "false"
-      : !enableThinking;
+  // enableThinking → reasoning_effort. Undefined leaves the field off so
+  // the API default applies (varies by model).
+  let reasoningEffort: string | undefined;
+  if (enableThinking === false) reasoningEffort = "minimal";
+  else if (enableThinking === true) reasoningEffort = "medium";
 
   const requestBody: Record<string, unknown> = {
     model: modelId,
-    temperature: 0.1,
     stream: true,
-    max_tokens: maxTokens,
+    max_completion_tokens: maxTokens,
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userMessage }
     ]
   };
-  if (disableThinking) requestBody.thinking = { type: "disabled" };
+  if (reasoningEffort) requestBody.reasoning_effort = reasoningEffort;
 
   const label = stepLabel ? ` step=${stepLabel}` : "";
   console.log(
-    `[${routeLogPrefix} ${routeVersion}]${label} POST ${endpoint} model=${modelId} thinking=${disableThinking ? "disabled" : "enabled"} stream=true max_tokens=${maxTokens} sysChars=${systemPrompt.length} userChars=${userMessage.length}`
+    `[${routeLogPrefix} ${routeVersion}]${label} POST ${endpoint} model=${modelId} reasoning_effort=${reasoningEffort ?? "default"} stream=true max_completion_tokens=${maxTokens} sysChars=${systemPrompt.length} userChars=${userMessage.length}`
   );
 
   const started = Date.now();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), DEEPSEEK_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
 
   let upstreamRes: Response;
   try {
@@ -209,8 +223,8 @@ export async function runDeepSeekJsonCall<T>(
       body: {
         _routeVersion: routeVersion,
         error: isAbort
-          ? "DeepSeek request timed out (no response headers within timeout)"
-          : (err as Error)?.message ?? "Network error calling DeepSeek",
+          ? "OpenAI request timed out (no response headers within timeout)"
+          : (err as Error)?.message ?? "Network error calling OpenAI",
         endpoint,
         model: modelId,
         stepLabel
@@ -234,22 +248,22 @@ export async function runDeepSeekJsonCall<T>(
     }
     const hint =
       upstreamRes.status === 400
-        ? "Bad request — check thinking/response_format support for this model or set DEEPSEEK_DISABLE_THINKING=false."
+        ? `Bad request — check that model "${modelId}" exists for your key and accepts reasoning_effort + response_format=json_object. May also be max_completion_tokens too high.`
         : upstreamRes.status === 401
-          ? "DeepSeek rejected the API key — check DEEPSEEK_API_KEY."
-          : upstreamRes.status === 402
-            ? "DeepSeek payment required — top up your account balance."
+          ? "OpenAI rejected the API key — check OPENAI_API_KEY."
+          : upstreamRes.status === 403
+            ? "OpenAI forbids this request — your account may not have access to this model."
             : upstreamRes.status === 404
               ? `Endpoint or model not found. Verify base URL (${baseURL}) and model "${modelId}".`
               : upstreamRes.status === 429
-                ? "DeepSeek rate-limit or quota exceeded."
+                ? "OpenAI rate-limit or quota exceeded."
                 : undefined;
     return {
       ok: false,
       status: 502,
       body: {
         _routeVersion: routeVersion,
-        error: `DeepSeek HTTP ${upstreamRes.status} ${upstreamRes.statusText}`,
+        error: `OpenAI HTTP ${upstreamRes.status} ${upstreamRes.statusText}`,
         hint,
         statusCode: upstreamRes.status,
         endpoint,
@@ -269,7 +283,7 @@ export async function runDeepSeekJsonCall<T>(
       status: 502,
       body: {
         _routeVersion: routeVersion,
-        error: "DeepSeek returned empty stream",
+        error: "OpenAI returned empty stream",
         endpoint,
         model: modelId,
         stepLabel
@@ -325,7 +339,7 @@ export async function runDeepSeekJsonCall<T>(
       body: {
         _routeVersion: routeVersion,
         error: isAbort
-          ? `DeepSeek stream timed out after ${Math.round((Date.now() - started) / 1000)}s (first chunk: ${firstChunkAt ? `${firstChunkAt - started}ms` : "never"})`
+          ? `OpenAI stream timed out after ${Math.round((Date.now() - started) / 1000)}s (first chunk: ${firstChunkAt ? `${firstChunkAt - started}ms` : "never"})`
           : (err as Error)?.message ?? "Stream read error",
         endpoint,
         model: modelId,
@@ -347,10 +361,11 @@ export async function runDeepSeekJsonCall<T>(
       status: 502,
       body: {
         _routeVersion: routeVersion,
-        error: "DeepSeek stream produced no content",
+        error: "OpenAI stream produced no content",
         endpoint,
         model: modelId,
         stepLabel,
+        finishReason,
         firstChunkMs: firstChunkAt ? firstChunkAt - started : null
       }
     };

@@ -334,8 +334,8 @@ export default function NlpPage() {
           mode === "google"
             ? "URL eingeben → Body-Content wird extrahiert → Sentiment, Entitäten und Kategorien über die Google Natural Language API."
             : llmInput === "keyword"
-              ? "Keyword eingeben → Top-5 SERP-URLs werden gefetched + bereinigt → DeepSeek macht eine konsolidierte 6-Phasen-Analyse über alle Quellen."
-              : "URL eingeben → Body-Content wird extrahiert → DeepSeek führt 6-Phasen-Semantik-Extraktion durch (Entitäten, Relationen, SEO-Signale, Sitemap)."
+              ? "Keyword eingeben → Top-5 SERP-URLs werden gefetched + bereinigt → GPT-5.4 macht eine konsolidierte 6-Phasen-Analyse über alle Quellen."
+              : "URL eingeben → Body-Content wird extrahiert → GPT-5.4 führt 6-Phasen-Semantik-Extraktion durch (Entitäten, Relationen, SEO-Signale, Sitemap)."
         }
         actions={
           <ModeSwitch mode={mode} onChange={setMode} disabled={loading} />
@@ -412,10 +412,10 @@ export default function NlpPage() {
             <div className="text-xs text-muted-foreground">
               Modell:{" "}
               <span className="font-mono text-foreground">
-                {llmData?.model || "deepseek-v4-pro"}
+                {llmData?.model || "gpt-5.4"}
               </span>
               {" · "}konfigurierbar über{" "}
-              <code className="rounded bg-muted px-1 py-0.5 text-[10px]">DEEPSEEK_MODEL</code>
+              <code className="rounded bg-muted px-1 py-0.5 text-[10px]">OPENAI_MODEL</code>
               {llmInput === "keyword" ? (
                 <span className="ml-2 text-amber-700 dark:text-amber-300">
                   · Keyword-Modus kann 60–120s dauern (SERP-Fetch + 5 Page-Crawls + LLM).

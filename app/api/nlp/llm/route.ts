@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { fetchAndExtract } from "@/lib/nlp/extract";
-import { runDeepSeekExtraction, MAX_TEXT_CHARS } from "@/lib/nlp/deepseek";
+import { runLlmExtraction, MAX_TEXT_CHARS } from "@/lib/nlp/llm";
 import {
   runPipeline,
   type PipelineStepMetric,
@@ -14,7 +14,7 @@ export const maxDuration = 900;
 
 // Bump this whenever the route logic changes so the client can confirm
 // the redeploy is live. Visible in the JSON response as `_routeVersion`.
-const ROUTE_VERSION = "2026-05-12.5-large-budget";
+const ROUTE_VERSION = "2026-05-12.9-openai-gpt5.4";
 
 const bodySchema = z.object({
   url: z.string().url(),
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
   };
 
   if (body.pipeline === "single") {
-    const result = await runDeepSeekExtraction({
+    const result = await runLlmExtraction({
       text: truncated,
       routeVersion: ROUTE_VERSION,
       routeLogPrefix: "nlp/llm"

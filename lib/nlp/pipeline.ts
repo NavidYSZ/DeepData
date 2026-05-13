@@ -8,7 +8,7 @@ import {
   EXTRACTION_PROMPT_SEO,
   EXTRACTION_PROMPT_SITEMAP
 } from "./extraction-prompt";
-import { runDeepSeekJsonCall, type DeepSeekJsonCallOptions } from "./deepseek";
+import { runLlmJsonCall, type LlmJsonCallOptions } from "./llm";
 import type {
   ExtractionEntity,
   ExtractionMeta,
@@ -87,13 +87,13 @@ export type PipelineOptions = {
   onProgress?: (event: PipelineProgressEvent) => void;
 };
 
-// Per-step max output tokens.
+// Per-step max output tokens (passed as max_completion_tokens to OpenAI).
 // URL-mode multi-step pipelines (single/2step/3step/4step) keep the full
 // 380k budget because their outputs can be large and reasoning runs on the
-// big v4-pro model. Map-Reduce caps each step tight: Phase 1 runs on the
-// fast v4-flash model without reasoning and produces tiny slim entities,
-// Phase 3 (combined synthesis+sitemap) runs with reasoning capped so it
-// doesn't drift.
+// default model (gpt-5.4). Map-Reduce caps each step tight: Phase 1 runs
+// on the fast model (gpt-5.4-mini) with reasoning_effort=minimal and
+// produces tiny slim entities; Phase 3 (combined synthesis+sitemap) runs
+// with reasoning_effort=medium capped so it doesn't drift.
 const TOKENS = {
   entities: 380_000,
   relations: 380_000,
@@ -197,10 +197,10 @@ async function executeStep<T>(
   steps: PipelineStepMetric[],
   startedAt: number,
   step: string,
-  callArgs: DeepSeekJsonCallOptions
+  callArgs: LlmJsonCallOptions
 ): Promise<{ ok: true; data: T } | PipelineFailure> {
   emitter.onProgress?.({ type: "step-start", step });
-  const result = await runDeepSeekJsonCall<T>(callArgs);
+  const result = await runLlmJsonCall<T>(callArgs);
   if (!result.ok) {
     emitter.onProgress?.({
       type: "step-failed",
@@ -681,18 +681,18 @@ async function runPerUrlLightExtraction(
     `# Keyword (gemeinsamer Topic der Top-SERP-Quellen)\n\n${options.keyword}`,
     `# Diese Quelle\n\nPosition: ${source.position}\nURL: ${source.finalUrl ?? "?"}\nTitle: ${source.title ?? "?"}\n\n## Body-Text\n\n${source.text}`
   ].join("\n\n");
-  const result = await runDeepSeekJsonCall<PerUrlExtraction>({
+  const result = await runLlmJsonCall<PerUrlExtraction>({
     systemPrompt: EXTRACTION_PROMPT_PER_URL_LIGHT,
     userMessage,
     routeVersion: options.routeVersion,
     routeLogPrefix: options.routeLogPrefix,
     maxTokens: TOKENS.mapreducePerUrl,
     // Phase 1 is mechanical entity/relation extraction — reasoning adds
-    // latency without quality, so we hardcode it off regardless of what
-    // the caller passed in. The fast non-reasoning model handles it
-    // 3-5× quicker than v4-pro.
+    // latency without quality, so we hardcode `enableThinking: false`
+    // (maps to OpenAI reasoning_effort=minimal). The "fast" hint routes
+    // to OPENAI_MODEL_FAST (default gpt-5.4-mini).
     enableThinking: false,
-    modelOverride: process.env.DEEPSEEK_MODEL_FAST ?? "deepseek-v4-flash",
+    modelHint: "fast",
     stepLabel: step
   });
   if (!result.ok) {
