@@ -129,6 +129,29 @@ function formatLlmError(json: any): string {
         : JSON.stringify(json.responseBody);
     parts.push(`response: ${rb}`);
   }
+  // Map-Reduce aggregated failure: first per-URL failure's underlying body.
+  if (Array.isArray(json?.details) && json.details.length > 0) {
+    const firstFailed = json.details.find((d: any) => d?.error);
+    if (firstFailed) {
+      parts.push(
+        `first failed source: pos=${firstFailed.position} ${firstFailed.finalUrl ?? "(no url)"}`
+      );
+      if (firstFailed.error) parts.push(`source error: ${firstFailed.error}`);
+      const body = firstFailed.body;
+      if (body && typeof body === "object") {
+        if (body.hint) parts.push(`source hint: ${body.hint}`);
+        if (body.statusCode) parts.push(`source HTTP ${body.statusCode}`);
+        if (body.model) parts.push(`source model: ${body.model}`);
+        if (body.responseBody) {
+          const rb =
+            typeof body.responseBody === "string"
+              ? body.responseBody
+              : JSON.stringify(body.responseBody);
+          parts.push(`source response: ${rb.slice(0, 400)}`);
+        }
+      }
+    }
+  }
   return parts.join(" · ");
 }
 

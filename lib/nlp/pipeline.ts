@@ -673,7 +673,12 @@ async function runPerUrlLightExtraction(
   options: KeywordMapReduceOptions
 ): Promise<
   | { ok: true; data: PerUrlExtraction; metric: PipelineStepMetric }
-  | { ok: false; error: string; metric: PipelineStepMetric }
+  | {
+      ok: false;
+      error: string;
+      body: Record<string, unknown>;
+      metric: PipelineStepMetric;
+    }
 > {
   const step = `mapreduce/1-extract-${index + 1}`;
   options.onProgress?.({ type: "step-start", step });
@@ -696,17 +701,18 @@ async function runPerUrlLightExtraction(
     stepLabel: step
   });
   if (!result.ok) {
-    const error = String((result.body as Record<string, unknown>)?.error ?? "extract failed");
+    const body = result.body as Record<string, unknown>;
+    const error = String(body?.error ?? "extract failed");
     const metric: PipelineStepMetric = {
       step,
-      model: "",
+      model: String(body?.model ?? ""),
       durationMs: 0,
       firstChunkMs: null,
       finishReason: null,
-      usage: { error }
+      usage: { error, hint: body?.hint, responseBody: body?.responseBody }
     };
     options.onProgress?.({ type: "step-failed", step, error });
-    return { ok: false, error, metric };
+    return { ok: false, error, body, metric };
   }
   const metric = metricFromCall(step, result);
   options.onProgress?.({ type: "step-done", metric });
@@ -747,7 +753,8 @@ export async function runKeywordMapReducePipeline(
         details: perUrlResults.map((r, i) => ({
           position: options.sources[i].position,
           finalUrl: options.sources[i].finalUrl,
-          error: r.ok ? null : r.error
+          error: r.ok ? null : r.error,
+          body: r.ok ? null : r.body
         }))
       },
       steps,
