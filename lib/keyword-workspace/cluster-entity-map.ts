@@ -69,11 +69,20 @@ export function clustersToEntityGraph(
 
   const filtered = subclusters.filter((c) => c.totalDemand >= options.minClusterDemand);
 
+  const pillarClusterId =
+    filtered.length > 0
+      ? filtered.reduce(
+          (best, c) => (c.totalDemand > best.totalDemand ? c : best),
+          filtered[0]
+        ).id
+      : null;
+
   const entities: EntityGraphEntity[] = [];
   const relations: EntityGraphRelation[] = [];
   const clusterIndex = new Map<string, ClusterEntityInput>();
 
   const clusterNameToCanonical = new Map<string, string>();
+  const idToCanonical = new Map<string, string>();
 
   for (const cluster of filtered) {
     let canonicalName = cluster.name;
@@ -82,6 +91,7 @@ export function clustersToEntityGraph(
     }
     clusterNameToCanonical.set(cluster.name, canonicalName);
     clusterIndex.set(canonicalName, cluster);
+    idToCanonical.set(cluster.id, canonicalName);
 
     const definitionParts: string[] = [];
     if (cluster.keywordCount) definitionParts.push(`${cluster.keywordCount} Keywords`);
@@ -95,7 +105,7 @@ export function clustersToEntityGraph(
       canonical_name: canonicalName,
       category: CLUSTER_CATEGORY,
       mentions: Math.max(1, Math.round(cluster.totalDemand)),
-      semantic_role: "pillar",
+      semantic_role: cluster.id === pillarClusterId ? "pillar" : "supporting",
       definition_in_text: definitionParts.length ? definitionParts.join(" · ") : null
     });
   }
@@ -103,9 +113,7 @@ export function clustersToEntityGraph(
   if (options.includeKeywords) {
     const seenKeyword = new Set<string>();
     for (const cluster of filtered) {
-      const canonicalClusterName = Array.from(clusterIndex.entries()).find(
-        ([, c]) => c.id === cluster.id
-      )?.[0];
+      const canonicalClusterName = idToCanonical.get(cluster.id);
       if (!canonicalClusterName) continue;
 
       const topKeywords = cluster.keywords
@@ -143,29 +151,65 @@ export function clustersToEntityGraph(
     }
   }
 
+  type CandidateEdge = {
+    a: ClusterEntityInput;
+    b: ClusterEntityInput;
+    score: number;
+    shared: string[];
+  };
+  const candidates: CandidateEdge[] = [];
   for (let i = 0; i < filtered.length; i++) {
     for (let j = i + 1; j < filtered.length; j++) {
       const a = filtered[i];
       const b = filtered[j];
       const score = jaccard(a.topDomains, b.topDomains);
-      if (score >= options.relatedThreshold) {
-        const canA = Array.from(clusterIndex.entries()).find(([, c]) => c.id === a.id)?.[0];
-        const canB = Array.from(clusterIndex.entries()).find(([, c]) => c.id === b.id)?.[0];
-        if (!canA || !canB) continue;
-        const shared = (a.topDomains ?? []).filter((d) =>
-          (b.topDomains ?? []).map((x) => x.toLowerCase()).includes(d.toLowerCase())
-        );
-        relations.push({
-          subject: canA,
-          predicate: "related_to",
-          object: canB,
-          evidence:
-            shared.length > 0
-              ? `Gemeinsame Hosts (${score.toFixed(2)}): ${shared.slice(0, 3).join(", ")}`
-              : `Host-Overlap ${score.toFixed(2)}`
-        });
-      }
+      if (score < options.relatedThreshold) continue;
+      const shared = (a.topDomains ?? []).filter((d) =>
+        (b.topDomains ?? []).map((x) => x.toLowerCase()).includes(d.toLowerCase())
+      );
+      candidates.push({ a, b, score, shared });
     }
+  }
+  candidates.sort((x, y) => y.score - x.score);
+
+  const parent = new Map<string, string>();
+  for (const c of filtered) parent.set(c.id, c.id);
+  const find = (id: string): string => {
+    let cur = id;
+    while (parent.get(cur) !== cur) cur = parent.get(cur)!;
+    let p = id;
+    while (parent.get(p) !== cur) {
+      const next = parent.get(p)!;
+      parent.set(p, cur);
+      p = next;
+    }
+    return cur;
+  };
+  const union = (x: string, y: string) => {
+    const rx = find(x);
+    const ry = find(y);
+    if (rx === ry) return false;
+    parent.set(rx, ry);
+    return true;
+  };
+
+  for (const edge of candidates) {
+    if (!union(edge.a.id, edge.b.id)) continue;
+    const canA = idToCanonical.get(edge.a.id);
+    const canB = idToCanonical.get(edge.b.id);
+    if (!canA || !canB) continue;
+    const aIsPillar = edge.a.id === pillarClusterId;
+    const subject = aIsPillar ? canA : canB;
+    const object = aIsPillar ? canB : canA;
+    relations.push({
+      subject,
+      predicate: "related_to",
+      object,
+      evidence:
+        edge.shared.length > 0
+          ? `Gemeinsame Hosts (${edge.score.toFixed(2)}): ${edge.shared.slice(0, 3).join(", ")}`
+          : `Host-Overlap ${edge.score.toFixed(2)}`
+    });
   }
 
   return {

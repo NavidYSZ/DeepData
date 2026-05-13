@@ -83,6 +83,7 @@ export type EntityMapProps = {
   orphansLabel?: (count: number) => string;
   heightClass?: string;
   defaultLayout?: EntityLayout;
+  allowedLayouts?: EntityLayout[];
 };
 
 export function EntityMap(props: EntityMapProps) {
@@ -98,9 +99,13 @@ function EntityMapInner({
   renderSidebar,
   orphansLabel,
   heightClass = "h-[78vh]",
-  defaultLayout = "tidy"
+  defaultLayout = "tidy",
+  allowedLayouts
 }: EntityMapProps) {
   const [layout, setLayout] = useState<EntityLayout>(defaultLayout);
+  const visibleLayouts = allowedLayouts
+    ? LAYOUT_MODES.filter((m) => allowedLayouts.includes(m.value))
+    : LAYOUT_MODES;
 
   const { nodes: initialNodes, edges: initialEdges, orphans, categoryColors } = useMemo(
     () => transformToReactFlow(data, { layout }),
@@ -201,7 +206,7 @@ function EntityMapInner({
           Ansicht:
         </span>
         <div className="inline-flex overflow-hidden rounded-md border bg-background">
-          {LAYOUT_MODES.map((mode) => {
+          {visibleLayouts.map((mode) => {
             const active = layout === mode.value;
             const Icon = mode.Icon;
             return (

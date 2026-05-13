@@ -94,6 +94,8 @@ export function WorkspaceEntityMapView({ subclusters, siteUrl, runId, generatedA
         <EntityMap
           data={graph}
           heightClass="h-[72vh]"
+          defaultLayout="tidy"
+          allowedLayouts={["tidy", "radial"]}
           orphansLabel={(n) =>
             `${n} Cluster-Beziehung${n === 1 ? "" : "en"} nicht aufgelöst`
           }
