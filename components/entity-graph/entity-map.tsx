@@ -83,12 +83,6 @@ export type EntityMapProps = {
   orphansLabel?: (count: number) => string;
   heightClass?: string;
   defaultLayout?: EntityLayout;
-  /**
-   * If set, only the given layout modes are offered to the user in the
-   * top-right layout switch. Cluster-analysis view restricts this to
-   * ["tidy", "radial"]; the Playground keeps the full set.
-   */
-  allowedLayouts?: EntityLayout[];
 };
 
 export function EntityMap(props: EntityMapProps) {
@@ -104,13 +98,9 @@ function EntityMapInner({
   renderSidebar,
   orphansLabel,
   heightClass = "h-[78vh]",
-  defaultLayout = "tidy",
-  allowedLayouts
+  defaultLayout = "tidy"
 }: EntityMapProps) {
   const [layout, setLayout] = useState<EntityLayout>(defaultLayout);
-  const visibleLayouts = allowedLayouts
-    ? LAYOUT_MODES.filter((m) => allowedLayouts.includes(m.value))
-    : LAYOUT_MODES;
 
   const { nodes: initialNodes, edges: initialEdges, orphans, categoryColors } = useMemo(
     () => transformToReactFlow(data, { layout }),
@@ -211,7 +201,7 @@ function EntityMapInner({
           Ansicht:
         </span>
         <div className="inline-flex overflow-hidden rounded-md border bg-background">
-          {visibleLayouts.map((mode) => {
+          {LAYOUT_MODES.map((mode) => {
             const active = layout === mode.value;
             const Icon = mode.Icon;
             return (

@@ -24,12 +24,6 @@ type FilterBarProps = {
   statusCounts: Record<SitemapPageStatus, number>;
   displayMode: SitemapDisplayMode;
   onChangeDisplayMode: (mode: SitemapDisplayMode) => void;
-  /**
-   * If set, only the given display modes are offered to the user. The
-   * cluster-analysis view restricts this to ["tidy", "radial"]; the
-   * Playground keeps the full set (TB / LR / tidy / radial / indented).
-   */
-  allowedModes?: SitemapDisplayMode[];
 };
 
 const STATUS_LABELS: Record<SitemapPageStatus, string> = {
@@ -104,12 +98,8 @@ export function SitemapFilterBar({
   onResetFilters,
   statusCounts,
   displayMode,
-  onChangeDisplayMode,
-  allowedModes
+  onChangeDisplayMode
 }: FilterBarProps) {
-  const visibleModes = allowedModes
-    ? MODES.filter((m) => allowedModes.includes(m.value))
-    : MODES;
   const [copied, setCopied] = useState(false);
 
   const onCopyJson = useCallback(async () => {
@@ -132,7 +122,7 @@ export function SitemapFilterBar({
             Ansicht:
           </span>
           <div className="inline-flex overflow-hidden rounded-md border bg-background">
-            {visibleModes.map((mode) => {
+            {MODES.map((mode) => {
               const active = displayMode === mode.value;
               const Icon = mode.Icon;
               return (

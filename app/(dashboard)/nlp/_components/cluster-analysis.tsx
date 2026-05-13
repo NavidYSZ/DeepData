@@ -788,7 +788,6 @@ function ResultTabs({ result }: { result: AnalysisResult }) {
         >
           <EntityMap
             data={result.extraction}
-            allowedLayouts={["tidy", "radial"]}
             renderSidebar={({ selectedEntity, onSelectEntity, categoryColors }) => ({
               collapsedLabel: selectedEntity?.canonical_name ?? "Insights",
               headerTitle: selectedEntity?.canonical_name ?? "SEO Insights",
@@ -824,11 +823,7 @@ function ResultTabs({ result }: { result: AnalysisResult }) {
               sitemap={sitemap}
               defaultMode="tidy"
               renderFilterBar={(args) => (
-                <SitemapFilterBar
-                  sitemap={sitemap}
-                  allowedModes={["tidy", "radial"]}
-                  {...args}
-                />
+                <SitemapFilterBar sitemap={sitemap} {...args} />
               )}
               renderSidebar={({ selectedPage, onSelectPage }) => ({
                 collapsedLabel: selectedPage?.h1 ?? "Sitemap",
