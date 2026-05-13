@@ -163,14 +163,20 @@ export function clustersToEntityGraph(
       const a = filtered[i];
       const b = filtered[j];
       const score = jaccard(a.topDomains, b.topDomains);
-      if (score < options.relatedThreshold) continue;
       const shared = (a.topDomains ?? []).filter((d) =>
         (b.topDomains ?? []).map((x) => x.toLowerCase()).includes(d.toLowerCase())
       );
       candidates.push({ a, b, score, shared });
     }
   }
-  candidates.sort((x, y) => y.score - x.score);
+  candidates.sort((x, y) => {
+    if (y.score !== x.score) return y.score - x.score;
+    const aTouchesPillar =
+      x.a.id === pillarClusterId || x.b.id === pillarClusterId ? 1 : 0;
+    const bTouchesPillar =
+      y.a.id === pillarClusterId || y.b.id === pillarClusterId ? 1 : 0;
+    return bTouchesPillar - aTouchesPillar;
+  });
 
   const parent = new Map<string, string>();
   for (const c of filtered) parent.set(c.id, c.id);
@@ -201,14 +207,19 @@ export function clustersToEntityGraph(
     const aIsPillar = edge.a.id === pillarClusterId;
     const subject = aIsPillar ? canA : canB;
     const object = aIsPillar ? canB : canA;
+    const meetsThreshold = edge.score >= options.relatedThreshold;
+    const evidence = meetsThreshold
+      ? edge.shared.length > 0
+        ? `Gemeinsame Hosts (${edge.score.toFixed(2)}): ${edge.shared.slice(0, 3).join(", ")}`
+        : `Host-Overlap ${edge.score.toFixed(2)}`
+      : edge.score > 0
+        ? `Schwacher Overlap ${edge.score.toFixed(2)}`
+        : "Kein SERP-Overlap (synthetisch verbunden)";
     relations.push({
       subject,
       predicate: "related_to",
       object,
-      evidence:
-        edge.shared.length > 0
-          ? `Gemeinsame Hosts (${edge.score.toFixed(2)}): ${edge.shared.slice(0, 3).join(", ")}`
-          : `Host-Overlap ${edge.score.toFixed(2)}`
+      evidence
     });
   }
 
