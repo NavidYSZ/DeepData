@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -15,7 +16,12 @@ import {
   Search,
   Waypoints,
   Languages,
-  Crown
+  Crown,
+  Compass,
+  ChevronRight,
+  Globe,
+  Tags,
+  Map as MapIcon
 } from "lucide-react";
 
 import {
@@ -28,9 +34,28 @@ import {
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
-  SidebarMenuItem
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  SidebarCollapsible,
+  SidebarCollapsibleTrigger,
+  SidebarCollapsibleContent,
+  useSidebar
 } from "@/components/ui/sidebar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PropertyMenu } from "@/components/dashboard/property-menu";
+
+const topicalAuthority = {
+  label: "Topical Authority",
+  icon: Compass,
+  basePath: "/topical-authority",
+  items: [
+    { href: "/topical-authority/site-context", label: "Site Context", icon: Globe },
+    { href: "/topical-authority/entities-queries", label: "Entities & Queries", icon: Tags },
+    { href: "/topical-authority/topical-map", label: "Topical Map", icon: MapIcon }
+  ]
+};
 
 const primaryItems = [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }];
 
@@ -89,6 +114,7 @@ export function AppSidebar({ pathname }: { pathname: string }) {
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
+                <TopicalAuthorityItem pathname={pathname} />
                 {primaryItems.map((item) => {
                   const Icon = item.icon;
                   return (
@@ -155,5 +181,69 @@ export function AppSidebar({ pathname }: { pathname: string }) {
         </div>
       </SidebarFooter>
     </Sidebar>
+  );
+}
+
+const sidebarMenuButtonBaseClass =
+  "group flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground";
+
+function TopicalAuthorityItem({ pathname }: { pathname: string }) {
+  const { collapsed } = useSidebar();
+  const isActiveGroup = pathname.startsWith(topicalAuthority.basePath);
+  const [open, setOpen] = React.useState(isActiveGroup);
+
+  React.useEffect(() => {
+    if (isActiveGroup) setOpen(true);
+  }, [isActiveGroup]);
+
+  const Icon = topicalAuthority.icon;
+
+  const triggerButton = (
+    <SidebarCollapsibleTrigger
+      data-active={isActiveGroup ? "true" : undefined}
+      className={[sidebarMenuButtonBaseClass, collapsed ? "justify-center gap-0" : ""].join(" ")}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className={collapsibleTextClass}>{topicalAuthority.label}</span>
+      <ChevronRight
+        className={[
+          "ml-auto h-4 w-4 shrink-0 transition-transform duration-200",
+          open && !collapsed ? "rotate-90" : "",
+          collapsibleTextClass
+        ].join(" ")}
+      />
+    </SidebarCollapsibleTrigger>
+  );
+
+  return (
+    <SidebarCollapsible open={open} onOpenChange={setOpen} asChild>
+      <SidebarMenuItem>
+        {collapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>{triggerButton}</TooltipTrigger>
+            <TooltipContent side="right">{topicalAuthority.label}</TooltipContent>
+          </Tooltip>
+        ) : (
+          triggerButton
+        )}
+        <SidebarCollapsibleContent>
+          <SidebarMenuSub>
+            {topicalAuthority.items.map((item) => {
+              const SubIcon = item.icon;
+              return (
+                <SidebarMenuSubItem key={item.href}>
+                  <SidebarMenuSubButton asChild isActive={pathname === item.href}>
+                    <Link href={item.href}>
+                      <SubIcon className="h-3.5 w-3.5 shrink-0" />
+                      <span>{item.label}</span>
+                    </Link>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              );
+            })}
+          </SidebarMenuSub>
+        </SidebarCollapsibleContent>
+      </SidebarMenuItem>
+    </SidebarCollapsible>
   );
 }

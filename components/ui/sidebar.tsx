@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
+import * as CollapsiblePrimitive from "@radix-ui/react-collapsible";
 import { Menu } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -248,6 +249,60 @@ const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenuButtonP
 );
 SidebarMenuButton.displayName = "SidebarMenuButton";
 
+const SidebarMenuSub = React.forwardRef<HTMLUListElement, React.HTMLAttributes<HTMLUListElement>>(
+  ({ className, ...props }, ref) => {
+    const { collapsed } = useSidebar();
+    return (
+      <ul
+        ref={ref}
+        className={cn(
+          "ml-4 mt-1 space-y-1 border-l border-sidebar-border/60 pl-3",
+          collapsed && "hidden",
+          className
+        )}
+        {...props}
+      />
+    );
+  }
+);
+SidebarMenuSub.displayName = "SidebarMenuSub";
+
+const SidebarMenuSubItem = React.forwardRef<HTMLLIElement, React.HTMLAttributes<HTMLLIElement>>(
+  ({ className, ...props }, ref) => (
+    <li ref={ref} className={cn("list-none", className)} {...props} />
+  )
+);
+SidebarMenuSubItem.displayName = "SidebarMenuSubItem";
+
+interface SidebarMenuSubButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  asChild?: boolean;
+  isActive?: boolean;
+}
+
+const SidebarMenuSubButton = React.forwardRef<HTMLButtonElement, SidebarMenuSubButtonProps>(
+  ({ className, asChild = false, isActive, children, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button";
+    return (
+      <Comp
+        ref={ref}
+        data-active={isActive ? "true" : undefined}
+        className={cn(
+          "flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </Comp>
+    );
+  }
+);
+SidebarMenuSubButton.displayName = "SidebarMenuSubButton";
+
+const SidebarCollapsible = CollapsiblePrimitive.Root;
+const SidebarCollapsibleTrigger = CollapsiblePrimitive.Trigger;
+const SidebarCollapsibleContent = CollapsiblePrimitive.Content;
+
 export {
   SidebarProvider,
   Sidebar,
@@ -262,5 +317,11 @@ export {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
+  SidebarCollapsible,
+  SidebarCollapsibleTrigger,
+  SidebarCollapsibleContent,
   useSidebar
 };

@@ -20,6 +20,9 @@ const pageTitles: Record<string, string> = {
   "/keyword-workspace": "Clustering",
   "/authority-workspace": "Authority Workspace",
   "/nlp": "NLP Playground",
+  "/topical-authority/site-context": "Site Context",
+  "/topical-authority/entities-queries": "Entities & Queries",
+  "/topical-authority/topical-map": "Topical Map",
   "/settings": "Settings",
   "/dashboard": "Dashboard"
 };
