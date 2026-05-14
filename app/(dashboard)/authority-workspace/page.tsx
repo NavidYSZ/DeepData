@@ -17,7 +17,7 @@ import {
   CheckCircle2,
   Crown,
   Loader2,
-  Network as NetworkIcon,
+  Map as MapIcon,
   RefreshCw,
   RotateCcw,
   Sparkles,
@@ -28,13 +28,10 @@ import { useSite } from "@/components/dashboard/site-context";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { EntityMap } from "@/components/entity-graph/entity-map";
-import { EntityDetailPanel } from "@/components/nlp/entity-detail-panel";
-import {
-  KEYWORD_PILLAR_CATEGORY,
-  type AuthorityKeywordResult
-} from "@/lib/authority-workspace/merge-graph";
-import type { EntityGraphInput } from "@/lib/entity-graph/types";
+import { SitemapMap } from "@/components/sitemap-graph/sitemap-map";
+import { SitemapFilterBar } from "@/components/sitemap-graph/sitemap-filter-bar";
+import { SitemapDetailPanel } from "@/components/nlp/sitemap-detail-panel";
+import type { RecommendedPage, RecommendedSitemap } from "@/lib/nlp/types";
 
 type WorkspaceMeta = { projectId: string; siteUrl: string | null };
 
@@ -71,6 +68,16 @@ type AnalyzeItem = {
   keyword: string;
   clusterId: string;
   clusterName: string;
+};
+
+type KeywordSitemapSummary = {
+  keyword: string;
+  clusterId: string;
+  clusterName: string;
+  entityCount: number;
+  relationCount: number;
+  pageCount: number;
+  sitemap: RecommendedSitemap | null;
 };
 
 type KwState =
@@ -232,11 +239,8 @@ export default function AuthorityWorkspacePage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [view, setView] = useState<View>("select");
   const [kwStates, setKwStates] = useState<Record<string, KwState>>({});
-  const [graph, setGraph] = useState<EntityGraphInput | null>(null);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
-  const [perKeywordSummary, setPerKeywordSummary] = useState<
-    Array<{ keyword: string; clusterId: string; clusterName: string; entityCount: number; relationCount: number }>
-  >([]);
+  const [perKeywordSummary, setPerKeywordSummary] = useState<KeywordSitemapSummary[]>([]);
   const [overallStartedAt, setOverallStartedAt] = useState<number | null>(null);
   const [overallDurationMs, setOverallDurationMs] = useState<number | null>(null);
   const [analyzeItems, setAnalyzeItems] = useState<AnalyzeItem[]>([]);
@@ -277,7 +281,6 @@ export default function AuthorityWorkspacePage() {
     setKwStates(
       Object.fromEntries(items.map((it) => [it.clusterId, { phase: "idle" } as KwState]))
     );
-    setGraph(null);
     setAnalyzeError(null);
     setPerKeywordSummary([]);
     setOverallStartedAt(Date.now());
@@ -367,17 +370,10 @@ export default function AuthorityWorkspacePage() {
               }
             }));
           } else if (eventName === "result") {
-            setGraph(payload.graph as EntityGraphInput);
             setOverallDurationMs(Number(payload.totalDurationMs ?? 0));
             setPerKeywordSummary(
               Array.isArray(payload.perKeyword)
-                ? (payload.perKeyword as Array<{
-                    keyword: string;
-                    clusterId: string;
-                    clusterName: string;
-                    entityCount: number;
-                    relationCount: number;
-                  }>)
+                ? (payload.perKeyword as KeywordSitemapSummary[])
                 : []
             );
             setView("map");
@@ -399,7 +395,6 @@ export default function AuthorityWorkspacePage() {
     abortRef.current = null;
     setView("select");
     setKwStates({});
-    setGraph(null);
     setAnalyzeError(null);
     setPerKeywordSummary([]);
     setOverallStartedAt(null);
@@ -452,7 +447,6 @@ export default function AuthorityWorkspacePage() {
         />
       ) : (
         <MapScene
-          graph={graph}
           perKeyword={perKeywordSummary}
           overallDurationMs={overallDurationMs}
           onBackToSelection={handleResetToSelection}
@@ -683,277 +677,168 @@ function KwStateLine({ state }: { state: KwState }) {
   );
 }
 
-/* ── Scene 3: Entity Map ── */
+/* ── Scene 3: Per-Keyword Sitemaps ── */
 function MapScene({
-  graph,
   perKeyword,
   overallDurationMs,
   onBackToSelection
 }: {
-  graph: EntityGraphInput | null;
-  perKeyword: Array<{
-    keyword: string;
-    clusterId: string;
-    clusterName: string;
-    entityCount: number;
-    relationCount: number;
-  }>;
+  perKeyword: KeywordSitemapSummary[];
   overallDurationMs: number | null;
   onBackToSelection: () => void;
 }) {
-  if (!graph) {
+  const withSitemap = useMemo(
+    () => perKeyword.filter((p) => p.sitemap && p.sitemap.pages.length > 0),
+    [perKeyword]
+  );
+  const [activeClusterId, setActiveClusterId] = useState<string | null>(
+    withSitemap[0]?.clusterId ?? null
+  );
+
+  useEffect(() => {
+    if (activeClusterId && withSitemap.some((p) => p.clusterId === activeClusterId)) {
+      return;
+    }
+    setActiveClusterId(withSitemap[0]?.clusterId ?? null);
+  }, [withSitemap, activeClusterId]);
+
+  const activeKw = withSitemap.find((p) => p.clusterId === activeClusterId) ?? null;
+  const sitemap = activeKw?.sitemap ?? null;
+
+  if (withSitemap.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Kein Graph vorhanden.
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-sm text-muted-foreground">
+        <MapIcon className="h-10 w-10 text-muted-foreground/40" />
+        <p className="max-w-md text-center">
+          Keine Sitemap-Empfehlungen vorhanden. Vermutlich wurde die LLM-Phase abgebrochen oder
+          jedes analysierte Keyword hat keine <code>recommended_sitemap</code> zurückgegeben.
+        </p>
+        <Button size="sm" variant="outline" onClick={onBackToSelection}>
+          <RotateCcw className="mr-1 h-3.5 w-3.5" /> Neue Auswahl
+        </Button>
       </div>
     );
   }
 
   return (
-    <>
-      <div className="pointer-events-none absolute left-3 top-3 z-20">
-        <div className="pointer-events-auto inline-flex items-center gap-2 rounded-lg border bg-card/95 px-3 py-2 shadow-sm backdrop-blur-md">
-          <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs" onClick={onBackToSelection}>
-            <RotateCcw className="h-3.5 w-3.5" /> Neue Auswahl
-          </Button>
-          <span className="text-[11px] text-muted-foreground">
-            {perKeyword.length} Keywords ·{" "}
-            {overallDurationMs ? `${(overallDurationMs / 1000).toFixed(0)}s` : "—"}
-          </span>
-        </div>
-      </div>
-
-      <EntityMap
-        data={graph}
-        fullscreen
-        heightClass="h-full"
-        defaultLayout="radial"
-        allowedLayouts={["tidy", "radial"]}
-        orphansLabel={(n) => `${n} Beziehung${n === 1 ? "" : "en"} ohne passende Entity übersprungen`}
-        renderSidebar={({ selectedEntity, onSelectEntity, categoryColors }) => {
-          if (!selectedEntity) {
-            return {
-              collapsedLabel: "Authority",
-              headerTitle: "Authority-Insights",
-              headerIcon: <Sparkles className="h-4 w-4 shrink-0 text-muted-foreground" />,
-              body: (
-                <AuthorityInsights
-                  perKeyword={perKeyword}
-                  graph={graph}
-                  overallDurationMs={overallDurationMs}
-                />
-              ),
-              showCloseButton: false
-            };
-          }
-          if (selectedEntity.category === KEYWORD_PILLAR_CATEGORY) {
-            const summary = perKeyword.find(
-              (p) => `Keyword: ${p.keyword}` === selectedEntity.canonical_name
-            );
-            return {
-              collapsedLabel: selectedEntity.name,
-              headerTitle: selectedEntity.name,
-              headerIcon: <Crown className="h-4 w-4 shrink-0 text-amber-500" />,
-              body: (
-                <KeywordPillarPanel
-                  entity={selectedEntity}
-                  summary={summary}
-                  graph={graph}
-                  onSelectEntity={onSelectEntity}
-                />
-              ),
-              showCloseButton: true
-            };
-          }
-          return {
-            collapsedLabel: selectedEntity.canonical_name,
-            headerTitle: selectedEntity.canonical_name,
-            headerIcon: <Tag className="h-4 w-4 shrink-0 text-muted-foreground" />,
-            body: (
-              <EntityDetailPanel
-                entity={selectedEntity}
-                color={categoryColors[selectedEntity.category] ?? "#64748b"}
-                relations={graph.relations}
-                onSelectEntity={onSelectEntity}
-              />
-            ),
-            showCloseButton: true
-          };
-        }}
-      />
-    </>
-  );
-}
-
-function AuthorityInsights({
-  perKeyword,
-  graph,
-  overallDurationMs
-}: {
-  perKeyword: Array<{
-    keyword: string;
-    clusterId: string;
-    clusterName: string;
-    entityCount: number;
-    relationCount: number;
-  }>;
-  graph: EntityGraphInput;
-  overallDurationMs: number | null;
-}) {
-  const sharedEntities = useMemo(() => {
-    const occurrences = new Map<string, number>();
-    for (const r of graph.relations) {
-      if (r.predicate !== "covers_entity") continue;
-      occurrences.set(r.object, (occurrences.get(r.object) ?? 0) + 1);
-    }
-    const shared = Array.from(occurrences.entries())
-      .filter(([, count]) => count > 1)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 15);
-    return shared.map(([canonical, count]) => {
-      const entity = graph.entities.find((e) => e.canonical_name === canonical);
-      return { canonical, count, name: entity?.name ?? canonical, category: entity?.category };
-    });
-  }, [graph]);
-
-  return (
-    <div className="space-y-5 text-sm">
-      <div className="space-y-1">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-          Authority Map
-        </div>
-        <div className="text-base font-semibold leading-snug">Topical Authority</div>
-        <p className="text-xs text-muted-foreground">
-          {perKeyword.length} Keywords analysiert · {graph.entities.length} Entities ·{" "}
-          {graph.relations.length} Relations
-          {overallDurationMs ? ` · ${(overallDurationMs / 1000).toFixed(0)}s` : ""}
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
-          <Crown className="h-3.5 w-3.5" />
-          Analysierte Keywords
-        </div>
-        <ul className="space-y-1">
-          {perKeyword.map((p) => (
-            <li
-              key={p.clusterId}
-              className="flex items-center justify-between gap-2 rounded-md border bg-background/50 px-2 py-1 text-xs"
-            >
-              <span className="min-w-0 flex-1 truncate">{p.keyword}</span>
-              <span className="shrink-0 tabular-nums text-muted-foreground">
-                {p.entityCount} E
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {sharedEntities.length ? (
-        <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
-            <NetworkIcon className="h-3.5 w-3.5" />
-            Shared Entities (Authority-Brücken)
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            Entities, die in mehreren Top-Keywords vorkommen — das sind die Themen, die deine
-            Topical Authority halten.
-          </p>
-          <ul className="space-y-1">
-            {sharedEntities.map((e) => (
-              <li
-                key={e.canonical}
-                className="flex items-center justify-between gap-2 rounded-md border bg-background/50 px-2 py-1 text-xs"
+    <div className="flex h-full w-full flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b bg-card/60 px-3 py-2">
+        <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs" onClick={onBackToSelection}>
+          <RotateCcw className="h-3.5 w-3.5" /> Neue Auswahl
+        </Button>
+        <span className="text-[11px] text-muted-foreground">
+          {withSitemap.length} Keyword{withSitemap.length === 1 ? "" : "s"} mit Sitemap ·{" "}
+          {overallDurationMs ? `${(overallDurationMs / 1000).toFixed(0)}s` : "—"}
+        </span>
+        <div className="ml-2 flex-1 min-w-0 overflow-x-auto">
+          <div className="flex items-center gap-1">
+            {withSitemap.map((p) => (
+              <button
+                key={p.clusterId}
+                type="button"
+                onClick={() => setActiveClusterId(p.clusterId)}
+                className={cn(
+                  "shrink-0 inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors",
+                  p.clusterId === activeClusterId
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-background/60 text-muted-foreground hover:bg-muted/40"
+                )}
+                title={`aus "${p.clusterName}"`}
               >
-                <span className="min-w-0 flex-1 truncate">{e.name}</span>
-                <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                  {e.count}× geteilt
+                <Crown className="h-3 w-3 shrink-0 text-amber-500" />
+                <span className="max-w-[200px] truncate">{p.keyword}</span>
+                <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] tabular-nums text-muted-foreground">
+                  {p.pageCount}
                 </span>
-              </li>
+              </button>
             ))}
-          </ul>
+          </div>
         </div>
-      ) : (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-[11px] text-amber-700 dark:text-amber-300">
-          Noch keine geteilten Entities zwischen den Keywords gefunden. Wähle thematisch
-          ähnlichere Cluster, um Authority-Brücken zu sehen.
-        </div>
-      )}
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-auto p-3">
+        {sitemap && activeKw ? (
+          <SitemapMap
+            sitemap={sitemap}
+            defaultMode="tidy"
+            heightClass="h-[calc(100vh-12rem)]"
+            renderFilterBar={(args) => <SitemapFilterBar sitemap={sitemap} {...args} />}
+            renderSidebar={({ selectedPage, onSelectPage }) => ({
+              collapsedLabel: selectedPage?.h1 ?? activeKw.keyword,
+              headerTitle: selectedPage?.h1 ?? activeKw.keyword,
+              headerIcon: selectedPage ? (
+                <Tag className="h-4 w-4 shrink-0 text-muted-foreground" />
+              ) : (
+                <Crown className="h-4 w-4 shrink-0 text-amber-500" />
+              ),
+              body: selectedPage ? (
+                <SitemapDetailPanel
+                  page={selectedPage}
+                  allPages={sitemap.pages}
+                  entities={[]}
+                  onSelectPage={onSelectPage}
+                />
+              ) : (
+                <KeywordSitemapOverview summary={activeKw} pages={sitemap.pages} />
+              ),
+              showCloseButton: selectedPage !== null
+            })}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
 
-function KeywordPillarPanel({
-  entity,
+function KeywordSitemapOverview({
   summary,
-  graph,
-  onSelectEntity
+  pages
 }: {
-  entity: { name: string; canonical_name: string; mentions: number };
-  summary?: {
-    keyword: string;
-    clusterId: string;
-    clusterName: string;
-    entityCount: number;
-    relationCount: number;
-  };
-  graph: EntityGraphInput;
-  onSelectEntity: (canonicalName: string) => void;
+  summary: KeywordSitemapSummary;
+  pages: RecommendedPage[];
 }) {
-  const ownEntities = useMemo(() => {
-    const list: Array<{ canonical: string; name: string; category: string }> = [];
-    for (const r of graph.relations) {
-      if (r.predicate !== "covers_entity") continue;
-      if (r.subject !== entity.canonical_name) continue;
-      const target = graph.entities.find((e) => e.canonical_name === r.object);
-      if (!target) continue;
-      list.push({ canonical: target.canonical_name, name: target.name, category: target.category });
-    }
-    return list;
-  }, [graph, entity.canonical_name]);
-
+  const total = pages.length;
+  const covered = pages.filter((p) => p.status === "covered_on_page").length;
+  const gap = pages.filter((p) => p.status === "content_gap").length;
+  const likely = pages.filter((p) => p.status === "likely_exists_elsewhere").length;
   return (
-    <div className="space-y-5 text-sm">
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-            <Crown className="h-3 w-3" />
-            Top-Keyword
-          </span>
-          {summary ? (
-            <span className="rounded-md border bg-muted/40 px-2 py-0.5 text-[10px] uppercase tracking-wide">
-              aus &quot;{summary.clusterName}&quot;
-            </span>
-          ) : null}
+    <div className="space-y-4 text-sm">
+      <div className="space-y-1">
+        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
+          <Crown className="h-3.5 w-3.5 text-amber-500" />
+          Top-Keyword
         </div>
-        <div className="text-xl font-semibold leading-tight">{entity.name}</div>
-        {summary ? (
-          <div className="text-xs text-muted-foreground">
-            {summary.entityCount} Entities · {summary.relationCount} Relations extrahiert
-          </div>
-        ) : null}
+        <div className="text-base font-semibold leading-snug">{summary.keyword}</div>
+        <p className="text-xs text-muted-foreground">
+          aus &quot;{summary.clusterName}&quot;
+        </p>
       </div>
-
-      <div className="space-y-2">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-          Extrahierte Entities ({ownEntities.length})
+      <p className="text-xs text-muted-foreground">
+        Empfohlene Site-Struktur für dieses Keyword. Klick auf eine Page-Card im Graph, um Details
+        (H1, Slug, Target-Queries, abgedeckte Entities, Begründung) zu sehen.
+      </p>
+      <div className="grid grid-cols-2 gap-2 text-center">
+        <div className="rounded-md border bg-background/60 p-2">
+          <div className="text-lg font-bold">{total}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Pages gesamt</div>
         </div>
-        <ul className="space-y-1">
-          {ownEntities.map((e) => (
-            <li key={e.canonical}>
-              <button
-                type="button"
-                onClick={() => onSelectEntity(e.canonical)}
-                className="flex w-full items-center justify-between gap-2 rounded-md border bg-background/50 px-2 py-1 text-left text-xs hover:bg-muted/40"
-              >
-                <span className="min-w-0 flex-1 truncate">{e.name}</span>
-                <span className="shrink-0 text-[10px] text-muted-foreground">{e.category}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="rounded-md border border-emerald-300 bg-emerald-50/60 p-2 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+          <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300">{covered}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">auf dieser Seite</div>
+        </div>
+        <div className="rounded-md border border-amber-300 bg-amber-50/60 p-2 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <div className="text-lg font-bold text-amber-700 dark:text-amber-300">{gap}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Content Gaps</div>
+        </div>
+        <div className="rounded-md border bg-zinc-50/60 p-2 dark:bg-zinc-800/40">
+          <div className="text-lg font-bold text-zinc-600 dark:text-zinc-300">{likely}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">likely exists</div>
+        </div>
       </div>
+      <p className="text-[11px] italic text-muted-foreground">
+        Slugs und H1s sind LLM-Empfehlungen. Crawl-Verifikation, ob diese URLs real existieren, ist
+        nicht Teil dieser Version.
+      </p>
     </div>
   );
 }

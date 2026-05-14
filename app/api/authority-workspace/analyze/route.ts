@@ -15,7 +15,7 @@ import {
 
 export const maxDuration = 900;
 
-const ROUTE_VERSION = "2026-05-13.1-authority-workspace";
+const ROUTE_VERSION = "2026-05-14.1-authority-workspace-sitemap";
 const TOP_N_URLS = 5;
 const PER_URL_MAX_CHARS = 20_000;
 const MAX_KEYWORDS_PER_REQUEST = 15;
@@ -267,7 +267,9 @@ export async function POST(request: Request) {
             clusterId: r.clusterId,
             clusterName: r.clusterName,
             entityCount: r.extraction.entities?.length ?? 0,
-            relationCount: r.extraction.relations?.length ?? 0
+            relationCount: r.extraction.relations?.length ?? 0,
+            pageCount: r.extraction.recommended_sitemap?.pages?.length ?? 0,
+            sitemap: r.extraction.recommended_sitemap ?? null
           })),
           graph
         });
