@@ -44,11 +44,6 @@ export type ExtractionSeo = {
   target_queries: string[];
 };
 
-export type SitemapPageStatus =
-  | "covered_on_page"
-  | "content_gap"
-  | "likely_exists_elsewhere";
-
 export type SitemapPageRole =
   | "pillar"
   | "service_page"
@@ -63,7 +58,6 @@ export type RecommendedPage = {
   parent_slug: string | null;
   h1: string;
   page_role: SitemapPageRole | string;
-  status: SitemapPageStatus | string;
   target_queries: string[];
   covers_entities: string[];
   covers_subtopics: string[];

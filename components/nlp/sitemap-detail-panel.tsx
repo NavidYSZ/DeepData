@@ -1,9 +1,6 @@
 "use client";
 
 import {
-  AlertTriangle,
-  CheckCircle2,
-  HelpCircle,
   Quote,
   Layers,
   Tags,
@@ -13,43 +10,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { findChildPages, findParentPage } from "@/lib/sitemap-graph/transform";
-import type {
-  ExtractionEntity,
-  RecommendedPage,
-  SitemapPageStatus
-} from "@/lib/nlp/types";
-
-type StatusMeta = {
-  label: string;
-  className: string;
-  Icon: typeof CheckCircle2;
-};
-
-const STATUS_META: Record<SitemapPageStatus, StatusMeta> = {
-  covered_on_page: {
-    label: "auf dieser Seite abgedeckt",
-    className:
-      "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300",
-    Icon: CheckCircle2
-  },
-  content_gap: {
-    label: "Content Gap — sollte neu angelegt werden",
-    className:
-      "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300",
-    Icon: AlertTriangle
-  },
-  likely_exists_elsewhere: {
-    label: "existiert wahrscheinlich (nicht im Text)",
-    className:
-      "border-zinc-300 bg-zinc-50 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-300",
-    Icon: HelpCircle
-  }
-};
-
-function resolveStatusMeta(status: string): StatusMeta {
-  if (status in STATUS_META) return STATUS_META[status as SitemapPageStatus];
-  return STATUS_META.likely_exists_elsewhere;
-}
+import type { ExtractionEntity, RecommendedPage } from "@/lib/nlp/types";
 
 export function SitemapDetailPanel({
   page,
@@ -62,8 +23,6 @@ export function SitemapDetailPanel({
   entities: ExtractionEntity[];
   onSelectPage: (slug: string) => void;
 }) {
-  const meta = resolveStatusMeta(page.status);
-  const { Icon } = meta;
   const parent = findParentPage(page.slug, allPages);
   const children = findChildPages(page.slug, allPages);
 
@@ -81,12 +40,6 @@ export function SitemapDetailPanel({
         </code>
         <div className="text-base font-semibold leading-tight">{page.h1}</div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span
-            className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${meta.className}`}
-          >
-            <Icon className="h-3 w-3" />
-            {meta.label}
-          </span>
           <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
             {page.page_role.replace(/_/g, " ")}
           </Badge>

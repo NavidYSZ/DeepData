@@ -1,10 +1,6 @@
 import dagre from "dagre";
 import type { Edge, Node } from "reactflow";
-import type {
-  RecommendedPage,
-  RecommendedSitemap,
-  SitemapPageStatus
-} from "@/lib/nlp/types";
+import type { RecommendedPage, RecommendedSitemap } from "@/lib/nlp/types";
 
 export const PAGE_NODE_WIDTH = 220;
 export const PAGE_NODE_HEIGHT = 120;
@@ -15,12 +11,6 @@ const TIDY_H_GAP = 32;
 const TIDY_V_GAP = 180;
 const RADIAL_MIN_RING_STEP = 220;
 const RADIAL_NODE_FOOTPRINT = PAGE_NODE_WIDTH * 1.35;
-
-export const STATUS_COLORS: Record<SitemapPageStatus, string> = {
-  covered_on_page: "#10b981",
-  content_gap: "#f59e0b",
-  likely_exists_elsewhere: "#a1a1aa"
-};
 
 export type SitemapLayout = "TB" | "LR" | "tidy" | "radial";
 
@@ -42,11 +32,7 @@ export type SitemapOrphan = {
 
 export type SitemapStats = {
   total: number;
-  covered: number;
-  gap: number;
-  likely: number;
   byRole: Record<string, number>;
-  byStatus: Record<string, number>;
   maxDepth: number;
 };
 
@@ -65,18 +51,10 @@ export type SitemapTransformOptions = {
 
 function emptyStats(pages: RecommendedPage[]): SitemapStats {
   const byRole: Record<string, number> = {};
-  const byStatus: Record<string, number> = {};
-  let covered = 0;
-  let gap = 0;
-  let likely = 0;
   for (const p of pages) {
     byRole[p.page_role] = (byRole[p.page_role] ?? 0) + 1;
-    byStatus[p.status] = (byStatus[p.status] ?? 0) + 1;
-    if (p.status === "covered_on_page") covered++;
-    else if (p.status === "content_gap") gap++;
-    else if (p.status === "likely_exists_elsewhere") likely++;
   }
-  return { total: pages.length, covered, gap, likely, byRole, byStatus, maxDepth: 0 };
+  return { total: pages.length, byRole, maxDepth: 0 };
 }
 
 function depthFromRoot(

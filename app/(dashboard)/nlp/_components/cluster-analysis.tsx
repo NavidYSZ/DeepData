@@ -861,44 +861,15 @@ function ResultTabs({ result }: { result: AnalysisResult }) {
 
 function SitemapOverview({ pages }: { pages: RecommendedPage[] }) {
   const total = pages.length;
-  const covered = pages.filter((p) => p.status === "covered_on_page").length;
-  const gap = pages.filter((p) => p.status === "content_gap").length;
-  const likely = pages.filter((p) => p.status === "likely_exists_elsewhere").length;
   return (
     <div className="space-y-4 text-sm">
       <p className="text-xs text-muted-foreground">
         Empfohlene Site-Struktur über alle ausgewählten Cluster.
       </p>
-      <div className="grid grid-cols-2 gap-2 text-center">
-        <div className="rounded-md border bg-background/60 p-2">
-          <div className="text-lg font-bold">{total}</div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            Pages gesamt
-          </div>
-        </div>
-        <div className="rounded-md border border-emerald-300 bg-emerald-50/60 p-2 dark:border-emerald-500/30 dark:bg-emerald-500/10">
-          <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300">
-            {covered}
-          </div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            covered
-          </div>
-        </div>
-        <div className="rounded-md border border-amber-300 bg-amber-50/60 p-2 dark:border-amber-500/30 dark:bg-amber-500/10">
-          <div className="text-lg font-bold text-amber-700 dark:text-amber-300">
-            {gap}
-          </div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            content gaps
-          </div>
-        </div>
-        <div className="rounded-md border bg-zinc-50/60 p-2 dark:bg-zinc-800/40">
-          <div className="text-lg font-bold text-zinc-600 dark:text-zinc-300">
-            {likely}
-          </div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            likely exists
-          </div>
+      <div className="rounded-md border bg-background/60 p-2 text-center">
+        <div className="text-lg font-bold">{total}</div>
+        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          Pages gesamt
         </div>
       </div>
     </div>

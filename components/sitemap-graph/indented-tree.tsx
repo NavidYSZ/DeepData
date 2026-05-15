@@ -1,73 +1,18 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ChevronRight,
-  HelpCircle,
-  Star
-} from "lucide-react";
+import { ChevronRight, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  flattenSitemapForIndentedView,
-  STATUS_COLORS
-} from "@/lib/sitemap-graph/transform";
-import type {
-  RecommendedPage,
-  RecommendedSitemap,
-  SitemapPageStatus
-} from "@/lib/nlp/types";
-
-type StatusMeta = {
-  Icon: typeof CheckCircle2;
-  label: string;
-  textClass: string;
-  bgClass: string;
-  borderClass: string;
-};
-
-const STATUS_META: Record<SitemapPageStatus, StatusMeta> = {
-  covered_on_page: {
-    Icon: CheckCircle2,
-    label: "covered",
-    textClass: "text-emerald-700 dark:text-emerald-300",
-    bgClass: "bg-emerald-50 dark:bg-emerald-500/10",
-    borderClass: "border-emerald-300 dark:border-emerald-500/30"
-  },
-  content_gap: {
-    Icon: AlertTriangle,
-    label: "gap",
-    textClass: "text-amber-800 dark:text-amber-300",
-    bgClass: "bg-amber-50 dark:bg-amber-500/10",
-    borderClass: "border-amber-300 dark:border-amber-500/30"
-  },
-  likely_exists_elsewhere: {
-    Icon: HelpCircle,
-    label: "likely",
-    textClass: "text-zinc-600 dark:text-zinc-400",
-    bgClass: "bg-zinc-50 dark:bg-zinc-800/40",
-    borderClass: "border-zinc-300 dark:border-zinc-700"
-  }
-};
-
-function getStatusMeta(status: string): StatusMeta {
-  return STATUS_META[status as SitemapPageStatus] ?? STATUS_META.likely_exists_elsewhere;
-}
+import { flattenSitemapForIndentedView } from "@/lib/sitemap-graph/transform";
+import type { RecommendedSitemap } from "@/lib/nlp/types";
 
 type Props = {
   sitemap: RecommendedSitemap;
   selectedSlug: string | null;
   onSelectPage: (slug: string) => void;
-  visibleStatuses: Set<SitemapPageStatus>;
 };
 
-export function IndentedTree({
-  sitemap,
-  selectedSlug,
-  onSelectPage,
-  visibleStatuses
-}: Props) {
+export function IndentedTree({ sitemap, selectedSlug, onSelectPage }: Props) {
   const rows = useMemo(() => flattenSitemapForIndentedView(sitemap), [sitemap]);
 
   if (rows.length === 0) {
@@ -78,25 +23,11 @@ export function IndentedTree({
     );
   }
 
-  const visibleRows = rows.filter((r) =>
-    visibleStatuses.has(r.page.status as SitemapPageStatus)
-  );
-
-  if (visibleRows.length === 0) {
-    return (
-      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-        Alle Status sind ausgefiltert — Filter wieder aktivieren.
-      </div>
-    );
-  }
-
   return (
     <div className="divide-y rounded-md border">
-      {visibleRows.map(({ page, depth }) => {
-        const meta = getStatusMeta(page.status);
+      {rows.map(({ page, depth }) => {
         const isSelected = selectedSlug === page.slug;
         const isRoot = page.parent_slug === null;
-        const { Icon } = meta;
         return (
           <button
             key={page.slug}
@@ -120,13 +51,7 @@ export function IndentedTree({
             {isRoot ? (
               <Star className="h-3.5 w-3.5 shrink-0 fill-amber-500 text-amber-500" />
             ) : (
-              <span
-                className="inline-block h-2 w-2 shrink-0 rounded-full"
-                style={{
-                  backgroundColor:
-                    STATUS_COLORS[page.status as SitemapPageStatus] ?? "#94a3b8"
-                }}
-              />
+              <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-muted-foreground/40" />
             )}
 
             {/* slug */}
@@ -148,19 +73,6 @@ export function IndentedTree({
             <span className="hidden shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground md:inline">
               {page.page_role.replace(/_/g, " ")}
             </span>
-
-            {/* status chip */}
-            <span
-              className={cn(
-                "inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
-                meta.bgClass,
-                meta.textClass,
-                meta.borderClass
-              )}
-            >
-              <Icon className="h-2.5 w-2.5" />
-              {meta.label}
-            </span>
           </button>
         );
       })}
@@ -172,35 +84,20 @@ export function IndentedTreeWithStats({
   sitemap,
   selectedSlug,
   onSelectPage,
-  visibleStatuses,
   stats
 }: Props & {
-  stats: { total: number; covered: number; gap: number; likely: number; maxDepth: number };
+  stats: { total: number; maxDepth: number };
 }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3 text-xs">
-        <span className="font-semibold">
-          {stats.total} Pages
-        </span>
-        <span className="text-emerald-600 dark:text-emerald-400">
-          {stats.covered} covered
-        </span>
-        <span className="text-amber-600 dark:text-amber-400">
-          {stats.gap} gaps
-        </span>
-        <span className="text-muted-foreground">
-          {stats.likely} likely
-        </span>
-        <span className="text-muted-foreground">
-          · max Tiefe {stats.maxDepth}
-        </span>
+        <span className="font-semibold">{stats.total} Pages</span>
+        <span className="text-muted-foreground">· max Tiefe {stats.maxDepth}</span>
       </div>
       <IndentedTree
         sitemap={sitemap}
         selectedSlug={selectedSlug}
         onSelectPage={onSelectPage}
-        visibleStatuses={visibleStatuses}
       />
     </div>
   );
