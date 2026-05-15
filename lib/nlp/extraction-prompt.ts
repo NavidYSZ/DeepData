@@ -73,9 +73,9 @@ Für JEDE empfohlene Page:
 - slug: URL-Pfad ab Domain-Root, immer mit führendem "/". Pillar = "/". Sonst lowercase, kebab-case, sprachspezifisch ("/leistungen/implantologie", nicht "/services/implants" wenn die Seite deutsch ist). Slugs MÜSSEN eindeutig sein.
 - parent_slug: Slug der Eltern-Page. NULL nur für die Pillar-Page. Jeder andere parent_slug MUSS einer in dieser Liste vorkommenden Slug sein.
 - h1: vorgeschlagene Hauptüberschrift, 2–8 Wörter, in der Sprache des Textes.
-- page_role: "pillar" | "cluster_overview" | "service_page" | "info_page" | "location_page" | "about_page" | "faq" | "blog_article"
+- page_role: "pillar" | "service_page" | "info_page" | "location_page" | "about_page" | "faq" | "blog_article". Es gibt KEINE separate "cluster_overview"-Rolle — die Pillar IST der einzige Hub. Mid-Level-Pages, die weitere Pages bündeln (z.B. "/leistungen" als Container für "/leistungen/implantologie" und "/leistungen/prophylaxe"), bekommen die Rolle "service_page".
 - status: "covered_on_page" wenn die analysierte URL diese Page IST oder ihren Inhalt vollständig abdeckt; "content_gap" wenn ein Phase-5-content_gap diese Page motiviert ODER die Page klar nötig wäre und im Text nicht behandelt wird; "likely_exists_elsewhere" wenn diese Page typischerweise auf der Website existiert (z.B. /impressum, /team, /kontakt), aber im analysierten Text nicht behandelt wird.
-- target_queries: 1–3 Suchanfragen, für die diese Page ranken soll. Leer für Pillar/Cluster-Overview wenn nicht eindeutig.
+- target_queries: 1–3 Suchanfragen, für die diese Page ranken soll. Leer für die Pillar wenn nicht eindeutig.
 - covers_entities: Liste der canonical_names aus Phase 3, die diese Page abdecken sollte. Kann leer sein.
 - covers_subtopics: Liste der Subtopics aus Phase 5 (subtopics oder content_gaps), die diese Page abdeckt. Kann leer sein.
 - rationale: ein Satz, warum diese Page existieren sollte (1 Halbsatz, in der Sprache des Textes).
@@ -89,8 +89,8 @@ REGELN:
 - Wenn der Text fast keinen verwertbaren SEO-Kontext liefert (z.B. nur ein Kontaktformular), gib eine minimale Sitemap mit 1–3 Pages aus statt zu halluzinieren.
 
 Beispiele plausibler Trees (NICHT 1:1 übernehmen, nur Stil):
-- Zahnarzt-Praxis: Pillar "/" → Cluster "/leistungen" → Service-Pages "/leistungen/implantologie", "/leistungen/prophylaxe", ... + Cluster "/praxis" → "/praxis/team", "/praxis/anfahrt" + "/notfall" + "/preise".
-- SaaS-B2B: Pillar "/" → "/produkt" → Feature-Pages, + "/anwendungsfaelle/<branche>", + "/preise", + "/blog/<thema>".
+- Zahnarzt-Praxis: Pillar "/" → Service-Hub "/leistungen" (service_page) → Service-Pages "/leistungen/implantologie", "/leistungen/prophylaxe", ... + Service-Hub "/praxis" (service_page) → "/praxis/team", "/praxis/anfahrt" + "/notfall" + "/preise".
+- SaaS-B2B: Pillar "/" → "/produkt" (service_page) → Feature-Pages, + "/anwendungsfaelle/<branche>", + "/preise", + "/blog/<thema>".
 
 # Output-Format
 
@@ -141,7 +141,7 @@ Gib AUSSCHLIESSLICH dieses JSON-Objekt zurück. Kein Preamble, keine Markdown-Fe
         "slug": "<string>",
         "parent_slug": "<string|null>",
         "h1": "<string>",
-        "page_role": "<pillar|cluster_overview|service_page|info_page|location_page|about_page|faq|blog_article>",
+        "page_role": "<pillar|service_page|info_page|location_page|about_page|faq|blog_article>",
         "status": "<covered_on_page|content_gap|likely_exists_elsewhere>",
         "target_queries": ["<string>"],
         "covers_entities": ["<canonical_name>"],
@@ -296,7 +296,7 @@ const SITEMAP_SCHEMA = `  "recommended_sitemap": {
         "slug": "<string>",
         "parent_slug": "<string|null>",
         "h1": "<string>",
-        "page_role": "<pillar|cluster_overview|service_page|info_page|location_page|about_page|faq|blog_article>",
+        "page_role": "<pillar|service_page|info_page|location_page|about_page|faq|blog_article>",
         "status": "<covered_on_page|content_gap|likely_exists_elsewhere>",
         "target_queries": ["<string>"],
         "covers_entities": ["<canonical_name>"],
@@ -377,9 +377,9 @@ Für JEDE empfohlene Page:
 - slug: URL-Pfad ab Domain-Root, immer mit führendem "/". Pillar = "/". Sonst lowercase, kebab-case, in der Sprache aus meta.language. Slugs MÜSSEN eindeutig sein.
 - parent_slug: Slug der Eltern-Page. NULL nur für die Pillar-Page. Jeder andere parent_slug MUSS einer in dieser Liste vorkommenden Slug sein.
 - h1: vorgeschlagene Hauptüberschrift, 2–8 Wörter, in der Sprache aus meta.language.
-- page_role: "pillar" | "cluster_overview" | "service_page" | "info_page" | "location_page" | "about_page" | "faq" | "blog_article"
+- page_role: "pillar" | "service_page" | "info_page" | "location_page" | "about_page" | "faq" | "blog_article". Es gibt KEINE separate "cluster_overview"-Rolle — die Pillar IST der einzige Hub. Mid-Level-Pages, die weitere Pages bündeln (z.B. "/leistungen" als Container für "/leistungen/implantologie" und "/leistungen/prophylaxe"), bekommen die Rolle "service_page".
 - status: "covered_on_page" wenn die analysierte URL (laut meta.page_type) diese Page IST oder ihren Inhalt vollständig abdeckt; "content_gap" wenn ein content_gap aus seo diese Page motiviert ODER die Page klar nötig wäre; "likely_exists_elsewhere" wenn diese Page typischerweise auf der Website existiert (/impressum, /team, /kontakt), aber nicht extrahiert wurde.
-- target_queries: 1–3 Suchanfragen. Bevorzuge Werte aus seo.target_queries und seo.content_gaps. Leer für Pillar/Cluster-Overview wenn nicht eindeutig.
+- target_queries: 1–3 Suchanfragen. Bevorzuge Werte aus seo.target_queries und seo.content_gaps. Leer für die Pillar wenn nicht eindeutig.
 - covers_entities: Liste der canonical_names. MUSS ausschließlich aus der bereitgestellten entities-Liste stammen — erfinde KEINE neuen Entity-Namen. Kann leer sein.
 - covers_subtopics: Liste der Subtopics aus seo.subtopics oder seo.content_gaps. MUSS aus diesen Listen stammen. Kann leer sein.
 - rationale: ein Satz, warum diese Page existieren sollte (1 Halbsatz, in der Sprache aus meta.language).
@@ -393,8 +393,8 @@ REGELN:
 - Wenn der Kontext kaum verwertbar ist (z.B. <3 Entities), gib eine minimale Sitemap mit 1–3 Pages aus statt zu halluzinieren.
 
 Beispiele plausibler Trees (NICHT 1:1 übernehmen, nur Stil):
-- Zahnarzt-Praxis: Pillar "/" → Cluster "/leistungen" → Service-Pages "/leistungen/implantologie", "/leistungen/prophylaxe", ... + Cluster "/praxis" → "/praxis/team", "/praxis/anfahrt" + "/notfall" + "/preise".
-- SaaS-B2B: Pillar "/" → "/produkt" → Feature-Pages, + "/anwendungsfaelle/<branche>", + "/preise", + "/blog/<thema>".`,
+- Zahnarzt-Praxis: Pillar "/" → Service-Hub "/leistungen" (service_page) → Service-Pages "/leistungen/implantologie", "/leistungen/prophylaxe", ... + Service-Hub "/praxis" (service_page) → "/praxis/team", "/praxis/anfahrt" + "/notfall" + "/preise".
+- SaaS-B2B: Pillar "/" → "/produkt" (service_page) → Feature-Pages, + "/anwendungsfaelle/<branche>", + "/preise", + "/blog/<thema>".`,
   `# Output-Format\n\n${NO_PREAMBLE}\n\n{\n${SITEMAP_SCHEMA}\n}`
 ].join("\n\n");
 
@@ -476,9 +476,9 @@ Für JEDE empfohlene Page:
 - slug: URL-Pfad ab Domain-Root, immer mit führendem "/". Pillar = "/". Sonst lowercase, kebab-case, in der Sprache aus meta.language. Slugs MÜSSEN eindeutig sein.
 - parent_slug: Slug der Eltern-Page. NULL nur für die Pillar-Page. Jeder andere parent_slug MUSS einer in dieser Liste vorkommenden Slug sein.
 - h1: vorgeschlagene Hauptüberschrift, 2–8 Wörter, in der Sprache aus meta.language.
-- page_role: "pillar" | "cluster_overview" | "service_page" | "info_page" | "location_page" | "about_page" | "faq" | "blog_article"
+- page_role: "pillar" | "service_page" | "info_page" | "location_page" | "about_page" | "faq" | "blog_article". Es gibt KEINE separate "cluster_overview"-Rolle — die Pillar IST der einzige Hub. Mid-Level-Pages, die weitere Pages bündeln (z.B. "/leistungen" als Container für "/leistungen/implantologie" und "/leistungen/prophylaxe"), bekommen die Rolle "service_page".
 - status: "covered_on_page" (Pillar selbst, da meta.page_type = "pillar_page"); "content_gap" wenn aus seo.content_gaps motiviert ODER die Page klar nötig wäre; "likely_exists_elsewhere" wenn die Page typischerweise auf einer Site existiert (/impressum, /team, /kontakt).
-- target_queries: 1–3 Suchanfragen. Bevorzuge Werte aus seo.target_queries und seo.content_gaps. Leer für Pillar/Cluster-Overview wenn nicht eindeutig.
+- target_queries: 1–3 Suchanfragen. Bevorzuge Werte aus seo.target_queries und seo.content_gaps. Leer für die Pillar wenn nicht eindeutig.
 - covers_entities: Liste der canonical_names. MUSS ausschließlich aus der im User-Message bereitgestellten entities-Liste stammen — erfinde KEINE neuen Entity-Namen. Kann leer sein.
 - covers_subtopics: Liste der Subtopics aus seo.subtopics oder seo.content_gaps. MUSS aus diesen Listen stammen. Kann leer sein.
 - rationale: ein Satz, warum diese Page existieren sollte (1 Halbsatz, in der Sprache aus meta.language).
@@ -491,8 +491,8 @@ REGELN:
 - Wenn der Kontext kaum verwertbar ist (z.B. <3 Entities), gib eine minimale Sitemap mit 1–3 Pages aus statt zu halluzinieren.
 
 Beispiele plausibler Trees (NICHT 1:1 übernehmen, nur Stil):
-- Zahnarzt-Praxis: Pillar "/" → Cluster "/leistungen" → Service-Pages "/leistungen/implantologie", "/leistungen/prophylaxe", ... + Cluster "/praxis" → "/praxis/team", "/praxis/anfahrt" + "/notfall" + "/preise".
-- SaaS-B2B: Pillar "/" → "/produkt" → Feature-Pages, + "/anwendungsfaelle/<branche>", + "/preise", + "/blog/<thema>".`,
+- Zahnarzt-Praxis: Pillar "/" → Service-Hub "/leistungen" (service_page) → Service-Pages "/leistungen/implantologie", "/leistungen/prophylaxe", ... + Service-Hub "/praxis" (service_page) → "/praxis/team", "/praxis/anfahrt" + "/notfall" + "/preise".
+- SaaS-B2B: Pillar "/" → "/produkt" (service_page) → Feature-Pages, + "/anwendungsfaelle/<branche>", + "/preise", + "/blog/<thema>".`,
   `# Output-Format\n\n${NO_PREAMBLE}\n\n{\n${META_SCHEMA},\n${SEO_SCHEMA},\n${SITEMAP_SCHEMA}\n}`
 ].join("\n\n");
 
@@ -596,15 +596,15 @@ Basierend auf Phase 1 (meta) + den bereitgestellten entities + Phase 3 (seo) + d
 
 Die Seitenstruktur hat genau EINE Pillar-Page (Wurzel, slug "/") und 2–4 Ebenen darunter. Höchstens 30 Pages gesamt.
 
-WICHTIG: Die einzelnen ausgewählten Cluster sollten in der Sitemap als eigene Cluster-Overview-Pages oder Service-Pages erscheinen (Sub-Pillars unter dem Root-Pillar). Das macht die Cross-Cluster-Struktur sichtbar.
+WICHTIG: Die einzelnen ausgewählten Cluster sollten in der Sitemap als eigene Service-Hub-Pages (page_role "service_page") direkt unter dem Root-Pillar erscheinen. Das macht die Cross-Cluster-Struktur sichtbar.
 
 Für JEDE empfohlene Page:
 - slug: URL-Pfad ab Domain-Root, immer mit führendem "/". Pillar = "/". Sonst lowercase, kebab-case, in der Sprache aus meta.language. Slugs MÜSSEN eindeutig sein.
 - parent_slug: Slug der Eltern-Page. NULL nur für die Pillar-Page. Jeder andere parent_slug MUSS einer in dieser Liste vorkommenden Slug sein.
 - h1: vorgeschlagene Hauptüberschrift, 2–8 Wörter, in der Sprache aus meta.language.
-- page_role: "pillar" | "cluster_overview" | "service_page" | "info_page" | "location_page" | "about_page" | "faq" | "blog_article"
+- page_role: "pillar" | "service_page" | "info_page" | "location_page" | "about_page" | "faq" | "blog_article". Es gibt KEINE separate "cluster_overview"-Rolle — die Pillar IST der einzige Hub. Mid-Level-Pages, die weitere Pages bündeln (z.B. ein Cluster-Hub mit mehreren Service-Children), bekommen die Rolle "service_page".
 - status: "covered_on_page" (NUR für die Pillar Page selbst, da meta.page_type = "pillar_page"); "content_gap" wenn aus seo.content_gaps motiviert ODER die Page für die Cross-Cluster-Abdeckung nötig ist; "likely_exists_elsewhere" für übliche Service-Pages (Impressum/Team/Kontakt).
-- target_queries: 1–3 Suchanfragen. Bevorzuge Werte aus seo.target_queries und seo.content_gaps. Leer für Pillar/Cluster-Overview wenn nicht eindeutig.
+- target_queries: 1–3 Suchanfragen. Bevorzuge Werte aus seo.target_queries und seo.content_gaps. Leer für die Pillar wenn nicht eindeutig.
 - covers_entities: Liste der canonical_names. MUSS ausschließlich aus der im User-Message bereitgestellten entities-Liste stammen. Kann leer sein.
 - covers_subtopics: Liste der Subtopics aus seo.subtopics oder seo.content_gaps. MUSS aus diesen Listen stammen. Kann leer sein.
 - rationale: ein Satz, warum diese Page existieren sollte (1 Halbsatz, in der Sprache aus meta.language).

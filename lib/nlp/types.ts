@@ -51,7 +51,6 @@ export type SitemapPageStatus =
 
 export type SitemapPageRole =
   | "pillar"
-  | "cluster_overview"
   | "service_page"
   | "info_page"
   | "location_page"
